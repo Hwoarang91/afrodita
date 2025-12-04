@@ -1,0 +1,106 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: afrodita-postgres-dev
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: afrodita
+      TZ: Europe/Moscow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: afrodita-redis-dev
+    environment:
+      TZ: Europe/Moscow
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: afrodita-backend-dev
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      TZ: Europe/Moscow
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    # Примечание: entrypoint скрипт автоматически переустанавливает bcrypt
+    # при каждом старте контейнера для правильной архитектуры
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: afrodita-frontend-dev
+    env_file:
+      - .env
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      # Для Vite используется localhost, т.к. запросы идут с клиента (браузера)
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api/v1}
+      TZ: Europe/Moscow
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile.dev
+    container_name: afrodita-admin-dev
+    env_file:
+      - .env
+    ports:
+      - "${ADMIN_PORT:-3002}:3002"
+    environment:
+      # Для Next.js используется localhost, т.к. запросы идут с клиента (браузера)
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api/v1}
+      NODE_ENV: development
+      TZ: Europe/Moscow
+      # Исправление для правильной работы чанков в Docker
+      HOSTNAME: 0.0.0.0
+      PORT: 3002
+    depends_on:
+      - backend
+    volumes:
+      - ./admin:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data_dev:
+  redis_data_dev:
+

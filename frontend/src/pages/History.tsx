@@ -1,0 +1,51 @@
+import { useQuery } from '@tanstack/react-query';
+import { appointmentsApi } from '../api/appointments';
+import { AppointmentCardSkeleton } from '../components/SkeletonLoader';
+import EmptyState from '../components/EmptyState';
+import { format } from 'date-fns';
+import { ru } from 'date-fns/locale';
+
+export default function History() {
+  const { data: appointments, isLoading } = useQuery({
+    queryKey: ['appointments', 'history'],
+    queryFn: () => appointmentsApi.getAll('completed'),
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">История посещений</h1>
+        {isLoading ? (
+          <div className="space-y-4">
+            <AppointmentCardSkeleton />
+            <AppointmentCardSkeleton />
+            <AppointmentCardSkeleton />
+          </div>
+        ) : appointments && appointments.length > 0 ? (
+          <div className="space-y-4">
+            {appointments.map((apt: any) => (
+              <div
+                key={apt.id}
+                className="bg-white rounded-lg shadow-md p-6"
+              >
+                <h3 className="font-semibold text-gray-900 mb-2">{apt.service?.name}</h3>
+                <p className="text-gray-600 mb-2">{apt.master?.name}</p>
+                <p className="text-gray-500 text-sm mb-2">
+                  {format(new Date(apt.startTime), 'd MMMM yyyy, HH:mm', { locale: ru })}
+                </p>
+                <p className="text-lg font-semibold text-primary-600">{apt.price} ₽</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon="📋"
+            title="История посещений пуста"
+            description="Здесь будут отображаться ваши завершенные записи."
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+

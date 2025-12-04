@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "shadcn": "^3.5.0"
+  },
+  "dependencies": {
+    "lucide": "^0.555.0"
+  }
+}

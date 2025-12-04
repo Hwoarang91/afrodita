@@ -1,0 +1,235 @@
+# ==========================================
+# Environment variables
+# ==========================================
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+# .env.example - обычно коммитится как шаблон
+
+# ==========================================
+# Dependencies
+# ==========================================
+node_modules/
+*/node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# ==========================================
+# Build outputs
+# ==========================================
+# Backend (NestJS)
+backend/dist/
+backend/dist-ssr/
+backend/*.tsbuildinfo
+
+# Admin (Next.js)
+admin/.next/
+admin/out/
+admin/build/
+admin/*.tsbuildinfo
+admin/next-env.d.ts
+
+# Frontend (Vite)
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+
+# Root
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# ==========================================
+# Logs
+# ==========================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+*.log.*
+
+# ==========================================
+# OS files
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ==========================================
+# IDE and editors
+# ==========================================
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# IntelliJ IDEA / WebStorm
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.vim/
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# ==========================================
+# Docker
+# ==========================================
+.docker/
+docker-compose.override.yml
+*.dockerignore
+
+# ==========================================
+# Testing
+# ==========================================
+coverage/
+*.lcov
+.nyc_output/
+.jest/
+*.test.js.snap
+
+# ==========================================
+# Temporary files
+# ==========================================
+tmp/
+temp/
+*.tmp
+*.temp
+.cache/
+.parcel-cache/
+
+# ==========================================
+# Database
+# ==========================================
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# ==========================================
+# Backups
+# ==========================================
+*.bak
+*.backup
+*.old
+*.orig
+
+# ==========================================
+# Package managers
+# ==========================================
+# npm - package-lock.json обычно коммитится
+# package-lock.json
+# yarn
+# yarn.lock - обычно коммитится
+# pnpm
+# pnpm-lock.yaml - обычно коммитится
+# Lerna
+lerna-debug.log
+
+# ==========================================
+# TypeScript
+# ==========================================
+*.tsbuildinfo
+.tsbuildinfo
+
+# ==========================================
+# Next.js specific
+# ==========================================
+.next/
+out/
+.vercel/
+.vercelignore
+
+# ==========================================
+# Vite specific
+# ==========================================
+.vite/
+dist-ssr/
+
+# ==========================================
+# NestJS specific
+# ==========================================
+dist/
+*.js.map
+
+# ==========================================
+# Secrets and keys
+# ==========================================
+*.pem
+*.key
+*.cert
+*.crt
+secrets/
+.secrets/
+
+# ==========================================
+# Scripts and utilities
+# ==========================================
+# Development-only PowerShell scripts (не используются в продакшене)
+# view-logs.ps1 - оставляем в репозитории для разработчиков, но не используем в продакшене
+*.dev.ps1
+
+# ==========================================
+# Documentation builds
+# ==========================================
+docs/_build/
+site/
+
+# ==========================================
+# Misc
+# ==========================================
+*.pid
+*.seed
+*.pid.lock
+.npm
+.eslintcache
+.stylelintcache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.pnp.*
+
+# ==========================================
+# Project specific
+# ==========================================
+# SQL scripts (если генерируются автоматически)
+# *.generated.sql
+
+# Migration backups
+# migrations/*.backup
+
+# Local development files
+.local/
+local/

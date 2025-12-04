@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Установка зависимостей
+COPY package*.json ./
+RUN npm ci
+
+# Копирование исходного кода
+COPY . .
+
+# Очистка кэша Next.js перед запуском
+RUN rm -rf .next || true
+
+EXPOSE 3002
+
+CMD ["npm", "run", "dev"]
+
