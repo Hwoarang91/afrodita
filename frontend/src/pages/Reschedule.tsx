@@ -40,13 +40,31 @@ export default function Reschedule() {
       if (!id) throw new Error('Appointment ID is required');
       return appointmentsApi.reschedule(id, newStartTime);
     },
+    onMutate: async (newStartTime) => {
+      await queryClient.cancelQueries({ queryKey: ['appointment', id] });
+      const previousAppointment = queryClient.getQueryData(['appointment', id]);
+      
+      // Оптимистично обновляем время записи
+      queryClient.setQueryData(['appointment', id], (old: any) => {
+        if (!old) return old;
+        return { ...old, startTime: newStartTime };
+      });
+      
+      return { previousAppointment };
+    },
+    onError: (error: any, variables, context) => {
+      // Откатываем изменения при ошибке
+      if (context?.previousAppointment) {
+        queryClient.setQueryData(['appointment', id], context.previousAppointment);
+      }
+      toast.error(error.response?.data?.message || 'Ошибка при переносе записи');
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
       toast.success('Запись успешно перенесена!');
       navigate('/profile');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Ошибка при переносе записи');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
     },
   });
 
@@ -56,12 +74,12 @@ export default function Reschedule() {
 
   if (!appointment) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
+      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-500 mb-4">Запись не найдена</p>
+          <p className="text-muted-foreground mb-4">Запись не найдена</p>
           <button
             onClick={() => navigate('/profile')}
-            className="bg-primary-600 text-white px-6 py-2 rounded-lg"
+            className="bg-primary text-primary-foreground px-6 py-2 rounded-lg"
           >
             Вернуться в профиль
           </button>
@@ -83,31 +101,31 @@ export default function Reschedule() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Перенос записи</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-6">Перенос записи</h1>
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Текущая запись</h2>
-          <div className="space-y-2 text-gray-600">
+        <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
+          <h2 className="text-xl font-semibold text-foreground mb-4">Текущая запись</h2>
+          <div className="space-y-2 text-muted-foreground">
             <p>
-              <span className="font-semibold">Услуга:</span> {appointment.service?.name}
+              <span className="font-semibold text-foreground">Услуга:</span> {appointment.service?.name}
             </p>
             <p>
-              <span className="font-semibold">Мастер:</span> {appointment.master?.name}
+              <span className="font-semibold text-foreground">Мастер:</span> {appointment.master?.name}
             </p>
             <p>
-              <span className="font-semibold">Дата и время:</span>{' '}
+              <span className="font-semibold text-foreground">Дата и время:</span>{' '}
               {format(new Date(appointment.startTime), 'd MMMM yyyy, HH:mm', { locale: ru })}
             </p>
             <p>
-              <span className="font-semibold">Цена:</span> {appointment.price} ₽
+              <span className="font-semibold text-foreground">Цена:</span> {appointment.price} ₽
             </p>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Выберите новую дату</h2>
+        <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
+          <h2 className="text-xl font-semibold text-foreground mb-4">Выберите новую дату</h2>
           <Calendar
             onChange={(value) => {
               if (value instanceof Date) {
@@ -123,8 +141,8 @@ export default function Reschedule() {
         </div>
 
         {selectedDate && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Выберите время</h2>
+          <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
+            <h2 className="text-xl font-semibold text-foreground mb-4">Выберите время</h2>
             {slotsLoading ? (
               <LoadingSpinner />
             ) : slots && slots.length > 0 ? (
@@ -139,8 +157,8 @@ export default function Reschedule() {
                       onClick={() => handleTimeSelect(slot)}
                       className={`py-3 px-4 rounded-lg font-semibold transition ${
                         isSelected
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                       }`}
                     >
                       {timeStr}
@@ -149,7 +167,7 @@ export default function Reschedule() {
                 })}
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-4">
+              <p className="text-muted-foreground text-center py-4">
                 На выбранную дату нет свободных слотов
               </p>
             )}
@@ -157,11 +175,11 @@ export default function Reschedule() {
         )}
 
         {selectedTime && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Подтверждение</h2>
-            <div className="space-y-2 text-gray-600 mb-4">
+          <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
+            <h2 className="text-xl font-semibold text-foreground mb-4">Подтверждение</h2>
+            <div className="space-y-2 text-muted-foreground mb-4">
               <p>
-                <span className="font-semibold">Новая дата и время:</span>{' '}
+                <span className="font-semibold text-foreground">Новая дата и время:</span>{' '}
                 {format(new Date(selectedTime), 'd MMMM yyyy, HH:mm', { locale: ru })}
               </p>
             </div>
@@ -169,13 +187,13 @@ export default function Reschedule() {
               <button
                 onClick={handleConfirm}
                 disabled={rescheduleMutation.isPending}
-                className="flex-1 bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition disabled:opacity-50"
+                className="flex-1 bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:bg-primary/90 transition disabled:opacity-50"
               >
                 {rescheduleMutation.isPending ? 'Перенос...' : 'Подтвердить перенос'}
               </button>
               <button
                 onClick={() => navigate('/profile')}
-                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition"
+                className="flex-1 bg-secondary text-secondary-foreground py-3 rounded-lg font-semibold hover:bg-secondary/80 transition"
               >
                 Отмена
               </button>

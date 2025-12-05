@@ -40,10 +40,10 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Выберите время</h1>
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h1 className="text-3xl font-bold text-foreground mb-6">Выберите время</h1>
+        <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
           <Calendar
             onChange={(date) => {
               setSelectedDate(date as Date);
@@ -53,14 +53,14 @@ export default function CalendarPage() {
             minDate={new Date()}
           />
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+        <div className="bg-card rounded-lg shadow-md p-6 border border-border">
+          <h2 className="text-xl font-semibold text-foreground mb-4">
             Доступное время
           </h2>
           {error ? (
             <div className="text-center py-8">
-              <p className="text-red-600 mb-2">Ошибка загрузки доступного времени</p>
-              <p className="text-sm text-gray-500">
+              <p className="text-destructive mb-2">Ошибка загрузки доступного времени</p>
+              <p className="text-sm text-muted-foreground">
                 {error instanceof Error ? error.message : 'Попробуйте выбрать другую дату'}
               </p>
             </div>
@@ -77,8 +77,8 @@ export default function CalendarPage() {
                     onClick={() => setSelectedSlot(slot)}
                     className={`py-2 px-4 rounded-lg font-semibold transition ${
                       selectedSlot === slot
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                     }`}
                   >
                     {time}
@@ -88,8 +88,8 @@ export default function CalendarPage() {
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-gray-600 mb-2">На эту дату нет доступного времени</p>
-              <p className="text-sm text-gray-500">
+              <p className="text-muted-foreground mb-2">На эту дату нет доступного времени</p>
+              <p className="text-sm text-muted-foreground">
                 Выберите другую дату или проверьте расписание мастера
               </p>
             </div>
@@ -98,7 +98,7 @@ export default function CalendarPage() {
         {selectedSlot && (
           <button
             onClick={handleNext}
-            className="w-full mt-6 bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
+            className="w-full mt-6 bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:bg-primary/90 transition"
           >
             Продолжить
           </button>

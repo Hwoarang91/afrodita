@@ -9,7 +9,7 @@ export default function ServiceCard({ service, onClick }: ServiceCardProps) {
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition"
+      className="bg-card rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition border border-border"
     >
       {service.imageUrl && (
         <img
@@ -18,11 +18,11 @@ export default function ServiceCard({ service, onClick }: ServiceCardProps) {
           className="w-full h-48 object-cover rounded-lg mb-4"
         />
       )}
-      <h3 className="text-xl font-semibold text-gray-900 mb-2">{service.name}</h3>
-      <p className="text-gray-600 mb-4 line-clamp-2">{service.description}</p>
+      <h3 className="text-xl font-semibold text-foreground mb-2">{service.name}</h3>
+      <p className="text-muted-foreground mb-4 line-clamp-2">{service.description}</p>
       <div className="flex justify-between items-center">
-        <span className="text-2xl font-bold text-primary-600">{service.price} ₽</span>
-        <span className="text-gray-500">{service.duration} мин</span>
+        <span className="text-2xl font-bold text-primary">{service.price} ₽</span>
+        <span className="text-muted-foreground">{service.duration} мин</span>
       </div>
     </div>
   );

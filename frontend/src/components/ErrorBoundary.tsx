@@ -92,20 +92,20 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
   }, [onReset]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+    <div className="min-h-screen bg-gradient-to-br from-destructive/10 to-destructive/5 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-card rounded-2xl shadow-xl p-8 text-center border border-border">
         <div className="text-6xl mb-4">⚠️</div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Что-то пошло не так</h1>
-        <p className="text-gray-600 mb-6">
+        <h1 className="text-2xl font-bold text-foreground mb-4">Что-то пошло не так</h1>
+        <p className="text-muted-foreground mb-6">
           Произошла непредвиденная ошибка. Мы уже работаем над её исправлением.
         </p>
         
         {process.env.NODE_ENV === 'development' && error && (
-          <details className="mt-4 text-left bg-gray-50 rounded-lg p-4 mb-4">
-            <summary className="cursor-pointer text-sm font-medium text-gray-700 mb-2">
+          <details className="mt-4 text-left bg-muted rounded-lg p-4 mb-4">
+            <summary className="cursor-pointer text-sm font-medium text-foreground mb-2">
               Детали ошибки (только в режиме разработки)
             </summary>
-            <pre className="text-xs text-red-600 overflow-auto max-h-40">
+            <pre className="text-xs text-destructive overflow-auto max-h-40">
               {error.toString()}
               {errorInfo?.componentStack}
             </pre>
@@ -114,7 +114,7 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
 
         <button
           onClick={onReset}
-          className="w-full bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+          className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:bg-primary/90 transition-colors font-medium"
         >
           Вернуться на главную
         </button>

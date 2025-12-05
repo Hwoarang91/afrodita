@@ -12,9 +12,9 @@ export default function History() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">История посещений</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-6">История посещений</h1>
         {isLoading ? (
           <div className="space-y-4">
             <AppointmentCardSkeleton />
@@ -26,14 +26,14 @@ export default function History() {
             {appointments.map((apt: any) => (
               <div
                 key={apt.id}
-                className="bg-white rounded-lg shadow-md p-6"
+                className="bg-card rounded-lg shadow-md p-6 border border-border"
               >
-                <h3 className="font-semibold text-gray-900 mb-2">{apt.service?.name}</h3>
-                <p className="text-gray-600 mb-2">{apt.master?.name}</p>
-                <p className="text-gray-500 text-sm mb-2">
+                <h3 className="font-semibold text-foreground mb-2">{apt.service?.name}</h3>
+                <p className="text-muted-foreground mb-2">{apt.master?.name}</p>
+                <p className="text-muted-foreground text-sm mb-2">
                   {format(new Date(apt.startTime), 'd MMMM yyyy, HH:mm', { locale: ru })}
                 </p>
-                <p className="text-lg font-semibold text-primary-600">{apt.price} ₽</p>
+                <p className="text-lg font-semibold text-primary">{apt.price} ₽</p>
               </div>
             ))}
           </div>

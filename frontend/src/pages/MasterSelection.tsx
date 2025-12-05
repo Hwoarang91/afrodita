@@ -39,9 +39,9 @@ export default function MasterSelection() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Выберите мастера</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-6">Выберите мастера</h1>
         {isLoading ? (
           <div className="space-y-4">
             <ServiceCardSkeleton />
@@ -55,8 +55,8 @@ export default function MasterSelection() {
                 <div
                   key={master.id}
                   onClick={() => setSelectedMaster(master.id)}
-                  className={`bg-white rounded-lg shadow-md p-6 cursor-pointer transition ${
-                    selectedMaster === master.id ? 'ring-2 ring-primary-600' : ''
+                  className={`bg-card rounded-lg shadow-md p-6 cursor-pointer transition border border-border ${
+                    selectedMaster === master.id ? 'ring-2 ring-primary' : ''
                   }`}
                 >
                   <div className="flex items-center gap-4">
@@ -64,20 +64,20 @@ export default function MasterSelection() {
                       <img
                         src={master.photoUrl}
                         alt={master.name}
-                        className="w-20 h-20 rounded-full object-cover"
+                        className="w-20 h-20 rounded-full object-cover border border-border"
                       />
                     )}
                     <div className="flex-1">
-                      <h3 className="text-xl font-semibold text-gray-900">{master.name}</h3>
+                      <h3 className="text-xl font-semibold text-foreground">{master.name}</h3>
                       {/* Отображаем specialties (из админки) или bio (для обратной совместимости) */}
                       {master.specialties && master.specialties.length > 0 ? (
-                        <p className="text-gray-600 mt-1">{master.specialties.join(', ')}</p>
+                        <p className="text-muted-foreground mt-1">{master.specialties.join(', ')}</p>
                       ) : master.bio ? (
-                        <p className="text-gray-600 mt-1">{master.bio}</p>
+                        <p className="text-muted-foreground mt-1">{master.bio}</p>
                       ) : null}
                       <div className="flex gap-4 mt-2">
-                        <span className="text-sm text-gray-500">⭐ {master.rating}</span>
-                        <span className="text-sm text-gray-500">💼 {master.experience} лет</span>
+                        <span className="text-sm text-muted-foreground">⭐ {master.rating}</span>
+                        <span className="text-sm text-muted-foreground">💼 {master.experience} лет</span>
                       </div>
                     </div>
                   </div>
@@ -87,7 +87,7 @@ export default function MasterSelection() {
             {selectedMaster && (
               <button
                 onClick={handleNext}
-                className="w-full mt-6 bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
+                className="w-full mt-6 bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:bg-primary/90 transition"
               >
                 Выбрать время
               </button>

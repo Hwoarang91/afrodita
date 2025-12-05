@@ -41,12 +41,12 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-card rounded-2xl shadow-xl p-8 text-center">
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-card rounded-2xl shadow-xl p-8 text-center border border-border">
         <div className="text-6xl mb-4">🔐</div>
         <h1 className="text-2xl font-bold text-foreground mb-4">Авторизация</h1>
         <p className="text-muted-foreground mb-8">Пожалуйста, подождите...</p>
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
       </div>
     </div>
   );

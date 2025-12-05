@@ -27,25 +27,30 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    /* Улучшенный фон для лучшей читаемости - более светлый */
+    --background: 222.2 47% 11.5%;
     --foreground: 0 0% 98%;
-    --card: 222.2 84% 4.9%;
+    /* Карточки с лучшим контрастом */
+    --card: 222.2 40% 14%;
     --card-foreground: 0 0% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 222.2 40% 14%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 72.2% 50.6%;
+    --primary: 0 72.2% 55%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    /* Более контрастный secondary */
+    --secondary: 217.2 28% 22%;
+    --secondary-foreground: 0 0% 96%;
+    /* Улучшенный muted для лучшей читаемости текста */
+    --muted: 217.2 22% 26%;
+    --muted-foreground: 215 25% 80%;
+    --accent: 217.2 28% 22%;
+    --accent-foreground: 0 0% 96%;
+    --destructive: 0 65% 55%;
     --destructive-foreground: 0 0% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 0 72.2% 50.6%;
+    /* Более видимые границы для лучшего разделения элементов */
+    --border: 217.2 22% 32%;
+    --input: 217.2 22% 26%;
+    --ring: 0 72.2% 55%;
   }
 }
 

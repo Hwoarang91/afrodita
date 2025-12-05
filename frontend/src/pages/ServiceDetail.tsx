@@ -14,8 +14,8 @@ export default function ServiceDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+      <div className="min-h-screen bg-background p-4">
+        <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-6 border border-border">
           <ServiceCardSkeleton />
         </div>
       </div>
@@ -24,7 +24,7 @@ export default function ServiceDetail() {
 
   if (!service) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
+      <div className="min-h-screen bg-background p-4">
         <div className="max-w-2xl mx-auto">
           <EmptyState
             icon="❌"
@@ -39,11 +39,11 @@ export default function ServiceDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+    <div className="min-h-screen bg-background p-4">
+      <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-6 border border-border">
         <button
           onClick={() => navigate(-1)}
-          className="mb-4 text-primary-600 hover:text-primary-700"
+          className="mb-4 text-primary hover:text-primary/80"
         >
           ← Назад
         </button>
@@ -51,22 +51,22 @@ export default function ServiceDetail() {
           <img
             src={service.imageUrl}
             alt={service.name}
-            className="w-full h-64 object-cover rounded-lg mb-6"
+            className="w-full h-64 object-cover rounded-lg mb-6 border border-border"
           />
         )}
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">{service.name}</h1>
-        <p className="text-gray-600 mb-6">{service.description}</p>
+        <h1 className="text-3xl font-bold text-foreground mb-4">{service.name}</h1>
+        <p className="text-muted-foreground mb-6">{service.description}</p>
         <div className="flex justify-between items-center mb-6">
           <div>
-            <span className="text-3xl font-bold text-primary-600">{service.price} ₽</span>
+            <span className="text-3xl font-bold text-primary">{service.price} ₽</span>
           </div>
-          <div className="text-gray-500">
+          <div className="text-muted-foreground">
             <span className="text-lg">{service.duration} минут</span>
           </div>
         </div>
         <button
           onClick={() => navigate(`/masters?serviceId=${service.id}`)}
-          className="w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
+          className="w-full bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:bg-primary/90 transition"
         >
           Выбрать мастера
         </button>
