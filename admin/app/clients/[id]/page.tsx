@@ -26,7 +26,6 @@ export default function ClientDetailPage() {
   const [adminNotes, setAdminNotes] = useState('');
   const [showNotificationSettingsModal, setShowNotificationSettingsModal] = useState(false);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
-  const [reminderIntervals, setReminderIntervals] = useState<number[]>([24, 2]);
   const queryClient = useQueryClient();
 
   const { data: client, isLoading: clientLoading } = useQuery({
@@ -48,10 +47,8 @@ export default function ClientDetailPage() {
   useEffect(() => {
     if (client?.notificationSettings) {
       setRemindersEnabled(client.notificationSettings.remindersEnabled !== false);
-      setReminderIntervals(client.notificationSettings.reminderIntervals || [24, 2]);
     } else {
       setRemindersEnabled(true);
-      setReminderIntervals([24, 2]);
     }
   }, [client?.notificationSettings]);
 
@@ -109,11 +106,10 @@ export default function ClientDetailPage() {
   });
 
   const updateNotificationSettingsMutation = useMutation({
-    mutationFn: async (settings: { remindersEnabled: boolean; reminderIntervals: number[] }) => {
+    mutationFn: async (settings: { remindersEnabled: boolean }) => {
       await apiClient.put(`/users/${clientId}`, {
         notificationSettings: {
           remindersEnabled: settings.remindersEnabled,
-          reminderIntervals: settings.reminderIntervals,
         },
       });
     },
@@ -263,25 +259,14 @@ export default function ClientDetailPage() {
                       {client?.notificationSettings?.remindersEnabled !== false ? 'Включены' : 'Отключены'}
                     </span>
                   </div>
-                  {client?.notificationSettings?.reminderIntervals && client.notificationSettings.reminderIntervals.length > 0 ? (
-                    <div className="text-muted-foreground">
-                      <span className="font-medium">Интервалы:</span>{' '}
-                      {client.notificationSettings.reminderIntervals
-                        .sort((a, b) => b - a)
-                        .map((h) => `${h}ч`)
-                        .join(', ')}
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground">
-                      <span className="font-medium">Интервалы:</span> Используются глобальные настройки
-                    </div>
-                  )}
+                  <div className="text-muted-foreground text-xs mt-2">
+                    Интервалы напоминаний настраиваются в глобальных настройках системы
+                  </div>
                 </div>
               </div>
               <button
                 onClick={() => {
                   setRemindersEnabled(client?.notificationSettings?.remindersEnabled !== false);
-                  setReminderIntervals(client?.notificationSettings?.reminderIntervals || [24, 2]);
                   setShowNotificationSettingsModal(true);
                 }}
                 className="mt-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-sm"
@@ -522,7 +507,7 @@ export default function ClientDetailPage() {
           <DialogHeader>
             <DialogTitle>Настройки уведомлений</DialogTitle>
             <DialogDescription>
-              Настройте напоминания о записях для этого клиента
+              Настройте напоминания о записях для этого клиента. Интервалы напоминаний настраиваются в глобальных настройках системы.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -538,48 +523,9 @@ export default function ClientDetailPage() {
                 className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
               />
             </div>
-            {remindersEnabled && (
-              <div>
-                <Label className="text-sm font-medium mb-2 block">
-                  Интервалы напоминаний (часы до записи)
-                </Label>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Выберите, за сколько часов до записи отправлять напоминания
-                </p>
-                <div className="space-y-2">
-                  {[48, 24, 12, 6, 2, 1].map((hours) => (
-                    <label key={hours} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={reminderIntervals.includes(hours)}
-                        onChange={(e) => {
-                          const current = [...reminderIntervals];
-                          if (e.target.checked) {
-                            current.push(hours);
-                            current.sort((a, b) => b - a);
-                          } else {
-                            const index = current.indexOf(hours);
-                            if (index > -1) {
-                              current.splice(index, 1);
-                            }
-                          }
-                          setReminderIntervals(current);
-                        }}
-                        className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
-                      />
-                      <span className="ml-2 text-sm text-foreground">
-                        За {hours} {hours === 1 ? 'час' : hours < 5 ? 'часа' : 'часов'}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                {reminderIntervals.length === 0 && (
-                  <p className="text-xs text-red-500 dark:text-red-400 mt-2">
-                    Выберите хотя бы один интервал
-                  </p>
-                )}
-              </div>
-            )}
+            <p className="text-xs text-muted-foreground">
+              Интервалы напоминаний (48ч, 24ч, 12ч, 6ч, 2ч, 1ч) настраиваются в разделе "Настройки" → "Уведомления"
+            </p>
           </div>
           <DialogFooter>
             <Button
@@ -587,23 +533,17 @@ export default function ClientDetailPage() {
               onClick={() => {
                 setShowNotificationSettingsModal(false);
                 setRemindersEnabled(client?.notificationSettings?.remindersEnabled !== false);
-                setReminderIntervals(client?.notificationSettings?.reminderIntervals || [24, 2]);
               }}
             >
               Отмена
             </Button>
             <Button
               onClick={() => {
-                if (remindersEnabled && reminderIntervals.length === 0) {
-                  toast.warning('Выберите хотя бы один интервал напоминаний');
-                  return;
-                }
                 updateNotificationSettingsMutation.mutate({
                   remindersEnabled,
-                  reminderIntervals: remindersEnabled ? reminderIntervals : [],
                 });
               }}
-              disabled={updateNotificationSettingsMutation.isPending || (remindersEnabled && reminderIntervals.length === 0)}
+              disabled={updateNotificationSettingsMutation.isPending}
             >
               {updateNotificationSettingsMutation.isPending ? 'Сохранение...' : 'Сохранить'}
             </Button>
