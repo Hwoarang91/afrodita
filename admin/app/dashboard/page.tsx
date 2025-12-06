@@ -3,6 +3,25 @@ import { fetchFromAPI } from '@/lib/api-server';
 import { DashboardClient } from './DashboardClient';
 import { cookies } from 'next/headers';
 
+interface DashboardStats {
+  totalAppointments: number;
+  completedAppointments: number;
+  cancelledAppointments: number;
+  pendingAppointments: number;
+  confirmedAppointments: number;
+  revenue: number;
+  activeMasters: number;
+  completionRate: number;
+  appointmentsByDay: {
+    labels: string[];
+    data: number[];
+  };
+  revenueByDay: {
+    labels: string[];
+    data: number[];
+  };
+}
+
 // Server Component для начальной загрузки данных
 // Использует cookies для аутентификации
 export default async function Dashboard() {
@@ -10,7 +29,7 @@ export default async function Dashboard() {
   const startDate = format(subDays(new Date(), 30), 'yyyy-MM-dd');
   const endDate = format(new Date(), 'yyyy-MM-dd');
 
-  let initialStats = null;
+  let initialStats: DashboardStats | undefined = undefined;
   let error = null;
 
   try {
@@ -21,7 +40,7 @@ export default async function Dashboard() {
     const token = cookieStore.get('admin-token')?.value;
 
     if (token) {
-      initialStats = await fetchFromAPI(`/analytics/dashboard?startDate=${startDate}&endDate=${endDate}`);
+      initialStats = (await fetchFromAPI(`/analytics/dashboard?startDate=${startDate}&endDate=${endDate}`)) as DashboardStats;
     }
   } catch (err: any) {
     // Если ошибка аутентификации или другие ошибки - игнорируем

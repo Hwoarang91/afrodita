@@ -123,6 +123,7 @@ export default function ClientsPage() {
         firstName: newClientData.firstName,
         lastName: newClientData.lastName,
         phone: newClientData.phone,
+        bonusPoints: 0,
         createdAt: new Date().toISOString(),
       };
       

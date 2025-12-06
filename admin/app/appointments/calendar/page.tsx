@@ -366,7 +366,7 @@ export default function CalendarPage() {
                 </Button>
                 <Button
                   onClick={() => setView('month')}
-                  variant={view === 'month' ? 'default' : 'outline'}
+                  variant="outline"
                 >
                   Месяц
                 </Button>
