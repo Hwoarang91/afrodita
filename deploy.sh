@@ -300,13 +300,46 @@ for i in {1..30}; do
     sleep 2
 done
 
-# Проверка существования пользователя и базы данных
+# Проверка и создание пользователя и базы данных
 print_info "Проверка пользователя и базы данных..."
-DB_EXISTS=$($DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -lqt | cut -d \| -f 1 | grep -w ${POSTGRES_DB:-afrodita} | wc -l)
 
-if [ "$DB_EXISTS" -eq "0" ]; then
-    print_info "База данных не существует. Создание..."
-    $DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -c "CREATE DATABASE ${POSTGRES_DB:-afrodita};" 2>/dev/null || print_warning "База данных уже существует или ошибка создания"
+# Попытка подключиться как суперпользователь postgres для создания/обновления пользователя
+if $DOCKER_COMPOSE_CMD exec -T postgres psql -U postgres -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
+    print_info "Создание/обновление пользователя PostgreSQL..."
+    $DOCKER_COMPOSE_CMD exec -T postgres psql -U postgres <<EOF
+-- Создание пользователя (если не существует) или обновление пароля
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_user WHERE usename = '${POSTGRES_USER:-afrodita_user}') THEN
+        CREATE USER ${POSTGRES_USER:-afrodita_user} WITH PASSWORD '${POSTGRES_PASSWORD}';
+        ALTER USER ${POSTGRES_USER:-afrodita_user} CREATEDB;
+        RAISE NOTICE 'Пользователь ${POSTGRES_USER:-afrodita_user} создан';
+    ELSE
+        ALTER USER ${POSTGRES_USER:-afrodita_user} WITH PASSWORD '${POSTGRES_PASSWORD}';
+        RAISE NOTICE 'Пароль пользователя ${POSTGRES_USER:-afrodita_user} обновлен';
+    END IF;
+END
+\$\$;
+
+-- Создание базы данных (если не существует)
+SELECT 'CREATE DATABASE ${POSTGRES_DB:-afrodita} OWNER ${POSTGRES_USER:-afrodita_user}'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${POSTGRES_DB:-afrodita}')\gexec
+
+-- Предоставление прав
+GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB:-afrodita} TO ${POSTGRES_USER:-afrodita_user};
+\c ${POSTGRES_DB:-afrodita}
+GRANT ALL ON SCHEMA public TO ${POSTGRES_USER:-afrodita_user};
+EOF
+    print_success "Пользователь и база данных настроены"
+else
+    print_warning "Не удалось подключиться как postgres. Пробуем с текущим пользователем..."
+    # Проверка существования базы данных
+    DB_EXISTS=$($DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -lqt 2>/dev/null | cut -d \| -f 1 | grep -w ${POSTGRES_DB:-afrodita} | wc -l)
+    
+    if [ "$DB_EXISTS" -eq "0" ]; then
+        print_info "База данных не существует. Создание..."
+        $DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -c "CREATE DATABASE ${POSTGRES_DB:-afrodita};" 2>/dev/null || print_warning "База данных уже существует или ошибка создания"
+    fi
 fi
 
 # Выполнение миграций
@@ -329,27 +362,57 @@ done
 # Выполнение миграций через TypeORM CLI
 print_info "Запуск миграций базы данных..."
 
-# Сначала пробуем через npm run migration:run (для dev окружения)
-MIGRATION_OUTPUT=$($DOCKER_COMPOSE_CMD exec -T backend npm run migration:run 2>&1)
+# Проверяем наличие миграций в контейнере
+print_info "Проверка наличия миграций..."
+if $DOCKER_COMPOSE_CMD exec -T backend test -d /app/dist/migrations 2>/dev/null; then
+    MIGRATION_COUNT=$($DOCKER_COMPOSE_CMD exec -T backend sh -c "ls -1 /app/dist/migrations/*.js 2>/dev/null | wc -l" | tr -d ' ')
+    if [ "$MIGRATION_COUNT" -gt "0" ]; then
+        print_success "Найдено $MIGRATION_COUNT файлов миграций"
+    else
+        print_warning "Миграции не найдены в dist/migrations/"
+    fi
+else
+    print_warning "Директория dist/migrations не найдена"
+fi
+
+# Пробуем выполнить миграции через TypeORM CLI
+print_info "Выполнение миграций через TypeORM CLI..."
+
+# Сначала пробуем через скомпилированный код (production)
+MIGRATION_OUTPUT=$($DOCKER_COMPOSE_CMD exec -T backend sh -c "cd /app && node node_modules/typeorm/cli.js migration:run -d dist/config/data-source.js" 2>&1)
 MIGRATION_EXIT_CODE=$?
 
 if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
-    print_warning "Миграции через ts-node не выполнены. Пробуем через скомпилированный код..."
-    
-    # Альтернативный способ: через скомпилированный код
+    print_warning "Миграции через node не выполнены. Пробуем через ts-node..."
+    # Альтернативный способ: через ts-node
     MIGRATION_OUTPUT=$($DOCKER_COMPOSE_CMD exec -T backend sh -c "cd /app && node -r ts-node/register node_modules/typeorm/cli.js migration:run -d dist/config/data-source.js" 2>&1)
     MIGRATION_EXIT_CODE=$?
 fi
 
 if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
-    print_success "Миграции успешно применены"
+    print_success "Миграции успешно применены через CLI"
     echo "$MIGRATION_OUTPUT" | grep -E "(Migration|migration|executed|applied)" | tail -5 || echo "$MIGRATION_OUTPUT" | tail -5
 else
-    print_warning "Миграции не выполнены через CLI"
+    print_warning "Миграции не выполнены через CLI (код выхода: $MIGRATION_EXIT_CODE)"
     echo "$MIGRATION_OUTPUT" | tail -10
-    print_info "Миграции будут выполнены автоматически при старте backend (если AUTO_RUN_MIGRATIONS не отключен)"
-    print_info "Или выполните вручную:"
-    echo "  $DOCKER_COMPOSE_CMD exec backend npm run migration:run"
+    print_info "Миграции будут выполнены автоматически при старте backend (AUTO_RUN_MIGRATIONS=true)"
+    print_info "Проверьте логи backend после перезапуска:"
+    echo "  $DOCKER_COMPOSE_CMD logs backend | grep -i migration"
+fi
+
+# Перезапускаем backend, чтобы миграции выполнились автоматически (если не выполнились через CLI)
+if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
+    print_info "Перезапуск backend для автоматического выполнения миграций..."
+    $DOCKER_COMPOSE_CMD restart backend
+    print_info "Ожидание 15 секунд для выполнения миграций..."
+    sleep 15
+    
+    # Проверяем логи на наличие сообщений о миграциях
+    MIGRATION_LOG=$($DOCKER_COMPOSE_CMD logs backend 2>&1 | grep -i "миграц\|migration" | tail -5)
+    if [ -n "$MIGRATION_LOG" ]; then
+        print_info "Логи миграций:"
+        echo "$MIGRATION_LOG"
+    fi
 fi
 
 # Проверка существования таблиц
