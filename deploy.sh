@@ -280,13 +280,13 @@ sleep 30
 print_info "Проверка статуса контейнеров..."
 $DOCKER_COMPOSE_CMD ps
 
-# Шаг 10: Выполнение миграций
-print_info "Шаг 10: Выполнение миграций базы данных..."
+# Шаг 10: Проверка и настройка базы данных
+print_info "Шаг 10: Проверка и настройка базы данных..."
 
 # Ждем готовности базы данных
 print_info "Ожидание готовности PostgreSQL..."
 for i in {1..30}; do
-    if $DOCKER_COMPOSE_CMD exec -T postgres pg_isready -U afrodita_user > /dev/null 2>&1; then
+    if $DOCKER_COMPOSE_CMD exec -T postgres pg_isready -U ${POSTGRES_USER:-afrodita_user} > /dev/null 2>&1; then
         print_success "PostgreSQL готов"
         break
     fi
@@ -297,13 +297,26 @@ for i in {1..30}; do
     sleep 2
 done
 
+# Проверка существования пользователя и базы данных
+print_info "Проверка пользователя и базы данных..."
+DB_EXISTS=$($DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -lqt | cut -d \| -f 1 | grep -w ${POSTGRES_DB:-afrodita} | wc -l)
+
+if [ "$DB_EXISTS" -eq "0" ]; then
+    print_info "База данных не существует. Создание..."
+    $DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -c "CREATE DATABASE ${POSTGRES_DB:-afrodita};" 2>/dev/null || print_warning "База данных уже существует или ошибка создания"
+fi
+
 # Выполнение миграций
 print_info "Применение миграций..."
 $DOCKER_COMPOSE_CMD exec -T backend npm run migration:run
 
 if [ $? -ne 0 ]; then
     print_warning "Возможна ошибка при выполнении миграций. Проверьте логи:"
-    echo "  docker-compose logs backend"
+    echo "  $DOCKER_COMPOSE_CMD logs backend"
+    print_info "Если ошибка связана с аутентификацией, попробуйте:"
+    echo "  1. Остановите контейнеры: $DOCKER_COMPOSE_CMD down -v"
+    echo "  2. Удалите volume PostgreSQL: docker volume rm afrodita_postgres_data"
+    echo "  3. Запустите скрипт развертывания снова"
 fi
 
 # Шаг 11: Финальная проверка
