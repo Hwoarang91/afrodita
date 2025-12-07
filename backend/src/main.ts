@@ -88,11 +88,8 @@ async function bootstrap() {
     const app = await NestFactory.create(AppModule, {
       bodyParser: true,
       rawBody: false,
+      logger: ['error', 'warn', 'log', 'debug', 'verbose'],
     });
-    
-    // Ждем инициализации всех модулей, особенно TypeORM
-    await app.init();
-    logger.log('Приложение инициализировано, все модули готовы');
     
     // Увеличиваем лимит для JSON body parser (по умолчанию 100kb, увеличиваем до 10MB)
     app.use(require('express').json({ limit: '10mb' }));
@@ -181,25 +178,30 @@ async function bootstrap() {
   const port = process.env.PORT || process.env.BACKEND_PORT || 3001;
   logger.log(`Запуск сервера на порту ${port}...`);
   
-  try {
+  // Используем Promise для app.listen() с явной обработкой
+  await new Promise<void>((resolve, reject) => {
     logger.log(`Вызов app.listen(${port}, '0.0.0.0')...`);
-    // app.listen() автоматически инициализирует приложение и регистрирует все маршруты
-    const httpServer = await app.listen(port, '0.0.0.0');
-    logger.log(`app.listen() завершился, httpServer получен`);
     
-    // Проверяем, что сервер действительно слушает
-    if (httpServer && httpServer.listening) {
-      logger.log(`✅ Backend успешно запущен на порту ${port}`);
-      logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
-      logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
-    } else {
-      logger.warn(`⚠️ app.listen() завершился, но httpServer.listening = false`);
-    }
-  } catch (listenError: any) {
-    logger.error(`❌ Ошибка при запуске сервера на порту ${port}:`, listenError.message);
-    logger.error(`Stack trace:`, listenError.stack);
-    throw listenError;
-  }
+    app.listen(port, '0.0.0.0')
+      .then((httpServer) => {
+        logger.log(`app.listen() завершился, httpServer получен`);
+        
+        // Проверяем, что сервер действительно слушает
+        if (httpServer && httpServer.listening) {
+          logger.log(`✅ Backend успешно запущен на порту ${port}`);
+          logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
+          logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
+        } else {
+          logger.warn(`⚠️ app.listen() завершился, но httpServer.listening = false`);
+        }
+        resolve();
+      })
+      .catch((listenError: any) => {
+        logger.error(`❌ Ошибка при запуске сервера на порту ${port}:`, listenError.message);
+        logger.error(`Stack trace:`, listenError.stack);
+        reject(listenError);
+      });
+  });
   } catch (error) {
     logger.error('Ошибка при запуске приложения:', error);
     // Закрываем соединение с DataSource при ошибке
