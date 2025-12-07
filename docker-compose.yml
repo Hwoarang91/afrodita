@@ -51,8 +51,8 @@ services:
       LC_ALL: ru_RU.UTF-8
       PYTHONIOENCODING: utf-8
       NODE_ENV: ${NODE_ENV:-production}
-    ports:
-      - "${BACKEND_PORT:-3001}:3001"
+    expose:
+      - "3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,8 +73,8 @@ services:
     container_name: afrodita-frontend
     env_file:
       - .env
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+    expose:
+      - "3000"
     environment:
       TZ: Europe/Moscow
     depends_on:
@@ -95,8 +95,8 @@ services:
     container_name: afrodita-admin
     env_file:
       - .env
-    ports:
-      - "${ADMIN_PORT:-3002}:3002"
+    expose:
+      - "3002"
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       TZ: Europe/Moscow
@@ -110,6 +110,32 @@ services:
       timeout: 10s
       retries: 5
       start_period: 40s
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: afrodita-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SERVER_IP: ${SERVER_IP:-localhost}
+      TZ: Europe/Moscow
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --timeout=3 -O- http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
 
 volumes:
   postgres_data:
