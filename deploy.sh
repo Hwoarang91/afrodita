@@ -303,9 +303,17 @@ done
 # Проверка и создание пользователя и базы данных
 print_info "Проверка пользователя и базы данных..."
 
+# Ждем полной готовности PostgreSQL
+print_info "Ожидание полной готовности PostgreSQL..."
+sleep 5
+
 # Попытка подключиться как суперпользователь postgres для создания/обновления пользователя
+print_info "Попытка подключения как суперпользователь postgres..."
 if $DOCKER_COMPOSE_CMD exec -T postgres psql -U postgres -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
+    print_success "Подключение как postgres успешно"
     print_info "Создание/обновление пользователя PostgreSQL..."
+    
+    # Создаем пользователя и базу данных через SQL скрипт
     $DOCKER_COMPOSE_CMD exec -T postgres psql -U postgres <<EOF
 -- Создание пользователя (если не существует) или обновление пароля
 DO \$\$
@@ -327,18 +335,41 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${POSTGRES_DB:-afrodi
 
 -- Предоставление прав
 GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB:-afrodita} TO ${POSTGRES_USER:-afrodita_user};
-\c ${POSTGRES_DB:-afrodita}
-GRANT ALL ON SCHEMA public TO ${POSTGRES_USER:-afrodita_user};
 EOF
+
+    # Подключаемся к базе данных и предоставляем права на схему
+    $DOCKER_COMPOSE_CMD exec -T postgres psql -U postgres -d ${POSTGRES_DB:-afrodita} <<EOF
+GRANT ALL ON SCHEMA public TO ${POSTGRES_USER:-afrodita_user};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${POSTGRES_USER:-afrodita_user};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${POSTGRES_USER:-afrodita_user};
+EOF
+
     print_success "Пользователь и база данных настроены"
-else
-    print_warning "Не удалось подключиться как postgres. Пробуем с текущим пользователем..."
-    # Проверка существования базы данных
-    DB_EXISTS=$($DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -lqt 2>/dev/null | cut -d \| -f 1 | grep -w ${POSTGRES_DB:-afrodita} | wc -l)
     
-    if [ "$DB_EXISTS" -eq "0" ]; then
-        print_info "База данных не существует. Создание..."
-        $DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -c "CREATE DATABASE ${POSTGRES_DB:-afrodita};" 2>/dev/null || print_warning "База данных уже существует или ошибка создания"
+    # Проверяем подключение с новыми учетными данными
+    print_info "Проверка подключения с новыми учетными данными..."
+    if $DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -d ${POSTGRES_DB:-afrodita} -c "SELECT 1;" > /dev/null 2>&1; then
+        print_success "Подключение с новыми учетными данными успешно"
+    else
+        print_error "Не удалось подключиться с новыми учетными данными"
+        print_info "Попробуйте запустить скрипт fix-postgres-auth.sh вручную"
+    fi
+else
+    print_warning "Не удалось подключиться как postgres"
+    print_info "Проверяем, может ли пользователь ${POSTGRES_USER:-afrodita_user} подключиться..."
+    
+    # Проверка существования базы данных
+    if $DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -d ${POSTGRES_DB:-afrodita} -c "SELECT 1;" > /dev/null 2>&1; then
+        print_success "Подключение с пользователем ${POSTGRES_USER:-afrodita_user} успешно"
+    else
+        print_error "Не удалось подключиться к базе данных"
+        print_warning "Возможно, нужно пересоздать volume PostgreSQL"
+        print_info "Выполните следующие команды:"
+        echo "  docker compose down"
+        echo "  docker volume rm afrodita_postgres_data"
+        echo "  docker compose up -d postgres"
+        echo "  ./deploy.sh"
+        exit 1
     fi
 fi
 
