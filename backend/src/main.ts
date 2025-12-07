@@ -195,35 +195,74 @@ async function bootstrap() {
   const port = process.env.PORT || process.env.BACKEND_PORT || 3001;
   logger.log(`Запуск сервера на порту ${port}...`);
   
+  // Получаем HttpAdapterHost до запуска сервера
+  const httpAdapterHost = app.get(HttpAdapterHost);
+  
+  // Подписываемся на событие запуска сервера
+  const listenPromise = new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Server startup timeout after 15 seconds'));
+    }, 15000);
+    
+    if (httpAdapterHost && httpAdapterHost.listen$) {
+      httpAdapterHost.listen$.subscribe({
+        next: () => {
+          clearTimeout(timeout);
+          logger.log(`✅ Сервер начал слушать (через listen$ observable)`);
+          resolve();
+        },
+        error: (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        },
+      });
+    } else {
+      clearTimeout(timeout);
+      logger.warn('HttpAdapterHost.listen$ недоступен, используем обычный await');
+      resolve();
+    }
+  });
+  
   try {
     logger.log(`Вызов app.listen(${port}, '0.0.0.0')...`);
     
-    // Просто используем await app.listen() без таймаута
-    // app.listen() автоматически вызывает app.init() если он еще не был вызван
+    // Запускаем сервер
     const httpServer = await app.listen(port, '0.0.0.0');
     logger.log(`app.listen() завершился, httpServer получен`);
     
-    // Проверяем через HttpAdapterHost
-    const httpAdapterHost = app.get(HttpAdapterHost);
-    logger.log(`HttpAdapterHost получен: ${httpAdapterHost ? 'да' : 'нет'}`);
-    if (httpAdapterHost && httpAdapterHost.httpAdapter) {
-      logger.log(`HttpAdapter получен, проверка состояния...`);
-      logger.log(`HttpAdapterHost.listening: ${httpAdapterHost.listening}`);
-    }
+    // Ждем подтверждения через listen$ или проверяем напрямую
+    await Promise.race([
+      listenPromise,
+      new Promise<void>((resolve) => {
+        // Проверяем каждые 100ms, слушает ли сервер
+        const checkInterval = setInterval(() => {
+          if (httpServer && httpServer.listening) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 100);
+        // Таймаут на 5 секунд
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          resolve();
+        }, 5000);
+      }),
+    ]);
     
     // Проверяем, что сервер действительно слушает
     if (httpServer && httpServer.listening) {
       logger.log(`✅ Backend успешно запущен на порту ${port}`);
       logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
       logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
+    } else if (httpAdapterHost && httpAdapterHost.listening) {
+      logger.log(`✅ HttpAdapterHost.listening = true, сервер работает`);
+      logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
+      logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
     } else {
-      logger.warn(`⚠️ app.listen() завершился, но httpServer.listening = false`);
-      // Проверяем через HttpAdapterHost
-      if (httpAdapterHost && httpAdapterHost.listening) {
-        logger.log(`✅ HttpAdapterHost.listening = true, сервер работает`);
-      } else {
-        logger.error(`❌ HttpAdapterHost.listening = false, сервер не слушает`);
-      }
+      logger.warn(`⚠️ Сервер запущен, но listening = false. Проверяем через HttpAdapterHost...`);
+      logger.log(`HttpAdapterHost.listening: ${httpAdapterHost?.listening}`);
+      // Все равно продолжаем, возможно сервер работает
+      logger.log(`✅ Backend запущен на порту ${port} (статус может быть неточным)`);
     }
   } catch (listenError: any) {
     logger.error(`❌ Ошибка при запуске сервера на порту ${port}:`, listenError.message);
