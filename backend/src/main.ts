@@ -89,6 +89,11 @@ async function bootstrap() {
       bodyParser: true,
       rawBody: false,
     });
+    
+    // Ждем инициализации всех модулей, особенно TypeORM
+    await app.init();
+    logger.log('Приложение инициализировано, все модули готовы');
+    
     // Увеличиваем лимит для JSON body parser (по умолчанию 100kb, увеличиваем до 10MB)
     app.use(require('express').json({ limit: '10mb' }));
     app.use(require('express').urlencoded({ limit: '10mb', extended: true }));
