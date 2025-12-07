@@ -4,6 +4,13 @@ export class AddServiceIsCategory1701234567892 implements MigrationInterface {
   name = 'AddServiceIsCategory1701234567892';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Проверяем существование таблицы services
+    const tableExists = await queryRunner.hasTable('services');
+    if (!tableExists) {
+      console.log('Таблица services не существует, пропускаем миграцию');
+      return;
+    }
+    
     // Проверяем, существует ли колонка isCategory
     const table = await queryRunner.getTable('services');
     const isCategoryColumn = table?.findColumnByName('isCategory');

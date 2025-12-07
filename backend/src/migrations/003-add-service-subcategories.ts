@@ -4,6 +4,13 @@ export class AddServiceSubcategories1701234567891 implements MigrationInterface 
   name = 'AddServiceSubcategories1701234567891';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Проверяем существование таблицы services
+    const tableExists = await queryRunner.hasTable('services');
+    if (!tableExists) {
+      console.log('Таблица services не существует, пропускаем миграцию');
+      return;
+    }
+    
     // Проверяем, существует ли колонка parentServiceId
     const table = await queryRunner.getTable('services');
     const parentServiceIdColumn = table?.findColumnByName('parentServiceId');
