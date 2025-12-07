@@ -1,7 +1,7 @@
 FROM node:18-alpine AS builder
 
-# Установка tzdata для правильной работы с таймзоной
-RUN apk add --no-cache tzdata
+# Установка tzdata и build tools для компиляции нативных модулей (bcrypt)
+RUN apk add --no-cache tzdata python3 make g++
 
 # Настройка кодировки для правильного отображения русского языка
 ENV LANG=C.UTF-8
@@ -37,8 +37,14 @@ RUN npm ci --omit=dev
 # Копируем собранные файлы из builder stage
 COPY --from=builder /app/dist ./dist
 
-# Копируем node_modules из builder для нативных модулей (bcrypt и его зависимости)
-COPY --from=builder /app/node_modules ./node_modules
+# Копируем bcrypt из builder stage (уже скомпилирован)
+# Это необходимо, так как bcrypt требует компиляции нативных модулей
+RUN mkdir -p node_modules/bcrypt
+COPY --from=builder /app/node_modules/bcrypt ./node_modules/bcrypt
+
+# Копируем зависимости bcrypt
+COPY --from=builder /app/node_modules/@mapbox ./node_modules/@mapbox 2>/dev/null || true
+COPY --from=builder /app/node_modules/node-pre-gyp ./node_modules/node-pre-gyp 2>/dev/null || true
 
 EXPOSE 3001
 
