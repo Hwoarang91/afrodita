@@ -105,7 +105,22 @@ docker compose logs postgres
 - База данных пустая
 - Backend запустился до выполнения миграций
 
-**Решение 1: Выполнить миграции вручную**
+**ВАЖНО:** Начиная с последней версии, миграции выполняются автоматически при старте backend в production режиме (если `AUTO_RUN_MIGRATIONS=true` в .env).
+
+**Решение 1: Перезапустить backend (миграции выполнятся автоматически)**
+
+```bash
+# Перезапустить backend контейнер
+docker compose restart backend
+
+# Проверить логи - должны увидеть сообщение о выполнении миграций
+docker compose logs backend | grep -i migration
+
+# Проверить созданные таблицы
+docker compose exec postgres psql -U afrodita_user -d afrodita -c "\dt"
+```
+
+**Решение 2: Выполнить миграции вручную**
 
 ```bash
 # Проверить подключение к базе данных
@@ -118,7 +133,7 @@ docker compose exec backend npm run migration:run
 docker compose exec postgres psql -U afrodita_user -d afrodita -c "\dt"
 ```
 
-**Решение 2: Если миграции не выполняются через npm**
+**Решение 3: Если миграции не выполняются через npm**
 
 ```bash
 # Выполнить миграции через node напрямую
@@ -128,17 +143,30 @@ docker compose exec backend sh -c "cd /app && node -r ts-node/register node_modu
 docker compose exec backend sh -c "cd /app && node node_modules/typeorm/cli.js migration:run -d dist/config/data-source.js"
 ```
 
-**Решение 3: Проверка существования миграций**
+**Решение 4: Отключить автоматическое выполнение миграций**
+
+Если нужно отключить автоматическое выполнение, добавьте в `.env`:
+
+```env
+AUTO_RUN_MIGRATIONS=false
+```
+
+Затем выполните миграции вручную.
+
+**Решение 5: Проверка существования миграций**
 
 ```bash
 # Проверить наличие файлов миграций
 docker compose exec backend ls -la /app/src/migrations/
 
+# Проверить скомпилированные миграции
+docker compose exec backend ls -la /app/dist/migrations/
+
 # Проверить логи миграций
 docker compose exec backend npm run migration:run
 ```
 
-**Решение 4: Пересоздание базы данных с миграциями**
+**Решение 6: Пересоздание базы данных с миграциями**
 
 ```bash
 # Остановить контейнеры
