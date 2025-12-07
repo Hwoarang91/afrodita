@@ -113,8 +113,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`Не удалось установить команды бота: ${error.message}`);
       }
       
-      await this.bot.launch();
-      this.logger.log('🤖 Telegram bot успешно запущен');
+      // Запускаем бота асинхронно, чтобы не блокировать запуск приложения
+      this.bot.launch().then(() => {
+        this.logger.log('🤖 Telegram bot успешно запущен');
+      }).catch((error: any) => {
+        this.logger.error(`Ошибка при запуске бота: ${error.message}`, error.stack);
+      });
     } catch (error: any) {
       // Обработка ошибки 409 - конфликт с другим экземпляром бота
       if (error.response?.error_code === 409 || error.message?.includes('409') || error.message?.includes('Conflict')) {
