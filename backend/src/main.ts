@@ -23,10 +23,9 @@ async function bootstrap() {
         if (!AppDataSource.isInitialized) {
           await AppDataSource.initialize();
         }
-        const pendingMigrations = await AppDataSource.showMigrations();
-        if (pendingMigrations && pendingMigrations.length > 0) {
-          logger.log(`Найдено ${pendingMigrations.length} невыполненных миграций. Применение...`);
-          const executedMigrations = await AppDataSource.runMigrations();
+        // Выполняем миграции - runMigrations вернет только те, которые были выполнены
+        const executedMigrations = await AppDataSource.runMigrations();
+        if (executedMigrations && executedMigrations.length > 0) {
           logger.log(`✅ Применено ${executedMigrations.length} миграций`);
         } else {
           logger.log('✅ Все миграции уже применены');
