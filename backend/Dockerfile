@@ -17,6 +17,21 @@ RUN npm ci --include=dev
 COPY . .
 RUN npm run build
 
+# Компилируем миграции TypeScript в JavaScript
+# TypeScript компилятор должен компилировать их автоматически, но на всякий случай компилируем явно
+RUN if [ -d "src/migrations" ] && [ -n "$(ls -A src/migrations/*.ts 2>/dev/null)" ]; then \
+      echo "Компиляция миграций TypeScript в JavaScript..."; \
+      mkdir -p dist/migrations && \
+      for file in src/migrations/*.ts; do \
+        filename=$(basename "$file" .ts); \
+        npx tsc "$file" --outDir dist/migrations --module commonjs --target ES2021 --esModuleInterop --skipLibCheck --declaration false --sourceMap false --rootDir src --resolveJsonModule false 2>&1 | head -3 || \
+        (echo "Компиляция $filename через альтернативный метод..." && \
+         node -e "const fs=require('fs'),path=require('path');const src=fs.readFileSync('$file','utf8');const js=src.replace(/import\s+(\{[^}]*\}|\w+)\s+from\s+['\"]([^'\"]+)['\"]/g,'const $1=require(\"$2\")').replace(/export\s+(class|interface|const|let|var|function)/g,'$1').replace(/export\s+default/g,'module.exports=');fs.writeFileSync(path.join('dist/migrations','$filename.js'),js);" 2>/dev/null || true); \
+      done; \
+      echo "Проверка скомпилированных миграций:"; \
+      ls -la dist/migrations/*.js 2>/dev/null | head -5 || echo "⚠️ Миграции не скомпилированы"; \
+    fi
+
 # Production stage
 FROM node:18-alpine
 
@@ -34,29 +49,18 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Копируем собранные файлы из builder stage
+# Копируем собранные файлы из builder stage (включая скомпилированные миграции)
 COPY --from=builder /app/dist ./dist
 
-# Копируем миграции из исходников builder stage (на случай, если они не скопировались в dist)
-# Сначала копируем во временную директорию
-COPY --from=builder /app/src/migrations ./temp_migrations
-
-# Перемещаем миграции в dist/migrations, если их там нет
-RUN if [ ! -d "dist/migrations" ] || [ -z "$(ls -A dist/migrations 2>/dev/null)" ]; then \
-      if [ -d "temp_migrations" ] && [ -n "$(ls -A temp_migrations 2>/dev/null)" ]; then \
-        mkdir -p dist/migrations && \
-        cp -r temp_migrations/* dist/migrations/ && \
-        echo "✅ Миграции скопированы из temp_migrations в dist/migrations"; \
-      fi; \
-    fi && \
-    rm -rf temp_migrations
-
-# Проверяем наличие миграций
-RUN if [ -d "dist/migrations" ] && [ -n "$(ls -A dist/migrations 2>/dev/null)" ]; then \
-      echo "✅ Миграции найдены в dist/migrations:"; \
-      ls -la dist/migrations/; \
+# Проверяем наличие скомпилированных миграций (.js файлы)
+RUN if [ -d "dist/migrations" ] && [ -n "$(ls -A dist/migrations/*.js 2>/dev/null)" ]; then \
+      echo "✅ Скомпилированные миграции найдены:"; \
+      ls -la dist/migrations/*.js | head -5; \
+      echo "Всего .js файлов: $(ls -1 dist/migrations/*.js 2>/dev/null | wc -l)"; \
     else \
-      echo "❌ Внимание: миграции не найдены в dist/migrations/"; \
+      echo "❌ Внимание: скомпилированные миграции (.js) не найдены в dist/migrations/"; \
+      echo "Содержимое dist/migrations:"; \
+      ls -la dist/migrations/ 2>/dev/null || echo "Директория не существует"; \
     fi
 
 # Копируем bcrypt из builder stage (уже скомпилирован)

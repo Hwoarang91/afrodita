@@ -13,7 +13,9 @@ export const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD || 'postgres',
   database: process.env.DB_NAME || 'afrodita',
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-  migrations: [__dirname + '/../migrations/*{.ts,.js}'],
+  migrations: process.env.NODE_ENV === 'production' 
+    ? [__dirname + '/../migrations/*.js']  // В production только .js файлы
+    : [__dirname + '/../migrations/*{.ts,.js}'],  // В development .ts и .js
   migrationsTableName: 'migrations',
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
