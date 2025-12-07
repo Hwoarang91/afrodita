@@ -21,7 +21,7 @@ export async function fetchFromAPI<T>(
   };
 
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    (headers as Record<string, string>).Authorization = `Bearer ${token}`;
   }
 
   try {

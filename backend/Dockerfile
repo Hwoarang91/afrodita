@@ -20,8 +20,8 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine
 
-# Установка tzdata для правильной работы с таймзоной
-RUN apk add --no-cache tzdata
+# Установка tzdata и wget для health checks
+RUN apk add --no-cache tzdata wget
 
 # Настройка кодировки для правильного отображения русского языка
 ENV LANG=C.UTF-8
@@ -36,6 +36,8 @@ RUN npm ci --omit=dev
 
 # Копируем собранные файлы из builder stage
 COPY --from=builder /app/dist ./dist
+# Копируем node_modules из builder для нативных модулей (bcrypt)
+COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3001
 

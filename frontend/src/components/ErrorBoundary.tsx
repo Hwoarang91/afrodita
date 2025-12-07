@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode, useEffect } from 'react';
+import { Component, ErrorInfo, ReactNode, useEffect } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -100,7 +100,7 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
           Произошла непредвиденная ошибка. Мы уже работаем над её исправлением.
         </p>
         
-        {process.env.NODE_ENV === 'development' && error && (
+        {import.meta.env.DEV && error && (
           <details className="mt-4 text-left bg-muted rounded-lg p-4 mb-4">
             <summary className="cursor-pointer text-sm font-medium text-foreground mb-2">
               Детали ошибки (только в режиме разработки)

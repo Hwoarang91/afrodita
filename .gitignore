@@ -109,6 +109,11 @@ out/
 .docker/
 docker-compose.override.yml
 *.dockerignore
+# Docker volumes
+postgres_data/
+postgres_data_dev/
+redis_data/
+redis_data_dev/
 
 # ==========================================
 # Testing
@@ -118,6 +123,19 @@ coverage/
 .nyc_output/
 .jest/
 *.test.js.snap
+coverage_*.txt
+coverage_check*.txt
+coverage_final*.txt
+coverage_progress.txt
+coverage_summary.txt
+coverage_target*.txt
+coverage_update.txt
+coverage_latest.txt
+coverage_new.txt
+coverage_current.txt
+coverage_goal.txt
+coverage_achieved.txt
+coverage.txt
 
 # ==========================================
 # Temporary files
@@ -233,3 +251,16 @@ site/
 # Local development files
 .local/
 local/
+
+# Test spec files (если не нужны в репозитории)
+# *.spec.ts - оставляем, так как это тесты
+
+# Временные файлы и артефакты проекта
+ck
+tatus
+--lost-found
+status
+
+# Lock files других менеджеров пакетов (если используем только npm)
+# yarn.lock
+# pnpm-lock.yaml

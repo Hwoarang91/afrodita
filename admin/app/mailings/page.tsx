@@ -158,7 +158,7 @@ export default function MailingsPage() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allIds = new Set(history?.data?.flatMap((item: BroadcastHistory) => item.notificationIds) || []);
+      const allIds = new Set<string>(history?.data?.flatMap((item: BroadcastHistory) => item.notificationIds) || []);
       setSelectedIds(allIds);
     } else {
       setSelectedIds(new Set());

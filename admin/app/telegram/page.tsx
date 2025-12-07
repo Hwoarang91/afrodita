@@ -1316,7 +1316,7 @@ function AutoRefreshSettings() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Загрузка текущего интервала
-  useQuery({
+  const { data: refreshIntervalData } = useQuery({
     queryKey: ['telegram-auto-refresh-interval'],
     queryFn: async () => {
       try {
@@ -1326,11 +1326,14 @@ function AutoRefreshSettings() {
         return 60; // Значение по умолчанию
       }
     },
-    onSuccess: (data) => {
-      setRefreshInterval(data);
-      setIsLoading(false);
-    },
   });
+
+  useEffect(() => {
+    if (refreshIntervalData !== undefined) {
+      setRefreshInterval(refreshIntervalData);
+      setIsLoading(false);
+    }
+  }, [refreshIntervalData]);
 
   const saveMutation = useMutation({
     mutationFn: async (interval: number) => {

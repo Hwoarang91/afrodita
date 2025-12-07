@@ -12,6 +12,7 @@ interface Settings {
   businessPhone: string;
   businessEmail: string;
   businessAddress: string;
+  timezone?: string;
   workingHours: {
     start: string;
     end: string;
@@ -61,7 +62,6 @@ export default function SettingsPage() {
       businessPhone: '',
       businessEmail: '',
       businessAddress: '',
-      timezone: 'Europe/Moscow',
       workingHours: {
         start: '09:00',
         end: '21:00',
@@ -100,7 +100,7 @@ export default function SettingsPage() {
         // Загружаем настройки с сервера
         const [settingsData, timezoneData, reminderIntervalsData, firstVisitDiscountData] = await Promise.all([
           apiClient.get('/settings').catch(() => ({ data: {} })),
-          apiClient.get('/settings/timezone').catch(() => ({ data: { value: defaultSettings.timezone } })),
+          apiClient.get('/settings/timezone').catch(() => ({ data: { value: 'Europe/Moscow' } })),
           apiClient.get('/settings/reminder-intervals').catch(() => ({ data: { value: defaultSettings.notifications.reminderIntervals } })),
           apiClient.get('/settings/first-visit-discount').catch(() => ({ data: { value: defaultSettings.firstVisitDiscount } })),
         ]);
@@ -108,7 +108,7 @@ export default function SettingsPage() {
         // Объединяем настройки из API с дефолтными значениями
         const mergedSettings = {
           ...defaultSettings,
-          timezone: timezoneData.data.value || defaultSettings.timezone,
+          timezone: timezoneData.data.value || defaultSettings.timezone || 'Europe/Moscow',
           bookingSettings: {
             ...defaultSettings.bookingSettings,
             ...(settingsData.data.bookingSettings || {}),

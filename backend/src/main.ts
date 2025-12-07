@@ -25,8 +25,19 @@ async function bootstrap() {
     logger.log('Приложение создано');
 
     // Security
-    // Временно отключено для отладки
-    // app.use(helmet());
+    if (process.env.NODE_ENV === 'production') {
+      app.use(helmet({
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            imgSrc: ["'self'", "data:", "https:"],
+          },
+        },
+        crossOriginEmbedderPolicy: false,
+      }));
+    }
     app.use(compression());
     logger.log('Middleware настроены');
 
@@ -36,13 +47,22 @@ async function bootstrap() {
   // app.use('/api/v1/appointments', appointmentLimiter);
 
   // CORS
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+    : process.env.NODE_ENV === 'production'
+    ? [
+        process.env.FRONTEND_URL,
+        process.env.ADMIN_URL,
+      ].filter(Boolean)
+    : [
+        process.env.FRONTEND_URL || 'http://localhost:3000',
+        process.env.ADMIN_URL || 'http://localhost:3002',
+        'http://localhost:3001',
+        'http://localhost:3002',
+      ];
+
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      process.env.ADMIN_URL || 'http://localhost:3002',
-      'http://localhost:3001',
-      'http://localhost:3002',
-    ],
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -57,8 +77,10 @@ async function bootstrap() {
     }),
   );
 
-  // API prefix
-  app.setGlobalPrefix('api/v1');
+  // API prefix (исключаем health endpoint)
+  app.setGlobalPrefix('api/v1', {
+    exclude: ['/health'],
+  });
   logger.log('API prefix установлен');
 
   // Swagger documentation - настраиваем ДО запуска сервера

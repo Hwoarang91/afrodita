@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { appointmentsApi } from '../api/appointments';
-import { AppointmentCardSkeleton, ProfileSkeleton } from '../components/SkeletonLoader';
+import { ProfileSkeleton } from '../components/SkeletonLoader';
 import EmptyState from '../components/EmptyState';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -32,7 +32,7 @@ export default function Profile() {
       
       return { previousAppointments };
     },
-    onError: (error: any, id, context) => {
+    onError: (error: any, _id, context) => {
       // Откатываем изменения при ошибке
       if (context?.previousAppointments) {
         queryClient.setQueryData(['appointments', 'upcoming'], context.previousAppointments);

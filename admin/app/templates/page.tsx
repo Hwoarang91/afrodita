@@ -172,7 +172,8 @@ export default function TemplatesPage() {
     if (!editingTemplate) return;
 
     if (editingTemplate.id) {
-      updateMutation.mutate({ id: editingTemplate.id, ...editingTemplate });
+      const { id, ...templateData } = editingTemplate;
+      updateMutation.mutate({ id, ...templateData });
     } else {
       createMutation.mutate(editingTemplate);
     }

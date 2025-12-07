@@ -9,6 +9,7 @@ import { FolderOpen, Edit, Trash2 } from 'lucide-react';
 interface Service {
   id: string;
   name: string;
+  description?: string;
   price: number;
   duration: number;
   isActive: boolean;

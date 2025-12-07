@@ -52,7 +52,7 @@ export default function Reschedule() {
       
       return { previousAppointment };
     },
-    onError: (error: any, variables, context) => {
+    onError: (error: any, _variables, context) => {
       // Откатываем изменения при ошибке
       if (context?.previousAppointment) {
         queryClient.setQueryData(['appointment', id], context.previousAppointment);

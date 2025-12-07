@@ -13,10 +13,10 @@ import { Loader2 } from 'lucide-react';
 interface Service {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   price: number;
   duration: number;
-  category: string;
+  category?: string;
   isActive: boolean;
   isCategory?: boolean;
   parentServiceId?: string | null;

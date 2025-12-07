@@ -18,6 +18,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 import { TemplatesModule } from './modules/templates/templates.module';
 import { DatabaseConfig } from './config/database.config';
 import { SchedulerModule } from './tasks/scheduler.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { SchedulerModule } from './tasks/scheduler.module';
     ReviewsModule,
     TemplatesModule,
     SchedulerModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

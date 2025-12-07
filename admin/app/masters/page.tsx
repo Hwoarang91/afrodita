@@ -684,7 +684,7 @@ function MasterModal({ master, open, onClose }: { master: Master | null; open: b
                       } else {
                         setFormData({
                           ...formData,
-                          serviceIds: formData.serviceIds.filter((id) => id !== service.id),
+                          serviceIds: formData.serviceIds.filter((id: string) => id !== service.id),
                         });
                       }
                     }}

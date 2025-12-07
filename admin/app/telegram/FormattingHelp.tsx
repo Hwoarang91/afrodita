@@ -51,7 +51,7 @@ export default function FormattingHelp() {
             <li><code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">[упоминание](tg://user?id=123456789)</code> - упоминание пользователя</li>
           </ul>
           <p className="text-xs mt-2 text-orange-600 dark:text-orange-400">
-            ⚠️ <strong>Важно:</strong> В MarkdownV2 нужно экранировать спецсимволы: <code className="bg-orange-100 dark:bg-orange-900/40 px-1 rounded">_ * [ ] ( ) ~ ` > # + - = | { } . !</code>
+            ⚠️ <strong>Важно:</strong> В MarkdownV2 нужно экранировать спецсимволы: <code className="bg-orange-100 dark:bg-orange-900/40 px-1 rounded">_ * [ ] ( ) ~ ` {'>'} # + - = | {'{'} {'}'} . !</code>
           </p>
         </div>
 

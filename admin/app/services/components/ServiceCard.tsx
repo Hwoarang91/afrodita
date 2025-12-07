@@ -10,7 +10,7 @@ import { SubcategoryList } from './SubcategoryList';
 interface Service {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   price: number;
   duration: number;
   isActive: boolean;

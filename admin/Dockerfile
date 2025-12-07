@@ -9,6 +9,10 @@ COPY . .
 RUN npm run build
 
 FROM node:20-alpine
+
+# Установка wget для health checks
+RUN apk add --no-cache wget
+
 WORKDIR /app
 
 # Копируем package файлы и устанавливаем только production зависимости

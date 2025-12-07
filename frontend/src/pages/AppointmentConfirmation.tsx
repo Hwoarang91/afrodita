@@ -50,7 +50,7 @@ export default function AppointmentConfirmation() {
       
       return { previousAppointments };
     },
-    onError: (error: any, variables, context) => {
+    onError: (error: any, _variables, context) => {
       // Откатываем изменения при ошибке
       if (context?.previousAppointments) {
         queryClient.setQueryData(['appointments'], context.previousAppointments);

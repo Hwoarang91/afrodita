@@ -1,0 +1,560 @@
+﻿
+> afrodita-backend@1.0.0 test:cov
+> jest --coverage
+
+node.exe : FAIL src/modules/users/users.service.spec.ts (8.375 s)
+строка:1 знак:1
++ & "D:\Program Files\nodejs/node.exe" "D:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (FAIL src/module...ec.ts (8.375 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  тЧП UsersService тА║ findAll - edge cases тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╤Д╨╕╨╗╤М╤В╤А╨╛╨▓╨░╤В╤М ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╣ ╨┐╨╛ search
+
+    TypeError: query.andWhere is not a function
+
+    [0m [90m 26 |[39m     }
+     [90m 27 |[39m     [36mif[39m (search) {
+    [31m[1m>[22m[39m[90m 28 |[39m       query[33m.[39mandWhere(
+     [90m    |[39m             [31m[1m^[22m[39m
+     [90m 29 |[39m         [32m'(user.firstName ILIKE :search OR user.lastName ILIKE :search OR user.phone ILIKE :search OR user.email ILIKE :search)'[39m[33m,[39m
+     [90m 30 |[39m         { search[33m:[39m [32m`%${search}%`[39m }[33m,[39m
+     [90m 31 |[39m       )[33m;[39m[0m
+
+      at UsersService.andWhere [as findAll] (modules/users/users.service.ts:28:13)
+      at Object.<anonymous> (modules/users/users.service.spec.ts:374:21)
+
+  тЧП UsersService тА║ findAll - edge cases тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╤Д╨╕╨╗╤М╤В╤А╨╛╨▓╨░╤В╤М ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╣ ╨┐╨╛ isActive
+
+    TypeError: query.getCount is not a function
+
+    [0m [90m 33 |[39m     query[33m.[39morderBy([32m'user.createdAt'[39m[33m,[39m [32m'DESC'[39m)[33m;[39m
+     [90m 34 |[39m
+    [31m[1m>[22m[39m[90m 35 |[39m     [36mconst[39m total [33m=[39m [36mawait[39m query[33m.[39mgetCount()[33m;[39m
+     [90m    |[39m                               [31m[1m^[22m[39m
+     [90m 36 |[39m     [36mconst[39m skip [33m=[39m (page [33m-[39m [35m1[39m) [33m*[39m limit[33m;[39m
+     [90m 37 |[39m     query[33m.[39mskip(skip)[33m.[39mtake(limit)[33m;[39m
+     [90m 38 |[39m[0m
+
+      at UsersService.getCount [as findAll] (modules/users/users.service.ts:35:31)
+      at Object.<anonymous> (modules/users/users.service.spec.ts:390:21)
+
+FAIL src/modules/auth/auth.service.spec.ts (8.735 s)
+  тЧП AuthService тА║ validateTelegramAuth тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨╛╨▒╨╜╨╛╨▓╨╕╤В╤М ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╤О╤Й╨╡╨│╨╛ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ refreshToken тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨╛╨▒╨╜╨╛╨▓╨╕╤В╤М ╤В╨╛╨║╨╡╨╜╤Л
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ refreshToken тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╤Л╨▒╤А╨╛╤Б╨╕╤В╤М ╨╛╤И╨╕╨▒╨║╤Г ╨╡╤Б╨╗╨╕ ╤Б╨╡╤Б╤Б╨╕╤П ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ refreshToken тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╤Л╨▒╤А╨╛╤Б╨╕╤В╤М ╨╛╤И╨╕╨▒╨║╤Г ╨╡╤Б╨╗╨╕ ╤Б╨╡╤Б╤Б╨╕╤П ╨╕╤Б╤В╨╡╨║╨╗╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ validatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╨╡╤А╨╜╤Г╤В╤М true ╨┤╨╗╤П ╨▓╨░╨╗╨╕╨┤╨╜╨╛╨│╨╛ ╤В╨╡╨╗╨╡╤Д╨╛╨╜╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ validatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╨╡╤А╨╜╤Г╤В╤М false ╨┤╨╗╤П ╨╜╨╡╨▓╨░╨╗╨╕╨┤╨╜╨╛╨│╨╛ ╤В╨╡╨╗╨╡╤Д╨╛╨╜╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ updatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨╛╨▒╨╜╨╛╨▓╨╕╤В╤М ╤В╨╡╨╗╨╡╤Д╨╛╨╜ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ updatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╤Л╨▒╤А╨╛╤Б╨╕╤В╤М ╨╛╤И╨╕╨▒╨║╤Г ╨┤╨╗╤П ╨╜╨╡╨▓╨░╨╗╨╕╨┤╨╜╨╛╨│╨╛ ╤В╨╡╨╗╨╡╤Д╨╛╨╜╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ updatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╤Л╨▒╤А╨╛╤Б╨╕╤В╤М ╨╛╤И╨╕╨▒╨║╤Г ╨╡╤Б╨╗╨╕ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+PASS src/modules/masters/masters.controller.spec.ts (8.869 s)
+PASS src/modules/auth/auth.controller.spec.ts (9.32 s)
+PASS src/modules/appointments/appointments.controller.spec.ts (9.308 s)
+PASS src/modules/notifications/notifications.controller.spec.ts (9.352 s)
+PASS src/modules/appointments/appointments.service.spec.ts
+[31m[Nest] 15312  - [39m07.12.2025, 11:39:26 [31m  ERROR[39m [38;5;3m[TelegramBotService] [39m[31m╨Ю╤И╨╕╨▒╨║╨░ ╨┐╤А╨╕ ╨╖╨░╨┐╤Г╤Б╨║╨╡ ╨▒╨╛╤В╨░: 404: Not Found[39m
+Error: 404: Not Found
+    at Telegram.callApi (D:\GitHub\Afrodita\backend\node_modules\telegraf\lib\core\network\client.js:315:19)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at Telegraf.launch (D:\GitHub\Afrodita\backend\node_modules\telegraf\lib\telegraf.js:188:78)
+    at TelegramBotService.onModuleInit (D:\GitHub\Afrodita\backend\src\modules\telegram\telegram-bot.service.ts:116:7)
+    at Object.<anonymous> (D:\GitHub\Afrodita\backend\src\modules\telegram\telegram-bot.service.spec.ts:208:7)
+[31m[Nest] 15312  - [39m07.12.2025, 11:39:26 [31m  ERROR[39m [38;5;3m[TelegramBotService] [39m[31m╨Ю╤И╨╕╨▒╨║╨░ ╨┐╤А╨╕ ╨╛╤В╨┐╤А╨░╨▓╨║╨╡ ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╤П: Send failed[39m
+PASS src/modules/services/services.controller.spec.ts
+PASS src/modules/telegram/telegram-bot.service.spec.ts (9.899 s)
+PASS src/modules/reviews/reviews.controller.spec.ts
+PASS src/modules/analytics/analytics.controller.spec.ts
+PASS src/tasks/scheduler.service.spec.ts
+PASS src/modules/templates/templates.controller.spec.ts
+PASS src/modules/services/services.service.spec.ts
+PASS src/modules/telegram/telegram.service.spec.ts
+PASS src/modules/templates/templates.service.spec.ts
+PASS src/modules/users/users.controller.spec.ts
+PASS src/modules/settings/settings.controller.spec.ts
+PASS src/modules/financial/financial.service.spec.ts
+PASS src/modules/notifications/notifications.service.spec.ts
+PASS src/modules/masters/masters.service.spec.ts
+PASS src/modules/reviews/reviews.service.spec.ts
+PASS src/modules/financial/financial.controller.spec.ts
+PASS src/modules/analytics/analytics.service.spec.ts
+PASS src/modules/auth/strategies/jwt.strategy.spec.ts
+PASS src/modules/audit/audit.controller.spec.ts
+PASS src/modules/settings/settings.service.spec.ts
+PASS src/modules/telegram/telegram-chats.service.spec.ts
+PASS src/modules/audit/audit.service.spec.ts
+PASS src/modules/auth/guards/roles.guard.spec.ts
+-----------------------------------|---------|----------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+File                               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s                                                                                                                                                                                                                                                                                          
+-----------------------------------|---------|----------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+All files                          |   42.52 |    26.67 |   40.31 |   41.95 |                                                                                                                                                                                                                                                                                                            
+ src                               |       0 |        0 |       0 |       0 |                                                                                                                                                                                                                                                                                                            
+  app.module.ts                    |       0 |      100 |     100 |       0 | 1-49                                                                                                                                                                                                                                                                                                       
+  main.ts                          |       0 |        0 |       0 |       0 | 1-124                                                                                                                                                                                                                                                                                                      
+ src/common/cache                  |   11.11 |        0 |       0 |    6.25 |                                                                                                                                                                                                                                                                                                            
+  cache.service.ts                 |   11.11 |        0 |       0 |    6.25 | 10-101                                                                                                                                                                                                                                                                                                     
+ src/config                        |       0 |        0 |       0 |       0 |                                                                                                                                                                                                                                                                                                            
+  data-source.ts                   |       0 |        0 |     100 |       0 | 1-8                                                                                                                                                                                                                                                                                                        
+  database.config.ts               |       0 |        0 |       0 |       0 | 1-10                                                                                                                                                                                                                                                                                                       
+ src/entities                      |   90.75 |      100 |   22.91 |   92.45 |                                                                                                                                                                                                                                                                                                            
+  appointment.entity.ts            |   91.17 |      100 |      25 |   90.62 | 36,43,50                                                                                                                                                                                                                                                                                                   
+  audit-log.entity.ts              |    97.5 |      100 |      50 |   97.36 | 61                                                                                                                                                                                                                                                                                                         
+  auth-log.entity.ts               |   94.73 |      100 |      50 |   94.11 | 28                                                                                                                                                                                                                                                                                                         
+  block-interval.entity.ts         |   92.85 |      100 |       0 |   91.66 | 20                                                                                                                                                                                                                                                                                                         
+  group-settings.entity.ts         |   92.85 |      100 |       0 |   91.66 | 22                                                                                                                                                                                                                                                                                                         
+  master.entity.ts                 |   75.67 |      100 |       0 |   83.87 | 29,69,72,75,78                                                                                                                                                                                                                                                                                             
+  notification.entity.ts           |   97.22 |      100 |      75 |   97.05 | 48                                                                                                                                                                                                                                                                                                         
+  review.entity.ts                 |   87.09 |      100 |      20 |    86.2 | 34,41,48,55                                                                                                                                                                                                                                                                                                
+  service.entity.ts                |   78.57 |      100 |       0 |   86.95 | 43,47,71                                                                                                                                                                                                                                                                                                   
+  session.entity.ts                |   93.75 |      100 |       0 |   92.85 | 22                                                                                                                                                                                                                                                                                                         
+  settings.entity.ts               |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  telegram-chat.entity.ts          |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  template.entity.ts               |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  transaction.entity.ts            |   91.66 |      100 |   33.33 |    90.9 | 30,37                                                                                                                                                                                                                                                                                                      
+  user.entity.ts                   |   84.61 |      100 |   14.28 |   91.17 | 92,95,98                                                                                                                                                                                                                                                                                                   
+  work-schedule.entity.ts          |   95.65 |      100 |      50 |   95.23 | 30                                                                                                                                                                                                                                                                                                         
+ src/middleware                    |       0 |      100 |       0 |       0 |                                                                                                                                                                                                                                                                                                            
+  rate-limit.middleware.ts         |       0 |      100 |       0 |       0 | 1-29                                                                                                                                                                                                                                                                                                       
+ src/migrations                    |       0 |        0 |       0 |       0 |                                                                                                                                                                                                                                                                                                            
+  001-initial-schema.ts            |       0 |      100 |       0 |       0 | 3-4                                                                                                                                                                                                                                                                                                        
+  002-fix-audit-logs-entity-id.ts  |       0 |      100 |       0 |       0 | 3-31                                                                                                                                                                                                                                                                                                       
+  003-add-service-subcategories.ts |       0 |        0 |       0 |       0 | 1-93                                                                                                                                                                                                                                                                                                       
+  004-add-service-is-category.ts   |       0 |        0 |       0 |       0 | 1-46                                                                                                                                                                                                                                                                                                       
+  005-fix-reviews-status-enum.ts   |       0 |        0 |       0 |       0 | 3-82                                                                                                                                                                                                                                                                                                       
+  006-fix-reviews-status-data.ts   |       0 |        0 |       0 |       0 | 3-45                                                                                                                                                                                                                                                                                                       
+  007-add-appointment-discount.ts  |       0 |        0 |       0 |       0 | 3-67                                                                                                                                                                                                                                                                                                       
+  008-add-database-indexes.ts      |       0 |      100 |       0 |       0 | 3-153                                                                                                                                                                                                                                                                                                      
+  009-create-group-settings.ts     |       0 |        0 |       0 |       0 | 3-69                                                                                                                                                                                                                                                                                                       
+ src/modules/analytics             |   88.04 |    85.18 |   96.29 |   88.46 |                                                                                                                                                                                                                                                                                                            
+  analytics.controller.ts          |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  analytics.module.ts              |       0 |      100 |     100 |       0 | 1-15                                                                                                                                                                                                                                                                                                       
+  analytics.service.ts             |    98.5 |     82.6 |   95.83 |   98.24 | 124                                                                                                                                                                                                                                                                                                        
+ src/modules/appointments          |    82.6 |     63.2 |   85.29 |   82.78 |                                                                                                                                                                                                                                                                                                            
+  appointments.controller.ts       |     100 |    73.33 |     100 |     100 | 85-97,176-177                                                                                                                                                                                                                                                                                              
+  appointments.module.ts           |       0 |      100 |       0 |       0 | 1-35                                                                                                                                                                                                                                                                                                       
+  appointments.service.ts          |   84.67 |    61.53 |      80 |    84.5 | 64,86-87,95,120,128,178-186,244,268,286,296,312,331,483-484,491-496,510,544,571-575,588,593,609-612,617,645,649,693-699                                                                                                                                                                                    
+ src/modules/appointments/dto      |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  create-appointment.dto.ts        |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  reschedule-appointment.dto.ts    |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  update-appointment.dto.ts        |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/audit                 |   86.11 |    88.88 |     100 |   89.65 |                                                                                                                                                                                                                                                                                                            
+  audit.controller.ts              |   93.93 |       75 |     100 |     100 | 42,46                                                                                                                                                                                                                                                                                                      
+  audit.module.ts                  |       0 |      100 |     100 |       0 | 1-13                                                                                                                                                                                                                                                                                                       
+  audit.service.ts                 |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/auth                  |   61.43 |    32.25 |   68.42 |   61.22 |                                                                                                                                                                                                                                                                                                            
+  auth.controller.ts               |   87.09 |      100 |   71.42 |    86.2 | 45-46,95,103                                                                                                                                                                                                                                                                                               
+  auth.module.ts                   |       0 |      100 |       0 |       0 | 1-35                                                                                                                                                                                                                                                                                                       
+  auth.service.ts                  |    63.8 |    32.25 |   72.72 |    63.1 | 58-59,82,93-105,120-123,176-206,227-242                                                                                                                                                                                                                                                                    
+ src/modules/auth/decorators       |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  roles.decorator.ts               |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/auth/dto              |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  login.dto.ts                     |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  update-phone.dto.ts              |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/auth/guards           |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  jwt-auth.guard.ts                |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  roles.guard.ts                   |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/auth/strategies       |   63.15 |      100 |      50 |   66.66 |                                                                                                                                                                                                                                                                                                            
+  jwt.strategy.ts                  |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  telegram.strategy.ts             |       0 |      100 |       0 |       0 | 1-9                                                                                                                                                                                                                                                                                                        
+ src/modules/financial             |   78.72 |      100 |     100 |   80.48 |                                                                                                                                                                                                                                                                                                            
+  financial.controller.ts          |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  financial.module.ts              |       0 |      100 |     100 |       0 | 1-18                                                                                                                                                                                                                                                                                                       
+  financial.service.ts             |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/masters               |   69.03 |    43.37 |   71.42 |   72.62 |                                                                                                                                                                                                                                                                                                            
+  masters.controller.ts            |   83.92 |    71.42 |   64.28 |   83.33 | 71,81-82,94-96,106,116-117                                                                                                                                                                                                                                                                                 
+  masters.module.ts                |       0 |      100 |     100 |       0 | 1-22                                                                                                                                                                                                                                                                                                       
+  masters.service.ts               |   70.07 |    37.68 |   78.57 |   75.22 | 46,50,137,158,165-205,219,227,239-243,257-279                                                                                                                                                                                                                                                              
+ src/modules/masters/dto           |   89.28 |      100 |     100 |   89.28 |                                                                                                                                                                                                                                                                                                            
+  create-master.dto.ts             |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  create-work-schedule.dto.ts      |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  update-master.dto.ts             |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  update-work-schedule.dto.ts      |       0 |      100 |     100 |       0 | 1-4                                                                                                                                                                                                                                                                                                        
+ src/modules/notifications         |   51.15 |       33 |   38.88 |   50.71 |                                                                                                                                                                                                                                                                                                            
+  notifications.controller.ts      |   87.17 |    66.66 |    62.5 |   86.48 | 92,109,139-147                                                                                                                                                                                                                                                                                             
+  notifications.module.ts          |       0 |      100 |       0 |       0 | 1-23                                                                                                                                                                                                                                                                                                       
+  notifications.service.ts         |   46.95 |    30.85 |   33.33 |   46.29 | 58-74,101-110,139-142,173-180,186-187,228,230,232,234,237-240,290,324-342,352,364-555                                                                                                                                                                                                                      
+ src/modules/notifications/dto     |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  broadcast.dto.ts                 |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/reviews               |   81.17 |       50 |     100 |   82.05 |                                                                                                                                                                                                                                                                                                            
+  reviews.controller.ts            |   86.36 |        0 |     100 |      85 | 37-39                                                                                                                                                                                                                                                                                                      
+  reviews.module.ts                |       0 |      100 |     100 |       0 | 1-17                                                                                                                                                                                                                                                                                                       
+  reviews.service.ts               |   98.03 |    63.15 |     100 |   97.91 | 89                                                                                                                                                                                                                                                                                                         
+ src/modules/services              |   84.71 |    76.42 |     100 |   85.43 |                                                                                                                                                                                                                                                                                                            
+  services.controller.ts           |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  services.module.ts               |       0 |      100 |     100 |       0 | 1-15                                                                                                                                                                                                                                                                                                       
+  services.service.ts              |   88.33 |    74.78 |     100 |   88.13 | 44,69-73,100,225,240,245-246,251-252,276-277,290                                                                                                                                                                                                                                                           
+ src/modules/services/dto          |   88.23 |      100 |       0 |   88.23 |                                                                                                                                                                                                                                                                                                            
+  create-service.dto.ts            |   88.23 |      100 |       0 |   88.23 | 15,22                                                                                                                                                                                                                                                                                                      
+  update-service.dto.ts            |   88.23 |      100 |       0 |   88.23 | 17,24                                                                                                                                                                                                                                                                                                      
+ src/modules/settings              |   74.31 |      100 |   71.42 |   74.75 |                                                                                                                                                                                                                                                                                                            
+  settings.controller.ts           |   72.05 |      100 |   57.14 |   71.21 | 65,102-113,119-120,126-137,143-144,150-164,177-188                                                                                                                                                                                                                                                         
+  settings.module.ts               |       0 |      100 |     100 |       0 | 1-14                                                                                                                                                                                                                                                                                                       
+  settings.service.ts              |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/telegram              |   11.17 |     5.78 |   15.78 |    10.9 |                                                                                                                                                                                                                                                                                                            
+  telegram-bot.service.ts          |   10.87 |     6.07 |   12.98 |   10.84 | 111,117,121-125,138-142,157-158,164-221,228-230,236-295,305-332,340-359,366-379,384-400,405-418,424-508,515-597,604-706,714-753,759,764,769,774,779,784-795,800,805-809,813-817,821-825,829-833,837,844,849,854,861,866,871,876-1145,1154-1291,1301-2960,3003,3030,3037,3060-3061,3071,3100,3107,3190-3870 
+  telegram-chats.service.ts        |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  telegram.controller.ts           |       0 |        0 |       0 |       0 | 1-670                                                                                                                                                                                                                                                                                                      
+  telegram.module.ts               |       0 |      100 |       0 |       0 | 1-40                                                                                                                                                                                                                                                                                                       
+  telegram.service.ts              |   39.18 |    35.29 |   28.57 |   35.71 | 107-285,295-320,330,333,335,337,357-369                                                                                                                                                                                                                                                                    
+ src/modules/telegram/dto          |       0 |        0 |       0 |       0 |                                                                                                                                                                                                                                                                                                            
+  send-message.dto.ts              |       0 |        0 |       0 |       0 | 1-234                                                                                                                                                                                                                                                                                                      
+ src/modules/telegram/utils        |       0 |        0 |       0 |       0 |                                                                                                                                                                                                                                                                                                            
+  markdown-v2.utils.ts             |       0 |        0 |       0 |       0 | 8-162                                                                                                                                                                                                                                                                                                      
+ src/modules/templates             |   87.69 |      100 |     100 |   89.83 |                                                                                                                                                                                                                                                                                                            
+  templates.controller.ts          |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  templates.module.ts              |       0 |      100 |     100 |       0 | 1-13                                                                                                                                                                                                                                                                                                       
+  templates.service.ts             |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/templates/dto         |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+  template.dto.ts                  |     100 |      100 |     100 |     100 |                                                                                                                                                                                                                                                                                                            
+ src/modules/users                 |    74.3 |    66.66 |      84 |   74.85 |                                                                                                                                                                                                                                                                                                            
+  users.controller.ts              |    57.4 |    27.27 |      60 |   55.76 | 49,70,90-116,122-141,148-151                                                                                                                                                                                                                                                                               
+  users.module.ts                  |       0 |      100 |     100 |       0 | 1-20                                                                                                                                                                                                                                                                                                       
+  users.service.ts                 |   90.26 |    73.13 |     100 |   90.82 | 94,98,147,154,161-166,227-229                                                                                                                                                                                                                                                                              
+ src/modules/websocket             |       0 |      100 |       0 |       0 |                                                                                                                                                                                                                                                                                                            
+  websocket.gateway.ts             |       0 |      100 |       0 |       0 | 1-44                                                                                                                                                                                                                                                                                                       
+  websocket.module.ts              |       0 |      100 |     100 |       0 | 1-8                                                                                                                                                                                                                                                                                                        
+ src/scripts                       |       0 |        0 |       0 |       0 |                                                                                                                                                                                                                                                                                                            
+  seed.ts                          |       0 |        0 |       0 |       0 | 1-315                                                                                                                                                                                                                                                                                                      
+ src/tasks                         |   48.63 |    26.92 |   27.77 |   49.43 |                                                                                                                                                                                                                                                                                                            
+  scheduler.controller.ts          |       0 |        0 |       0 |       0 | 1-34                                                                                                                                                                                                                                                                                                       
+  scheduler.module.ts              |       0 |      100 |     100 |       0 | 1-24                                                                                                                                                                                                                                                                                                       
+  scheduler.service.ts             |   59.73 |    27.45 |   33.33 |   59.58 | 18-47,112-114,177-183,191,222-258,271-305                                                                                                                                                                                                                                                                  
+-----------------------------------|---------|----------|---------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Summary of all failing tests
+FAIL modules/users/users.service.spec.ts (8.375 s)
+  тЧП UsersService тА║ findAll - edge cases тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╤Д╨╕╨╗╤М╤В╤А╨╛╨▓╨░╤В╤М ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╣ ╨┐╨╛ search
+
+    TypeError: query.andWhere is not a function
+
+    [0m [90m 26 |[39m     }
+     [90m 27 |[39m     [36mif[39m (search) {
+    [31m[1m>[22m[39m[90m 28 |[39m       query[33m.[39mandWhere(
+     [90m    |[39m             [31m[1m^[22m[39m
+     [90m 29 |[39m         [32m'(user.firstName ILIKE :search OR user.lastName ILIKE :search OR user.phone ILIKE :search OR user.email ILIKE :search)'[39m[33m,[39m
+     [90m 30 |[39m         { search[33m:[39m [32m`%${search}%`[39m }[33m,[39m
+     [90m 31 |[39m       )[33m;[39m[0m
+
+      at UsersService.andWhere [as findAll] (modules/users/users.service.ts:28:13)
+      at Object.<anonymous> (modules/users/users.service.spec.ts:374:21)
+
+  тЧП UsersService тА║ findAll - edge cases тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╤Д╨╕╨╗╤М╤В╤А╨╛╨▓╨░╤В╤М ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╣ ╨┐╨╛ isActive
+
+    TypeError: query.getCount is not a function
+
+    [0m [90m 33 |[39m     query[33m.[39morderBy([32m'user.createdAt'[39m[33m,[39m [32m'DESC'[39m)[33m;[39m
+     [90m 34 |[39m
+    [31m[1m>[22m[39m[90m 35 |[39m     [36mconst[39m total [33m=[39m [36mawait[39m query[33m.[39mgetCount()[33m;[39m
+     [90m    |[39m                               [31m[1m^[22m[39m
+     [90m 36 |[39m     [36mconst[39m skip [33m=[39m (page [33m-[39m [35m1[39m) [33m*[39m limit[33m;[39m
+     [90m 37 |[39m     query[33m.[39mskip(skip)[33m.[39mtake(limit)[33m;[39m
+     [90m 38 |[39m[0m
+
+      at UsersService.getCount [as findAll] (modules/users/users.service.ts:35:31)
+      at Object.<anonymous> (modules/users/users.service.spec.ts:390:21)
+
+FAIL modules/auth/auth.service.spec.ts (8.735 s)
+  тЧП AuthService тА║ validateTelegramAuth тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨╛╨▒╨╜╨╛╨▓╨╕╤В╤М ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╤О╤Й╨╡╨│╨╛ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ refreshToken тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨╛╨▒╨╜╨╛╨▓╨╕╤В╤М ╤В╨╛╨║╨╡╨╜╤Л
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ refreshToken тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╤Л╨▒╤А╨╛╤Б╨╕╤В╤М ╨╛╤И╨╕╨▒╨║╤Г ╨╡╤Б╨╗╨╕ ╤Б╨╡╤Б╤Б╨╕╤П ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ refreshToken тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╤Л╨▒╤А╨╛╤Б╨╕╤В╤М ╨╛╤И╨╕╨▒╨║╤Г ╨╡╤Б╨╗╨╕ ╤Б╨╡╤Б╤Б╨╕╤П ╨╕╤Б╤В╨╡╨║╨╗╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ validatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╨╡╤А╨╜╤Г╤В╤М true ╨┤╨╗╤П ╨▓╨░╨╗╨╕╨┤╨╜╨╛╨│╨╛ ╤В╨╡╨╗╨╡╤Д╨╛╨╜╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ validatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╨╡╤А╨╜╤Г╤В╤М false ╨┤╨╗╤П ╨╜╨╡╨▓╨░╨╗╨╕╨┤╨╜╨╛╨│╨╛ ╤В╨╡╨╗╨╡╤Д╨╛╨╜╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ updatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨╛╨▒╨╜╨╛╨▓╨╕╤В╤М ╤В╨╡╨╗╨╡╤Д╨╛╨╜ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ updatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╤Л╨▒╤А╨╛╤Б╨╕╤В╤М ╨╛╤И╨╕╨▒╨║╤Г ╨┤╨╗╤П ╨╜╨╡╨▓╨░╨╗╨╕╨┤╨╜╨╛╨│╨╛ ╤В╨╡╨╗╨╡╤Д╨╛╨╜╨░
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+  тЧП AuthService тА║ updatePhone тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▓╤Л╨▒╤А╨╛╤Б╨╕╤В╤М ╨╛╤И╨╕╨▒╨║╤Г ╨╡╤Б╨╗╨╕ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜
+
+    Nest could not find AuthService element (this provider does not exist in the current context)
+
+    [0m [90m 92 |[39m     })[33m.[39mcompile()[33m;[39m
+     [90m 93 |[39m
+    [31m[1m>[22m[39m[90m 94 |[39m     service [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mAuthService[39m[33m>[39m([33mAuthService[39m)[33m;[39m
+     [90m    |[39m                      [31m[1m^[22m[39m
+     [90m 95 |[39m     userRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mUser[39m[33m>>[39m(getRepositoryToken([33mUser[39m))[33m;[39m
+     [90m 96 |[39m     sessionRepository [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mRepository[39m[33m<[39m[33mSession[39m[33m>>[39m(getRepositoryToken([33mSession[39m))[33m;[39m
+     [90m 97 |[39m     jwtService [33m=[39m module[33m.[39m[36mget[39m[33m<[39m[33mJwtService[39m[33m>[39m([33mJwtService[39m)[33m;[39m[0m
+
+      at InstanceLinksHost.get (../node_modules/@nestjs/core/injector/instance-links-host.js:15:19)
+      at TestingModule.find (../node_modules/@nestjs/core/injector/abstract-instance-resolver.js:8:60)
+      at TestingModule.get (../node_modules/@nestjs/core/nest-application-context.js:70:20)
+      at Object.<anonymous> (modules/auth/auth.service.spec.ts:94:22)
+
+
+Test Suites: 2 failed, 28 passed, 30 total
+Tests:       11 failed, 317 passed, 328 total
+Snapshots:   0 total
+Time:        20.9 s
+Ran all test suites.

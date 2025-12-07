@@ -1,0 +1,139 @@
+﻿
+> afrodita-backend@1.0.0 test
+> jest
+
+node.exe : FAIL src/modules/users/users.service.spec.ts (8.332 s)
+строка:1 знак:1
++ & "D:\Program Files\nodejs/node.exe" "D:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (FAIL src/module...ec.ts (8.332 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  тЧП UsersService тА║ findAll - edge cases тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╤Д╨╕╨╗╤М╤В╤А╨╛╨▓╨░╤В╤М ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╣ ╨┐╨╛ search
+
+    TypeError: query.andWhere is not a function
+
+    [0m [90m 26 |[39m     }
+     [90m 27 |[39m     [36mif[39m (search) {
+    [31m[1m>[22m[39m[90m 28 |[39m       query[33m.[39mandWhere(
+     [90m    |[39m             [31m[1m^[22m[39m
+     [90m 29 |[39m         [32m'(user.firstName ILIKE :search OR user.lastName ILIKE :search OR user.phone ILIKE :search OR user.email ILIKE :search)'[39m[33m,[39m
+     [90m 30 |[39m         { search[33m:[39m [32m`%${search}%`[39m }[33m,[39m
+     [90m 31 |[39m       )[33m;[39m[0m
+
+      at UsersService.findAll (modules/users/users.service.ts:28:13)
+      at Object.<anonymous> (modules/users/users.service.spec.ts:374:21)
+
+  тЧП UsersService тА║ findAll - edge cases тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╤Д╨╕╨╗╤М╤В╤А╨╛╨▓╨░╤В╤М ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╣ ╨┐╨╛ isActive
+
+    TypeError: query.getCount is not a function
+
+    [0m [90m 33 |[39m     query[33m.[39morderBy([32m'user.createdAt'[39m[33m,[39m [32m'DESC'[39m)[33m;[39m
+     [90m 34 |[39m
+    [31m[1m>[22m[39m[90m 35 |[39m     [36mconst[39m total [33m=[39m [36mawait[39m query[33m.[39mgetCount()[33m;[39m
+     [90m    |[39m                               [31m[1m^[22m[39m
+     [90m 36 |[39m     [36mconst[39m skip [33m=[39m (page [33m-[39m [35m1[39m) [33m*[39m limit[33m;[39m
+     [90m 37 |[39m     query[33m.[39mskip(skip)[33m.[39mtake(limit)[33m;[39m
+     [90m 38 |[39m[0m
+
+      at UsersService.findAll (modules/users/users.service.ts:35:31)
+      at Object.<anonymous> (modules/users/users.service.spec.ts:390:21)
+
+PASS src/modules/appointments/appointments.service.spec.ts (8.803 s)
+PASS src/modules/masters/masters.controller.spec.ts (9.061 s)
+PASS src/modules/services/services.controller.spec.ts
+PASS src/modules/notifications/notifications.controller.spec.ts (9.278 s)
+PASS src/modules/auth/auth.controller.spec.ts (9.302 s)
+PASS src/modules/appointments/appointments.controller.spec.ts (9.427 s)
+PASS src/tasks/scheduler.service.spec.ts
+PASS src/modules/audit/audit.controller.spec.ts
+[31m[Nest] 9300  - [39m07.12.2025, 11:53:18 [31m  ERROR[39m [38;5;3m[TelegramBotService] [39m[31m╨Ю╤И╨╕╨▒╨║╨░ ╨┐╤А╨╕ ╨╖╨░╨┐╤Г╤Б╨║╨╡ ╨▒╨╛╤В╨░: 404: Not Found[39m
+Error: 404: Not Found
+    at Telegram.callApi (D:\GitHub\Afrodita\backend\node_modules\telegraf\lib\core\network\client.js:315:19)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at Telegraf.launch (D:\GitHub\Afrodita\backend\node_modules\telegraf\lib\telegraf.js:188:78)
+    at TelegramBotService.onModuleInit (D:\GitHub\Afrodita\backend\src\modules\telegram\telegram-bot.service.ts:116:7)
+    at Object.<anonymous> (D:\GitHub\Afrodita\backend\src\modules\telegram\telegram-bot.service.spec.ts:208:7)
+[31m[Nest] 9300  - [39m07.12.2025, 11:53:18 [31m  ERROR[39m [38;5;3m[TelegramBotService] [39m[31m╨Ю╤И╨╕╨▒╨║╨░ ╨┐╤А╨╕ ╨╛╤В╨┐╤А╨░╨▓╨║╨╡ ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╤П: Send failed[39m
+PASS src/modules/templates/templates.service.spec.ts
+PASS src/modules/telegram/telegram-bot.service.spec.ts (9.963 s)
+PASS src/modules/users/users.controller.spec.ts
+PASS src/modules/services/services.service.spec.ts
+PASS src/modules/templates/templates.controller.spec.ts
+PASS src/modules/settings/settings.controller.spec.ts
+PASS src/modules/telegram/telegram.service.spec.ts
+PASS src/modules/notifications/notifications.service.spec.ts
+PASS src/modules/reviews/reviews.controller.spec.ts
+PASS src/modules/masters/masters.service.spec.ts
+PASS src/modules/analytics/analytics.service.spec.ts
+PASS src/modules/financial/financial.service.spec.ts
+PASS src/modules/auth/strategies/jwt.strategy.spec.ts
+PASS src/modules/analytics/analytics.controller.spec.ts
+PASS src/modules/settings/settings.service.spec.ts
+PASS src/modules/reviews/reviews.service.spec.ts
+PASS src/modules/telegram/telegram-chats.service.spec.ts
+PASS src/modules/financial/financial.controller.spec.ts
+PASS src/modules/audit/audit.service.spec.ts
+PASS src/modules/auth/guards/roles.guard.spec.ts
+FAIL src/modules/auth/auth.service.spec.ts
+  тЧП Test suite failed to run
+
+    [96msrc/modules/auth/auth.service.spec.ts[0m:[93m289[0m:[93m7[0m - [91merror[0m[90m TS2304: [0mCannot find name 'createHashSpy'.
+
+    [7m289[0m       createHashSpy.mockRestore();
+    [7m   [0m [91m      ~~~~~~~~~~~~~[0m
+    [96msrc/modules/auth/auth.service.spec.ts[0m:[93m290[0m:[93m7[0m - [91merror[0m[90m TS2304: [0mCannot find name 'createHmacSpy'.
+
+    [7m290[0m       createHmacSpy.mockRestore();
+    [7m   [0m [91m      ~~~~~~~~~~~~~[0m
+
+Summary of all failing tests
+FAIL modules/users/users.service.spec.ts (8.332 s)
+  тЧП UsersService тА║ findAll - edge cases тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╤Д╨╕╨╗╤М╤В╤А╨╛╨▓╨░╤В╤М ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╣ ╨┐╨╛ search
+
+    TypeError: query.andWhere is not a function
+
+    [0m [90m 26 |[39m     }
+     [90m 27 |[39m     [36mif[39m (search) {
+    [31m[1m>[22m[39m[90m 28 |[39m       query[33m.[39mandWhere(
+     [90m    |[39m             [31m[1m^[22m[39m
+     [90m 29 |[39m         [32m'(user.firstName ILIKE :search OR user.lastName ILIKE :search OR user.phone ILIKE :search OR user.email ILIKE :search)'[39m[33m,[39m
+     [90m 30 |[39m         { search[33m:[39m [32m`%${search}%`[39m }[33m,[39m
+     [90m 31 |[39m       )[33m;[39m[0m
+
+      at UsersService.findAll (modules/users/users.service.ts:28:13)
+      at Object.<anonymous> (modules/users/users.service.spec.ts:374:21)
+
+  тЧП UsersService тА║ findAll - edge cases тА║ ╨┤╨╛╨╗╨╢╨╡╨╜ ╤Д╨╕╨╗╤М╤В╤А╨╛╨▓╨░╤В╤М ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╣ ╨┐╨╛ isActive
+
+    TypeError: query.getCount is not a function
+
+    [0m [90m 33 |[39m     query[33m.[39morderBy([32m'user.createdAt'[39m[33m,[39m [32m'DESC'[39m)[33m;[39m
+     [90m 34 |[39m
+    [31m[1m>[22m[39m[90m 35 |[39m     [36mconst[39m total [33m=[39m [36mawait[39m query[33m.[39mgetCount()[33m;[39m
+     [90m    |[39m                               [31m[1m^[22m[39m
+     [90m 36 |[39m     [36mconst[39m skip [33m=[39m (page [33m-[39m [35m1[39m) [33m*[39m limit[33m;[39m
+     [90m 37 |[39m     query[33m.[39mskip(skip)[33m.[39mtake(limit)[33m;[39m
+     [90m 38 |[39m[0m
+
+      at UsersService.findAll (modules/users/users.service.ts:35:31)
+      at Object.<anonymous> (modules/users/users.service.spec.ts:390:21)
+
+FAIL modules/auth/auth.service.spec.ts
+  тЧП Test suite failed to run
+
+    [96msrc/modules/auth/auth.service.spec.ts[0m:[93m289[0m:[93m7[0m - [91merror[0m[90m TS2304: [0mCannot find name 'createHashSpy'.
+
+    [7m289[0m       createHashSpy.mockRestore();
+    [7m   [0m [91m      ~~~~~~~~~~~~~[0m
+    [96msrc/modules/auth/auth.service.spec.ts[0m:[93m290[0m:[93m7[0m - [91merror[0m[90m TS2304: [0mCannot find name 'createHmacSpy'.
+
+    [7m290[0m       createHmacSpy.mockRestore();
+    [7m   [0m [91m      ~~~~~~~~~~~~~[0m
+
+
+Test Suites: 2 failed, 28 passed, 30 total
+Tests:       2 failed, 310 passed, 312 total
+Snapshots:   0 total
+Time:        13.553 s
+Ran all test suites.
