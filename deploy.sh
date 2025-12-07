@@ -77,11 +77,21 @@ if ! check_command docker; then
 fi
 print_success "Docker установлен"
 
-if ! check_command docker-compose; then
-    print_error "Docker Compose не установлен. Установите Docker Compose"
+# Проверка Docker Compose (плагин или standalone)
+DOCKER_COMPOSE_CMD=""
+if docker compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker compose"
+    print_success "Docker Compose plugin установлен"
+elif docker-compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+    print_success "Docker Compose standalone установлен"
+else
+    print_error "Docker Compose не установлен"
+    print_info "Установите Docker Compose plugin:"
+    echo "  sudo apt-get update"
+    echo "  sudo apt-get install docker-compose-plugin"
     exit 1
 fi
-print_success "Docker Compose установлен"
 
 if ! check_command openssl; then
     print_warning "OpenSSL не установлен. Устанавливаю..."
@@ -239,7 +249,7 @@ fi
 print_info "Шаг 7: Сборка Docker образов..."
 print_warning "Это может занять несколько минут..."
 
-docker-compose build --no-cache
+$DOCKER_COMPOSE_CMD build --no-cache
 
 if [ $? -ne 0 ]; then
     print_error "Ошибка при сборке Docker образов"
@@ -251,7 +261,7 @@ print_success "Docker образы собраны"
 # Шаг 8: Запуск контейнеров
 print_info "Шаг 8: Запуск контейнеров..."
 
-docker-compose up -d
+$DOCKER_COMPOSE_CMD up -d
 
 if [ $? -ne 0 ]; then
     print_error "Ошибка при запуске контейнеров"
@@ -268,7 +278,7 @@ sleep 30
 
 # Проверка статуса контейнеров
 print_info "Проверка статуса контейнеров..."
-docker-compose ps
+$DOCKER_COMPOSE_CMD ps
 
 # Шаг 10: Выполнение миграций
 print_info "Шаг 10: Выполнение миграций базы данных..."
@@ -276,7 +286,7 @@ print_info "Шаг 10: Выполнение миграций базы данны
 # Ждем готовности базы данных
 print_info "Ожидание готовности PostgreSQL..."
 for i in {1..30}; do
-    if docker-compose exec -T postgres pg_isready -U afrodita_user > /dev/null 2>&1; then
+    if $DOCKER_COMPOSE_CMD exec -T postgres pg_isready -U afrodita_user > /dev/null 2>&1; then
         print_success "PostgreSQL готов"
         break
     fi
@@ -289,7 +299,7 @@ done
 
 # Выполнение миграций
 print_info "Применение миграций..."
-docker-compose exec -T backend npm run migration:run
+$DOCKER_COMPOSE_CMD exec -T backend npm run migration:run
 
 if [ $? -ne 0 ]; then
     print_warning "Возможна ошибка при выполнении миграций. Проверьте логи:"
@@ -331,10 +341,10 @@ echo "  - SSL сертификат самоподписанный (браузе�
 echo "  - Для принятия сертификата нажмите 'Дополнительно' -> 'Перейти на сайт'"
 echo ""
 echo "Управление:"
-echo "  Просмотр логов:    docker-compose logs -f"
-echo "  Остановка:         docker-compose down"
-echo "  Перезапуск:        docker-compose restart"
-echo "  Статус:            docker-compose ps"
+echo "  Просмотр логов:    $DOCKER_COMPOSE_CMD logs -f"
+echo "  Остановка:         $DOCKER_COMPOSE_CMD down"
+echo "  Перезапуск:        $DOCKER_COMPOSE_CMD restart"
+echo "  Статус:            $DOCKER_COMPOSE_CMD ps"
 echo ""
 print_warning "Не забудьте сохранить пароль PostgreSQL и JWT секреты в безопасном месте!"
 echo ""
