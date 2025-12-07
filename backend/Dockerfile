@@ -39,12 +39,9 @@ COPY --from=builder /app/dist ./dist
 
 # Копируем bcrypt из builder stage (уже скомпилирован)
 # Это необходимо, так как bcrypt требует компиляции нативных модулей
-RUN mkdir -p node_modules/bcrypt
+# Внутри bcrypt уже есть все необходимые зависимости
+RUN mkdir -p node_modules
 COPY --from=builder /app/node_modules/bcrypt ./node_modules/bcrypt
-
-# Копируем зависимости bcrypt
-COPY --from=builder /app/node_modules/@mapbox ./node_modules/@mapbox 2>/dev/null || true
-COPY --from=builder /app/node_modules/node-pre-gyp ./node_modules/node-pre-gyp 2>/dev/null || true
 
 EXPOSE 3001
 
