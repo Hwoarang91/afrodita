@@ -21,14 +21,31 @@ async function bootstrap() {
       let dataSourceInitialized = false;
       try {
         logger.log('Проверка и выполнение миграций базы данных...');
+        
+        // Проверяем наличие миграций
+        const fs = require('fs');
+        const path = require('path');
+        const migrationsPath = path.join(__dirname, 'migrations');
+        if (fs.existsSync(migrationsPath)) {
+          const migrations = fs.readdirSync(migrationsPath).filter((f: string) => f.endsWith('.js'));
+          logger.log(`Найдено ${migrations.length} файлов миграций в ${migrationsPath}`);
+        } else {
+          logger.warn(`Директория миграций не найдена: ${migrationsPath}`);
+        }
+        
         if (!AppDataSource.isInitialized) {
           await AppDataSource.initialize();
           dataSourceInitialized = true;
+          logger.log('AppDataSource инициализирован для миграций');
         }
+        
         // Выполняем миграции - runMigrations вернет только те, которые были выполнены
         const executedMigrations = await AppDataSource.runMigrations();
         if (executedMigrations && executedMigrations.length > 0) {
-          logger.log(`✅ Применено ${executedMigrations.length} миграций`);
+          logger.log(`✅ Применено ${executedMigrations.length} миграций:`);
+          executedMigrations.forEach((migration: any) => {
+            logger.log(`  - ${migration.name}`);
+          });
         } else {
           logger.log('✅ Все миграции уже применены');
         }
@@ -36,6 +53,7 @@ async function bootstrap() {
         logger.error('⚠️ Ошибка при выполнении миграций:', migrationError.message);
         logger.error('Stack:', migrationError.stack);
         logger.warn('Приложение продолжит запуск. Выполните миграции вручную: npm run migration:run');
+        // Не прерываем запуск приложения, но логируем ошибку
       } finally {
         // Закрываем соединение после миграций, чтобы избежать конфликтов с TypeORM модулем NestJS
         if (dataSourceInitialized && AppDataSource.isInitialized) {
