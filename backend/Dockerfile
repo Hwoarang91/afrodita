@@ -37,12 +37,23 @@ RUN npm ci --omit=dev
 # Копируем собранные файлы из builder stage
 COPY --from=builder /app/dist ./dist
 
-# Явно копируем миграции, если они не были скопированы автоматически
-COPY --from=builder /app/src/migrations ./dist/migrations 2>/dev/null || true
+# Копируем миграции из исходников builder stage (на случай, если они не скопировались в dist)
+# Сначала копируем во временную директорию
+COPY --from=builder /app/src/migrations ./temp_migrations
+
+# Перемещаем миграции в dist/migrations, если их там нет
+RUN if [ ! -d "dist/migrations" ] || [ -z "$(ls -A dist/migrations 2>/dev/null)" ]; then \
+      if [ -d "temp_migrations" ] && [ -n "$(ls -A temp_migrations 2>/dev/null)" ]; then \
+        mkdir -p dist/migrations && \
+        cp -r temp_migrations/* dist/migrations/ && \
+        echo "✅ Миграции скопированы из temp_migrations в dist/migrations"; \
+      fi; \
+    fi && \
+    rm -rf temp_migrations
 
 # Проверяем наличие миграций
-RUN if [ -d "dist/migrations" ]; then \
-      echo "✅ Миграции найдены:"; \
+RUN if [ -d "dist/migrations" ] && [ -n "$(ls -A dist/migrations 2>/dev/null)" ]; then \
+      echo "✅ Миграции найдены в dist/migrations:"; \
       ls -la dist/migrations/; \
     else \
       echo "❌ Внимание: миграции не найдены в dist/migrations/"; \
