@@ -86,11 +86,18 @@ async function bootstrap() {
       }
     }
     // Увеличиваем лимит размера тела запроса для загрузки изображений (base64)
+    logger.log('Создание NestFactory...');
     const app = await NestFactory.create(AppModule, {
       bodyParser: true,
       rawBody: false,
       logger: ['error', 'warn', 'log', 'debug', 'verbose'],
     });
+    logger.log('NestFactory создан');
+    
+    // Ждем инициализации всех модулей, особенно TypeORM
+    logger.log('Ожидание инициализации модулей...');
+    await app.init();
+    logger.log('Модули инициализированы');
     
     // Увеличиваем лимит для JSON body parser (по умолчанию 100kb, увеличиваем до 10MB)
     app.use(require('express').json({ limit: '10mb' }));
@@ -182,19 +189,17 @@ async function bootstrap() {
   try {
     logger.log(`Вызов app.listen(${port}, '0.0.0.0')...`);
     
-    // Используем Promise для app.listen() с таймаутом
-    const listenPromise = app.listen(port, '0.0.0.0');
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('app.listen() timeout after 10 seconds')), 10000)
-    );
-    
-    const httpServer = await Promise.race([listenPromise, timeoutPromise]) as any;
+    // Просто используем await app.listen() без таймаута
+    // app.listen() автоматически вызывает app.init() если он еще не был вызван
+    const httpServer = await app.listen(port, '0.0.0.0');
     logger.log(`app.listen() завершился, httpServer получен`);
     
     // Проверяем через HttpAdapterHost
     const httpAdapterHost = app.get(HttpAdapterHost);
+    logger.log(`HttpAdapterHost получен: ${httpAdapterHost ? 'да' : 'нет'}`);
     if (httpAdapterHost && httpAdapterHost.httpAdapter) {
       logger.log(`HttpAdapter получен, проверка состояния...`);
+      logger.log(`HttpAdapterHost.listening: ${httpAdapterHost.listening}`);
     }
     
     // Проверяем, что сервер действительно слушает
