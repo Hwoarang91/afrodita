@@ -20,95 +20,69 @@ async function bootstrap() {
     if (process.env.NODE_ENV === 'production' && process.env.AUTO_RUN_MIGRATIONS !== 'false') {
       let dataSourceInitialized = false;
       try {
-        logger.log('═══════════════════════════════════════════════════════');
         logger.log('Проверка и выполнение миграций базы данных...');
-        logger.log('═══════════════════════════════════════════════════════');
         
         // Проверяем наличие миграций
         const fs = require('fs');
         const path = require('path');
         const migrationsPath = path.join(__dirname, 'migrations');
-        logger.log(`Путь к миграциям: ${migrationsPath}`);
-        
         if (fs.existsSync(migrationsPath)) {
-          const allFiles = fs.readdirSync(migrationsPath);
-          const jsFiles = allFiles.filter((f: string) => f.endsWith('.js'));
-          const tsFiles = allFiles.filter((f: string) => f.endsWith('.ts'));
-          logger.log(`Найдено файлов в директории: всего ${allFiles.length}, .js: ${jsFiles.length}, .ts: ${tsFiles.length}`);
-          
-          if (jsFiles.length > 0) {
-            logger.log('Список .js файлов миграций:');
-            jsFiles.forEach((file: string) => logger.log(`  - ${file}`));
-          } else {
-            logger.warn('⚠️ Не найдено .js файлов миграций!');
-            if (tsFiles.length > 0) {
-              logger.warn('⚠️ Найдены .ts файлы, но нужны .js файлы. Миграции не были скомпилированы!');
-            }
-          }
+          const migrations = fs.readdirSync(migrationsPath).filter((f: string) => f.endsWith('.js'));
+          logger.log(`Найдено ${migrations.length} файлов миграций в ${migrationsPath}`);
         } else {
-          logger.error(`❌ Директория миграций не найдена: ${migrationsPath}`);
-          logger.error(`Текущая рабочая директория: ${process.cwd()}`);
-          logger.error(`__dirname: ${__dirname}`);
+          logger.warn(`Директория миграций не найдена: ${migrationsPath}`);
         }
         
-        logger.log('Инициализация AppDataSource для миграций...');
         if (!AppDataSource.isInitialized) {
           await AppDataSource.initialize();
           dataSourceInitialized = true;
-          logger.log('✅ AppDataSource инициализирован');
-        } else {
-          logger.log('AppDataSource уже инициализирован');
+          logger.log('AppDataSource инициализирован для миграций');
         }
         
-        // Проверяем, какие миграции уже применены
-        const executedMigrationsList = await AppDataSource.showMigrations();
-        logger.log(`Проверка выполненных миграций...`);
+        // Проверяем, есть ли таблицы в базе данных
+        const tables = await AppDataSource.query(`
+          SELECT table_name 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name != 'migrations'
+        `);
+        
+        if (tables.length === 0) {
+          logger.warn('⚠️ Таблицы не найдены в базе данных. Включаю синхронизацию для создания таблиц...');
+          // Временно включаем синхронизацию для создания таблиц
+          const tempDataSource = new (require('typeorm').DataSource)({
+            ...AppDataSource.options,
+            synchronize: true,
+          });
+          await tempDataSource.initialize();
+          logger.log('✅ Таблицы созданы через синхронизацию');
+          await tempDataSource.destroy();
+        } else {
+          logger.log(`Найдено ${tables.length} таблиц в базе данных`);
+        }
         
         // Выполняем миграции - runMigrations вернет только те, которые были выполнены
-        logger.log('Запуск выполнения миграций...');
         const executedMigrations = await AppDataSource.runMigrations();
-        
         if (executedMigrations && executedMigrations.length > 0) {
-          logger.log(`✅ Успешно применено ${executedMigrations.length} миграций:`);
+          logger.log(`✅ Применено ${executedMigrations.length} миграций:`);
           executedMigrations.forEach((migration: any) => {
-            logger.log(`  ✅ ${migration.name}`);
+            logger.log(`  - ${migration.name}`);
           });
         } else {
-          logger.log('✅ Все миграции уже применены (или миграций не найдено)');
+          logger.log('✅ Все миграции уже применены');
         }
-        
-        logger.log('═══════════════════════════════════════════════════════');
       } catch (migrationError: any) {
-        logger.error('═══════════════════════════════════════════════════════');
-        logger.error('❌ КРИТИЧЕСКАЯ ОШИБКА при выполнении миграций!');
-        logger.error('═══════════════════════════════════════════════════════');
-        logger.error('Сообщение об ошибке:', migrationError.message);
-        logger.error('Тип ошибки:', migrationError.constructor.name);
-        if (migrationError.stack) {
-          logger.error('Stack trace:');
-          logger.error(migrationError.stack);
-        }
-        logger.error('═══════════════════════════════════════════════════════');
-        logger.warn('⚠️ Приложение продолжит запуск, но миграции НЕ ВЫПОЛНЕНЫ!');
-        logger.warn('⚠️ Выполните миграции вручную:');
-        logger.warn('   docker compose exec backend npm run migration:run:prod');
-        logger.warn('   или');
-        logger.warn('   docker compose exec backend node node_modules/typeorm/cli.js migration:run -d dist/config/data-source.js');
-        logger.error('═══════════════════════════════════════════════════════');
+        logger.error('⚠️ Ошибка при выполнении миграций:', migrationError.message);
+        logger.error('Stack:', migrationError.stack);
+        logger.warn('Приложение продолжит запуск. Выполните миграции вручную: npm run migration:run');
         // Не прерываем запуск приложения, но логируем ошибку
       } finally {
         // Закрываем соединение после миграций, чтобы избежать конфликтов с TypeORM модулем NestJS
         if (dataSourceInitialized && AppDataSource.isInitialized) {
-          try {
-            await AppDataSource.destroy();
-            logger.log('Соединение с БД для миграций закрыто');
-          } catch (destroyError: any) {
-            logger.warn('Ошибка при закрытии соединения:', destroyError.message);
-          }
+          await AppDataSource.destroy();
+          logger.log('Соединение с БД для миграций закрыто');
         }
       }
-    } else {
-      logger.log(`Миграции пропущены: NODE_ENV=${process.env.NODE_ENV}, AUTO_RUN_MIGRATIONS=${process.env.AUTO_RUN_MIGRATIONS}`);
     }
     // Увеличиваем лимит размера тела запроса для загрузки изображений (base64)
     const app = await NestFactory.create(AppModule, {
