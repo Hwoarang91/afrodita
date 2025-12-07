@@ -176,38 +176,15 @@ async function bootstrap() {
   const port = process.env.PORT || process.env.BACKEND_PORT || 3001;
   logger.log(`Запуск сервера на порту ${port}...`);
   
-  // app.listen() автоматически инициализирует приложение и регистрирует все маршруты
-  // Не нужно вызывать app.init() вручную
-  logger.log(`Вызов app.listen(${port}, '0.0.0.0')...`);
-  
-  // Используем Promise с таймаутом для диагностики зависания
-  const listenPromise = app.listen(port, '0.0.0.0');
-  const timeoutPromise = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error('app.listen() timeout after 30 seconds')), 30000)
-  );
-  
   try {
-    logger.log(`Ожидание завершения app.listen()...`);
-    const httpServer = await Promise.race([listenPromise, timeoutPromise]);
+    // app.listen() автоматически инициализирует приложение и регистрирует все маршруты
+    await app.listen(port, '0.0.0.0');
     
-    if (!httpServer) {
-      throw new Error('app.listen() вернул null или undefined');
-    }
-    
-    logger.log(`app.listen() завершился успешно, httpServer создан`);
-    
-    // Получаем URL сервера для проверки
-    try {
-      const url = await app.getUrl();
-      logger.log(`URL приложения: ${url}`);
-    } catch (urlError: any) {
-      logger.warn(`Не удалось получить URL приложения: ${urlError.message}`);
-    }
-    
-    logger.log(`🚀 Backend запущен на порту ${port}`);
-    logger.log(`📚 Swagger документация: http://localhost:${port}/api/docs`);
+    logger.log(`✅ Backend успешно запущен на порту ${port}`);
+    logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
+    logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
   } catch (listenError: any) {
-    logger.error(`Ошибка при запуске сервера на порту ${port}:`, listenError.message);
+    logger.error(`❌ Ошибка при запуске сервера на порту ${port}:`, listenError.message);
     logger.error(`Stack trace:`, listenError.stack);
     throw listenError;
   }
