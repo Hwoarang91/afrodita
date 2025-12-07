@@ -19,6 +19,9 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
       synchronize: this.configService.get('NODE_ENV') !== 'production',
       logging: this.configService.get('NODE_ENV') === 'development',
       ssl: this.configService.get('DB_SSL') === 'true' ? { rejectUnauthorized: false } : false,
+      retryAttempts: 10,
+      retryDelay: 3000,
+      autoLoadEntities: true,
     };
   }
 }

@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { HttpAdapterHost } from '@nestjs/core';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import * as compression from 'compression';
@@ -180,8 +181,21 @@ async function bootstrap() {
   
   try {
     logger.log(`Вызов app.listen(${port}, '0.0.0.0')...`);
-    const httpServer = await app.listen(port, '0.0.0.0');
+    
+    // Используем Promise для app.listen() с таймаутом
+    const listenPromise = app.listen(port, '0.0.0.0');
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('app.listen() timeout after 10 seconds')), 10000)
+    );
+    
+    const httpServer = await Promise.race([listenPromise, timeoutPromise]) as any;
     logger.log(`app.listen() завершился, httpServer получен`);
+    
+    // Проверяем через HttpAdapterHost
+    const httpAdapterHost = app.get(HttpAdapterHost);
+    if (httpAdapterHost && httpAdapterHost.httpAdapter) {
+      logger.log(`HttpAdapter получен, проверка состояния...`);
+    }
     
     // Проверяем, что сервер действительно слушает
     if (httpServer && httpServer.listening) {
@@ -190,6 +204,12 @@ async function bootstrap() {
       logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
     } else {
       logger.warn(`⚠️ app.listen() завершился, но httpServer.listening = false`);
+      // Проверяем через HttpAdapterHost
+      if (httpAdapterHost && httpAdapterHost.listening) {
+        logger.log(`✅ HttpAdapterHost.listening = true, сервер работает`);
+      } else {
+        logger.error(`❌ HttpAdapterHost.listening = false, сервер не слушает`);
+      }
     }
   } catch (listenError: any) {
     logger.error(`❌ Ошибка при запуске сервера на порту ${port}:`, listenError.message);
