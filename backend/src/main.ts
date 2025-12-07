@@ -177,12 +177,19 @@ async function bootstrap() {
   logger.log(`Запуск сервера на порту ${port}...`);
   
   try {
+    logger.log(`Вызов app.listen(${port}, '0.0.0.0')...`);
     // app.listen() автоматически инициализирует приложение и регистрирует все маршруты
-    await app.listen(port, '0.0.0.0');
+    const httpServer = await app.listen(port, '0.0.0.0');
+    logger.log(`app.listen() завершился, httpServer получен`);
     
-    logger.log(`✅ Backend успешно запущен на порту ${port}`);
-    logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
-    logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
+    // Проверяем, что сервер действительно слушает
+    if (httpServer && httpServer.listening) {
+      logger.log(`✅ Backend успешно запущен на порту ${port}`);
+      logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
+      logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
+    } else {
+      logger.warn(`⚠️ app.listen() завершился, но httpServer.listening = false`);
+    }
   } catch (listenError: any) {
     logger.error(`❌ Ошибка при запуске сервера на порту ${port}:`, listenError.message);
     logger.error(`Stack trace:`, listenError.stack);
