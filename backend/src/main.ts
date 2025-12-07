@@ -26,8 +26,8 @@ async function bootstrap() {
         const pendingMigrations = await AppDataSource.showMigrations();
         if (pendingMigrations && pendingMigrations.length > 0) {
           logger.log(`Найдено ${pendingMigrations.length} невыполненных миграций. Применение...`);
-          await AppDataSource.runMigrations();
-          logger.log('✅ Миграции успешно применены');
+          const executedMigrations = await AppDataSource.runMigrations();
+          logger.log(`✅ Применено ${executedMigrations.length} миграций`);
         } else {
           logger.log('✅ Все миграции уже применены');
         }
@@ -158,6 +158,10 @@ async function bootstrap() {
   logger.log(`📚 Swagger документация: http://localhost:${port}/api/docs`);
   } catch (error) {
     logger.error('Ошибка при запуске приложения:', error);
+    // Закрываем соединение с DataSource при ошибке
+    if (AppDataSource.isInitialized) {
+      await AppDataSource.destroy().catch(() => {});
+    }
     process.exit(1);
   }
 }
