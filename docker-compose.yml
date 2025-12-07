@@ -51,6 +51,7 @@ services:
       LC_ALL: ru_RU.UTF-8
       PYTHONIOENCODING: utf-8
       NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${BACKEND_PORT:-3001}
     expose:
       - "3001"
     depends_on:

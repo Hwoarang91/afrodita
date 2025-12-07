@@ -173,7 +173,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
   logger.log('Swagger настроен');
 
-  const port = process.env.PORT || 3001;
+  const port = process.env.PORT || process.env.BACKEND_PORT || 3001;
   logger.log(`Запуск сервера на порту ${port}...`);
   
   // Инициализируем приложение - это зарегистрирует все маршруты
