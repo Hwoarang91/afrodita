@@ -201,9 +201,15 @@ async function bootstrap() {
   
   // Используем app.listen() вместо httpServer.listen() для правильного вызова lifecycle hooks
   // Это гарантирует, что OnApplicationBootstrap будет вызван
-  await app.listen(port, '0.0.0.0');
-  logger.log(`🚀 Backend запущен на порту ${port}`);
-  logger.log(`📚 Swagger документация: http://localhost:${port}/api/docs`);
+  logger.log(`Попытка запуска сервера на порту ${port}...`);
+  try {
+    await app.listen(port, '0.0.0.0');
+    logger.log(`🚀 Backend запущен на порту ${port}`);
+    logger.log(`📚 Swagger документация: http://localhost:${port}/api/docs`);
+  } catch (listenError: any) {
+    logger.error(`Ошибка при запуске сервера на порту ${port}:`, listenError.message);
+    throw listenError;
+  }
   } catch (error) {
     logger.error('Ошибка при запуске приложения:', error);
     // Закрываем соединение с DataSource при ошибке
