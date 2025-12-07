@@ -179,8 +179,31 @@ async function bootstrap() {
   // app.listen() автоматически инициализирует приложение и регистрирует все маршруты
   // Не нужно вызывать app.init() вручную
   logger.log(`Вызов app.listen(${port}, '0.0.0.0')...`);
+  
+  // Используем Promise с таймаутом для диагностики зависания
+  const listenPromise = app.listen(port, '0.0.0.0');
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('app.listen() timeout after 30 seconds')), 30000)
+  );
+  
   try {
-    await app.listen(port, '0.0.0.0');
+    logger.log(`Ожидание завершения app.listen()...`);
+    const httpServer = await Promise.race([listenPromise, timeoutPromise]);
+    
+    if (!httpServer) {
+      throw new Error('app.listen() вернул null или undefined');
+    }
+    
+    logger.log(`app.listen() завершился успешно, httpServer создан`);
+    
+    // Получаем URL сервера для проверки
+    try {
+      const url = await app.getUrl();
+      logger.log(`URL приложения: ${url}`);
+    } catch (urlError: any) {
+      logger.warn(`Не удалось получить URL приложения: ${urlError.message}`);
+    }
+    
     logger.log(`🚀 Backend запущен на порту ${port}`);
     logger.log(`📚 Swagger документация: http://localhost:${port}/api/docs`);
   } catch (listenError: any) {
