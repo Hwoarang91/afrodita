@@ -36,7 +36,8 @@ RUN npm ci --omit=dev
 
 # Копируем собранные файлы из builder stage
 COPY --from=builder /app/dist ./dist
-# Копируем node_modules из builder для нативных модулей (bcrypt)
+
+# Копируем node_modules из builder для нативных модулей (bcrypt и его зависимости)
 COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3001
