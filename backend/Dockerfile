@@ -37,6 +37,9 @@ RUN npm ci --omit=dev
 # Копируем собранные файлы из builder stage
 COPY --from=builder /app/dist ./dist
 
+# Убеждаемся, что миграции скопированы
+RUN ls -la dist/migrations/ 2>/dev/null || echo "Внимание: миграции не найдены в dist/migrations/"
+
 # Копируем bcrypt из builder stage (уже скомпилирован)
 # Это необходимо, так как bcrypt требует компиляции нативных модулей
 # Внутри bcrypt уже есть все необходимые зависимости

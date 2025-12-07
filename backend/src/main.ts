@@ -18,10 +18,12 @@ async function bootstrap() {
     
     // Выполнение миграций при старте (только в production)
     if (process.env.NODE_ENV === 'production' && process.env.AUTO_RUN_MIGRATIONS !== 'false') {
+      let dataSourceInitialized = false;
       try {
         logger.log('Проверка и выполнение миграций базы данных...');
         if (!AppDataSource.isInitialized) {
           await AppDataSource.initialize();
+          dataSourceInitialized = true;
         }
         // Выполняем миграции - runMigrations вернет только те, которые были выполнены
         const executedMigrations = await AppDataSource.runMigrations();
@@ -32,7 +34,14 @@ async function bootstrap() {
         }
       } catch (migrationError: any) {
         logger.error('⚠️ Ошибка при выполнении миграций:', migrationError.message);
+        logger.error('Stack:', migrationError.stack);
         logger.warn('Приложение продолжит запуск. Выполните миграции вручную: npm run migration:run');
+      } finally {
+        // Закрываем соединение после миграций, чтобы избежать конфликтов с TypeORM модулем NestJS
+        if (dataSourceInitialized && AppDataSource.isInitialized) {
+          await AppDataSource.destroy();
+          logger.log('Соединение с БД для миграций закрыто');
+        }
       }
     }
     // Увеличиваем лимит размера тела запроса для загрузки изображений (base64)
