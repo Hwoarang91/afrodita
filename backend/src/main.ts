@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { authLimiter, appointmentLimiter } from './middleware/rate-limit.middleware';
+import { AppDataSource } from './config/data-source';
 
 async function bootstrap() {
   // Настройка кодировки для правильного отображения русского языка
@@ -14,6 +15,27 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   try {
     logger.log('Инициализация приложения...');
+    
+    // Выполнение миграций при старте (только в production)
+    if (process.env.NODE_ENV === 'production' && process.env.AUTO_RUN_MIGRATIONS !== 'false') {
+      try {
+        logger.log('Проверка и выполнение миграций базы данных...');
+        if (!AppDataSource.isInitialized) {
+          await AppDataSource.initialize();
+        }
+        const pendingMigrations = await AppDataSource.showMigrations();
+        if (pendingMigrations && pendingMigrations.length > 0) {
+          logger.log(`Найдено ${pendingMigrations.length} невыполненных миграций. Применение...`);
+          await AppDataSource.runMigrations();
+          logger.log('✅ Миграции успешно применены');
+        } else {
+          logger.log('✅ Все миграции уже применены');
+        }
+      } catch (migrationError: any) {
+        logger.error('⚠️ Ошибка при выполнении миграций:', migrationError.message);
+        logger.warn('Приложение продолжит запуск. Выполните миграции вручную: npm run migration:run');
+      }
+    }
     // Увеличиваем лимит размера тела запроса для загрузки изображений (base64)
     const app = await NestFactory.create(AppModule, {
       bodyParser: true,

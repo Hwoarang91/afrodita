@@ -98,11 +98,71 @@ docker compose logs postgres
 # Убедиться, что DB_HOST=postgres в .env
 ```
 
+### Ошибка: relation "appointments" does not exist
+
+**Причина:**
+- Миграции не были выполнены
+- База данных пустая
+- Backend запустился до выполнения миграций
+
+**Решение 1: Выполнить миграции вручную**
+
+```bash
+# Проверить подключение к базе данных
+docker compose exec backend env | grep DB_
+
+# Выполнить миграции
+docker compose exec backend npm run migration:run
+
+# Проверить созданные таблицы
+docker compose exec postgres psql -U afrodita_user -d afrodita -c "\dt"
+```
+
+**Решение 2: Если миграции не выполняются через npm**
+
+```bash
+# Выполнить миграции через node напрямую
+docker compose exec backend sh -c "cd /app && node -r ts-node/register node_modules/typeorm/cli.js migration:run -d dist/config/data-source.js"
+
+# Или через скомпилированный код
+docker compose exec backend sh -c "cd /app && node node_modules/typeorm/cli.js migration:run -d dist/config/data-source.js"
+```
+
+**Решение 3: Проверка существования миграций**
+
+```bash
+# Проверить наличие файлов миграций
+docker compose exec backend ls -la /app/src/migrations/
+
+# Проверить логи миграций
+docker compose exec backend npm run migration:run
+```
+
+**Решение 4: Пересоздание базы данных с миграциями**
+
+```bash
+# Остановить контейнеры
+docker compose down
+
+# Удалить volume PostgreSQL
+docker volume rm afrodita_postgres_data
+
+# Запустить контейнеры заново
+docker compose up -d
+
+# Дождаться готовности PostgreSQL
+sleep 10
+
+# Выполнить миграции
+docker compose exec backend npm run migration:run
+```
+
 ### Ошибка: Migration failed
 
 **Причина:**
 - База данных не создана
 - Пользователь не имеет прав
+- Неправильный путь к миграциям
 
 **Решение:**
 
@@ -110,8 +170,14 @@ docker compose logs postgres
 # Создать базу данных вручную
 docker compose exec postgres psql -U afrodita_user -c "CREATE DATABASE afrodita;"
 
+# Проверить права пользователя
+docker compose exec postgres psql -U postgres -c "\du"
+
 # Выполнить миграции
 docker compose exec backend npm run migration:run
+
+# Проверить результат
+docker compose exec postgres psql -U afrodita_user -d afrodita -c "\dt"
 ```
 
 ### Ошибка: Port already in use

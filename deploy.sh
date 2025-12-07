@@ -220,6 +220,9 @@ SERVER_IP=${SERVER_IP}
 # Окружение
 NODE_ENV=production
 
+# Автоматическое выполнение миграций при старте
+AUTO_RUN_MIGRATIONS=true
+
 # Часовой пояс
 TZ=Europe/Moscow
 EOF
@@ -308,15 +311,57 @@ fi
 
 # Выполнение миграций
 print_info "Применение миграций..."
-$DOCKER_COMPOSE_CMD exec -T backend npm run migration:run
 
-if [ $? -ne 0 ]; then
-    print_warning "Возможна ошибка при выполнении миграций. Проверьте логи:"
-    echo "  $DOCKER_COMPOSE_CMD logs backend"
-    print_info "Если ошибка связана с аутентификацией, попробуйте:"
-    echo "  1. Остановите контейнеры: $DOCKER_COMPOSE_CMD down -v"
-    echo "  2. Удалите volume PostgreSQL: docker volume rm afrodita_postgres_data"
-    echo "  3. Запустите скрипт развертывания снова"
+# Ждем, пока backend контейнер полностью соберется
+print_info "Ожидание готовности backend контейнера..."
+for i in {1..30}; do
+    if $DOCKER_COMPOSE_CMD exec -T backend test -f /app/dist/main.js 2>/dev/null; then
+        print_success "Backend контейнер готов"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        print_error "Backend контейнер не готов после 30 попыток"
+        exit 1
+    fi
+    sleep 2
+done
+
+# Выполнение миграций через TypeORM CLI
+print_info "Запуск миграций базы данных..."
+
+# Сначала пробуем через npm run migration:run (для dev окружения)
+MIGRATION_OUTPUT=$($DOCKER_COMPOSE_CMD exec -T backend npm run migration:run 2>&1)
+MIGRATION_EXIT_CODE=$?
+
+if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
+    print_warning "Миграции через ts-node не выполнены. Пробуем через скомпилированный код..."
+    
+    # Альтернативный способ: через скомпилированный код
+    MIGRATION_OUTPUT=$($DOCKER_COMPOSE_CMD exec -T backend sh -c "cd /app && node -r ts-node/register node_modules/typeorm/cli.js migration:run -d dist/config/data-source.js" 2>&1)
+    MIGRATION_EXIT_CODE=$?
+fi
+
+if [ $MIGRATION_EXIT_CODE -eq 0 ]; then
+    print_success "Миграции успешно применены"
+    echo "$MIGRATION_OUTPUT" | grep -E "(Migration|migration|executed|applied)" | tail -5 || echo "$MIGRATION_OUTPUT" | tail -5
+else
+    print_warning "Миграции не выполнены через CLI"
+    echo "$MIGRATION_OUTPUT" | tail -10
+    print_info "Миграции будут выполнены автоматически при старте backend (если AUTO_RUN_MIGRATIONS не отключен)"
+    print_info "Или выполните вручную:"
+    echo "  $DOCKER_COMPOSE_CMD exec backend npm run migration:run"
+fi
+
+# Проверка существования таблиц
+print_info "Проверка создания таблиц..."
+TABLE_CHECK=$($DOCKER_COMPOSE_CMD exec -T postgres psql -U ${POSTGRES_USER:-afrodita_user} -d ${POSTGRES_DB:-afrodita} -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>/dev/null | tr -d ' ')
+
+if [ -n "$TABLE_CHECK" ] && [ "$TABLE_CHECK" -gt "0" ]; then
+    print_success "Таблицы созданы ($TABLE_CHECK таблиц)"
+else
+    print_warning "Таблицы не найдены. Возможно, миграции не выполнены."
+    print_info "Выполните миграции вручную:"
+    echo "  $DOCKER_COMPOSE_CMD exec backend npm run migration:run"
 fi
 
 # Шаг 11: Финальная проверка
