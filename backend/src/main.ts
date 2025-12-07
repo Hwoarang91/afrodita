@@ -91,18 +91,27 @@ async function bootstrap() {
       bodyParser: true,
       rawBody: false,
       logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+      forceCloseConnections: true, // Принудительно закрывать соединения при завершении
     });
     logger.log('NestFactory создан');
-    
-    // Ждем инициализации всех модулей, особенно TypeORM
-    logger.log('Ожидание инициализации модулей...');
-    await app.init();
-    logger.log('Модули инициализированы');
     
     // Увеличиваем лимит для JSON body parser (по умолчанию 100kb, увеличиваем до 10MB)
     app.use(require('express').json({ limit: '10mb' }));
     app.use(require('express').urlencoded({ limit: '10mb', extended: true }));
     logger.log('Приложение создано');
+    
+    // Проверяем подключение TypeORM перед запуском сервера
+    try {
+      const { DataSource } = require('typeorm');
+      const dataSource = app.get(DataSource);
+      if (dataSource && dataSource.isInitialized) {
+        logger.log('TypeORM DataSource инициализирован');
+      } else {
+        logger.warn('TypeORM DataSource не инициализирован, но продолжаем запуск');
+      }
+    } catch (error: any) {
+      logger.warn(`Не удалось проверить TypeORM DataSource: ${error.message}`);
+    }
 
     // Security
     if (process.env.NODE_ENV === 'production') {

@@ -22,6 +22,11 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
       retryAttempts: 10,
       retryDelay: 3000,
       autoLoadEntities: true,
+      connectTimeoutMS: 10000, // Таймаут подключения 10 секунд
+      extra: {
+        max: 10, // Максимальное количество соединений в пуле
+        connectionTimeoutMillis: 10000,
+      },
     };
   }
 }
