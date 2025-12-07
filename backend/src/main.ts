@@ -176,38 +176,16 @@ async function bootstrap() {
   const port = process.env.PORT || process.env.BACKEND_PORT || 3001;
   logger.log(`Запуск сервера на порту ${port}...`);
   
-  // Инициализируем приложение - это зарегистрирует все маршруты
-  // Используем таймаут, чтобы избежать зависания
-  logger.log('Инициализация приложения для регистрации маршрутов...');
-  
-  const initPromise = app.init();
-  const initTimeout = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error('Init timeout')), 5000)
-  );
-  
-  try {
-    await Promise.race([initPromise, initTimeout]);
-    logger.log('Приложение инициализировано, маршруты зарегистрированы');
-  } catch (error: any) {
-    if (error.message === 'Init timeout') {
-      logger.warn('Таймаут при инициализации, но продолжаем - маршруты могут быть уже зарегистрированы');
-    } else {
-      throw error;
-    }
-  }
-  
-  // Даем дополнительное время на завершение регистрации маршрутов
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  // Используем app.listen() вместо httpServer.listen() для правильного вызова lifecycle hooks
-  // Это гарантирует, что OnApplicationBootstrap будет вызван
-  logger.log(`Попытка запуска сервера на порту ${port}...`);
+  // app.listen() автоматически инициализирует приложение и регистрирует все маршруты
+  // Не нужно вызывать app.init() вручную
+  logger.log(`Вызов app.listen(${port}, '0.0.0.0')...`);
   try {
     await app.listen(port, '0.0.0.0');
     logger.log(`🚀 Backend запущен на порту ${port}`);
     logger.log(`📚 Swagger документация: http://localhost:${port}/api/docs`);
   } catch (listenError: any) {
     logger.error(`Ошибка при запуске сервера на порту ${port}:`, listenError.message);
+    logger.error(`Stack trace:`, listenError.stack);
     throw listenError;
   }
   } catch (error) {
