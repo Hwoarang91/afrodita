@@ -29,14 +29,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     }
     
+    // Используем window.location.href для редиректа, чтобы сохранить префикс /admin
     if (!token && !isLoginPage) {
-      router.push(`${basePath}/login`);
+      window.location.href = `${basePath}/login`;
     } else if (token && isLoginPage) {
-      router.push(`${basePath}/dashboard`);
+      window.location.href = `${basePath}/dashboard`;
     } else {
       setIsChecking(false);
     }
-  }, [router, pathname]);
+  }, [pathname]);
 
   if (isChecking) {
     return (
