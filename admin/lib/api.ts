@@ -3,10 +3,11 @@ import axios from 'axios';
 // API URL загружается из переменных окружения (корневой .env)
 // Next.js автоматически подхватывает переменные с префиксом NEXT_PUBLIC_
 // В продакшене используем относительный путь для работы через Nginx
+// В development режиме используем полный URL
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   process.env.API_URL ||
-  (typeof window !== 'undefined' ? '/api/v1' : 'http://localhost:3001/api/v1');
+  (process.env.NODE_ENV === 'production' ? '/api/v1' : 'http://localhost:3001/api/v1');
 
 export const apiClient = axios.create({
   baseURL: API_URL,

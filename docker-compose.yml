@@ -96,6 +96,9 @@ services:
     container_name: afrodita-admin
     env_file:
       - .env
+    environment:
+      NEXT_PUBLIC_API_URL: /api/v1
+      TZ: Europe/Moscow
     expose:
       - "3002"
     environment:

@@ -4,7 +4,8 @@ const nextConfig = {
   basePath: '/admin', // Добавлено для работы под префиксом /admin
   env: {
     // Загружаем переменные из корневого .env
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || 'http://localhost:3001/api/v1',
+    // Если NEXT_PUBLIC_API_URL не установлен, используем относительный путь в продакшене
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || (process.env.NODE_ENV === 'production' ? '/api/v1' : 'http://localhost:3001/api/v1'),
   },
   // Настройка для правильной работы чанков в Docker
   webpack: (config, { isServer, dev }) => {
