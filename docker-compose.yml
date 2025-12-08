@@ -98,12 +98,10 @@ services:
       - .env
     environment:
       NEXT_PUBLIC_API_URL: /api/v1
+      NODE_ENV: ${NODE_ENV:-production}
       TZ: Europe/Moscow
     expose:
       - "3002"
-    environment:
-      NODE_ENV: ${NODE_ENV:-production}
-      TZ: Europe/Moscow
     depends_on:
       backend:
         condition: service_healthy
