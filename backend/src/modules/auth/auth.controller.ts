@@ -14,6 +14,7 @@ import { AuthService, TelegramAuthData } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -101,6 +102,38 @@ export class AuthController {
   @ApiOperation({ summary: 'Получение текущего пользователя' })
   async getMe(@Request() req) {
     return req.user;
+  }
+
+  @Get('check-setup')
+  @ApiOperation({ summary: 'Проверка наличия администраторов в системе' })
+  @ApiResponse({ status: 200, description: 'Статус настройки системы' })
+  async checkSetup() {
+    const hasUsers = await this.authService.checkHasUsers();
+    return { hasUsers, needsSetup: !hasUsers };
+  }
+
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Регистрация первого администратора' })
+  @ApiResponse({ status: 201, description: 'Администратор успешно зарегистрирован' })
+  @ApiResponse({ status: 400, description: 'Администратор уже существует' })
+  async register(@Body() registerDto: RegisterDto, @Request() req) {
+    this.logger.debug(`Запрос на регистрацию: email=${registerDto.email}`);
+    try {
+      const result = await this.authService.registerFirstAdmin(
+        registerDto.email,
+        registerDto.password,
+        registerDto.firstName,
+        registerDto.lastName,
+        req.ip,
+        req.get('user-agent'),
+      );
+      this.logger.log(`Успешная регистрация первого администратора: ${registerDto.email}`);
+      return result;
+    } catch (error: any) {
+      this.logger.error(`Ошибка регистрации для ${registerDto.email}: ${error.message}`);
+      throw error;
+    }
   }
 }
 

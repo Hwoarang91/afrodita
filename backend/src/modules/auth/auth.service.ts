@@ -259,6 +259,57 @@ export class AuthService {
     return calculatedHash === hash;
   }
 
+  async checkHasUsers(): Promise<boolean> {
+    const count = await this.userRepository.count({
+      where: { role: UserRole.ADMIN },
+    });
+    return count > 0;
+  }
+
+  async registerFirstAdmin(
+    email: string,
+    password: string,
+    firstName: string,
+    lastName?: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ accessToken: string; token: string; refreshToken: string; user: any }> {
+    // Проверяем, есть ли уже администраторы
+    const hasAdmins = await this.checkHasUsers();
+    if (hasAdmins) {
+      throw new UnauthorizedException('Регистрация недоступна. Администратор уже существует.');
+    }
+
+    // Проверяем, не существует ли уже пользователь с таким email
+    const existingUser = await this.userRepository.findOne({
+      where: { email },
+    });
+    if (existingUser) {
+      throw new UnauthorizedException('Пользователь с таким email уже существует');
+    }
+
+    // Хешируем пароль
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Создаем администратора
+    const admin = this.userRepository.create({
+      email,
+      password: hashedPassword,
+      firstName,
+      lastName,
+      role: UserRole.ADMIN,
+      isActive: true,
+    });
+
+    const savedAdmin = await this.userRepository.save(admin);
+
+    // Логируем регистрацию
+    await this.logAuthAction(savedAdmin.id, AuthAction.LOGIN, ipAddress, userAgent);
+
+    // Выполняем вход для нового администратора
+    return await this.login(savedAdmin, ipAddress, userAgent);
+  }
+
   private async logAuthAction(
     userId: string,
     action: AuthAction,

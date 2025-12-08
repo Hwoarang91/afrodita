@@ -17,19 +17,31 @@ RUN npm ci --include=dev
 COPY . .
 RUN npm run build
 
-# Компилируем миграции TypeScript в JavaScript
-# TypeScript компилятор должен компилировать их автоматически, но на всякий случай компилируем явно
+# Компилируем миграции TypeScript в JavaScript явно
+# NestJS не компилирует миграции автоматически, поэтому компилируем их отдельно
 RUN if [ -d "src/migrations" ] && [ -n "$(ls -A src/migrations/*.ts 2>/dev/null)" ]; then \
       echo "Компиляция миграций TypeScript в JavaScript..."; \
       mkdir -p dist/migrations && \
-      for file in src/migrations/*.ts; do \
-        filename=$(basename "$file" .ts); \
-        npx tsc "$file" --outDir dist/migrations --module commonjs --target ES2021 --esModuleInterop --skipLibCheck --declaration false --sourceMap false --rootDir src --resolveJsonModule false 2>&1 | head -3 || \
-        (echo "Компиляция $filename через альтернативный метод..." && \
-         node -e "const fs=require('fs'),path=require('path');const src=fs.readFileSync('$file','utf8');const js=src.replace(/import\s+(\{[^}]*\}|\w+)\s+from\s+['\"]([^'\"]+)['\"]/g,'const $1=require(\"$2\")').replace(/export\s+(class|interface|const|let|var|function)/g,'$1').replace(/export\s+default/g,'module.exports=');fs.writeFileSync(path.join('dist/migrations','$filename.js'),js);" 2>/dev/null || true); \
-      done; \
+      npx tsc src/migrations/*.ts --outDir dist/migrations --module commonjs --target ES2021 \
+        --esModuleInterop --skipLibCheck --declaration false --sourceMap false \
+        --rootDir src --resolveJsonModule false --moduleResolution node 2>&1 || \
+      (echo "Попытка компиляции по одному файлу..." && \
+       for file in src/migrations/*.ts; do \
+         filename=$(basename "$file" .ts); \
+         echo "Компиляция $filename..."; \
+         npx tsc "$file" --outDir dist/migrations --module commonjs --target ES2021 \
+           --esModuleInterop --skipLibCheck --declaration false --sourceMap false \
+           --rootDir src --moduleResolution node 2>&1 | grep -v "error TS" || true; \
+       done); \
       echo "Проверка скомпилированных миграций:"; \
-      ls -la dist/migrations/*.js 2>/dev/null | head -5 || echo "⚠️ Миграции не скомпилированы"; \
+      if [ -n "$(ls -A dist/migrations/*.js 2>/dev/null)" ]; then \
+        echo "✅ Найдено .js файлов: $(ls -1 dist/migrations/*.js 2>/dev/null | wc -l)"; \
+        ls -la dist/migrations/*.js | head -3; \
+      else \
+        echo "❌ Миграции не скомпилированы в .js файлы"; \
+        echo "Содержимое dist/migrations:"; \
+        ls -la dist/migrations/ 2>/dev/null || echo "Директория не существует"; \
+      fi; \
     fi
 
 # Production stage

@@ -264,37 +264,47 @@ print_success "Docker образы собраны"
 # Шаг 8: Запуск контейнеров
 print_info "Шаг 8: Запуск контейнеров..."
 
-$DOCKER_COMPOSE_CMD up -d
+# Проверяем, существует ли volume PostgreSQL
+if docker volume inspect afrodita_postgres_data > /dev/null 2>&1; then
+    print_warning "Volume PostgreSQL уже существует"
+    print_info "Если возникают проблемы с аутентификацией, volume будет пересоздан"
+fi
+
+# Сначала запускаем только PostgreSQL для настройки пользователя
+print_info "Запуск PostgreSQL..."
+$DOCKER_COMPOSE_CMD up -d postgres
 
 if [ $? -ne 0 ]; then
-    print_error "Ошибка при запуске контейнеров"
+    print_error "Ошибка при запуске PostgreSQL"
     exit 1
 fi
 
-print_success "Контейнеры запущены"
+print_success "PostgreSQL запущен"
 
-# Шаг 9: Ожидание готовности сервисов
-print_info "Шаг 9: Ожидание готовности сервисов..."
-print_info "Ожидание 30 секунд для инициализации..."
+# Ждем готовности PostgreSQL перед настройкой пользователя
+print_info "Ожидание готовности PostgreSQL..."
+sleep 10
 
-sleep 30
-
-# Проверка статуса контейнеров
-print_info "Проверка статуса контейнеров..."
-$DOCKER_COMPOSE_CMD ps
-
-# Шаг 10: Проверка и настройка базы данных
+# Шаг 9: Проверка и настройка базы данных (выполняется до запуска остальных контейнеров)
 print_info "Шаг 10: Проверка и настройка базы данных..."
 
-# Ждем готовности базы данных
+# Ждем готовности базы данных (проверяем как postgres, так как пользователь может еще не существовать)
 print_info "Ожидание готовности PostgreSQL..."
 for i in {1..30}; do
+    # Сначала пробуем как postgres (суперпользователь)
+    if $DOCKER_COMPOSE_CMD exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
+        print_success "PostgreSQL готов"
+        break
+    fi
+    # Если не получилось, пробуем с указанным пользователем
     if $DOCKER_COMPOSE_CMD exec -T postgres pg_isready -U ${POSTGRES_USER:-afrodita_user} > /dev/null 2>&1; then
         print_success "PostgreSQL готов"
         break
     fi
     if [ $i -eq 30 ]; then
         print_error "PostgreSQL не готов после 30 попыток"
+        print_info "Проверьте логи PostgreSQL:"
+        echo "  $DOCKER_COMPOSE_CMD logs postgres"
         exit 1
     fi
     sleep 2
@@ -308,8 +318,16 @@ print_info "Ожидание полной готовности PostgreSQL..."
 sleep 5
 
 # Попытка подключиться как суперпользователь postgres для создания/обновления пользователя
+# PostgreSQL по умолчанию позволяет подключиться как postgres без пароля из контейнера
 print_info "Попытка подключения как суперпользователь postgres..."
-if $DOCKER_COMPOSE_CMD exec -T postgres psql -U postgres -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
+
+# Пробуем подключиться как postgres (обычно работает без пароля внутри контейнера)
+# Если не получается, пробуем с паролем из переменной окружения
+POSTGRES_SUPERUSER_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+export PGPASSWORD=$POSTGRES_SUPERUSER_PASSWORD
+
+if $DOCKER_COMPOSE_CMD exec -T postgres psql -U postgres -d postgres -c "SELECT 1;" > /dev/null 2>&1 || \
+   $DOCKER_COMPOSE_CMD exec -T -e PGPASSWORD=$POSTGRES_SUPERUSER_PASSWORD postgres psql -U postgres -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
     print_success "Подключение как postgres успешно"
     print_info "Создание/обновление пользователя PostgreSQL..."
     
@@ -363,13 +381,46 @@ else
         print_success "Подключение с пользователем ${POSTGRES_USER:-afrodita_user} успешно"
     else
         print_error "Не удалось подключиться к базе данных"
-        print_warning "Возможно, нужно пересоздать volume PostgreSQL"
-        print_info "Выполните следующие команды:"
-        echo "  docker compose down"
-        echo "  docker volume rm afrodita_postgres_data"
-        echo "  docker compose up -d postgres"
-        echo "  ./deploy.sh"
-        exit 1
+        print_warning "Возможно, PostgreSQL volume содержит старые учетные данные"
+        
+        # Предлагаем пересоздать volume
+        read -p "Пересоздать volume PostgreSQL? Это удалит все данные! (y/N): " RECREATE_VOLUME
+        if [[ "$RECREATE_VOLUME" =~ ^[Yy]$ ]]; then
+            print_info "Остановка контейнеров..."
+            $DOCKER_COMPOSE_CMD down
+            
+            print_info "Удаление volume PostgreSQL..."
+            docker volume rm afrodita_postgres_data 2>/dev/null || true
+            
+            print_info "Запуск PostgreSQL заново..."
+            $DOCKER_COMPOSE_CMD up -d postgres
+            
+            print_info "Ожидание готовности PostgreSQL..."
+            sleep 10
+            
+            # Повторная попытка создания пользователя
+            if $DOCKER_COMPOSE_CMD exec -T postgres psql -U postgres -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
+                print_info "Создание пользователя и базы данных..."
+                $DOCKER_COMPOSE_CMD exec -T postgres psql -U postgres <<EOF
+CREATE USER ${POSTGRES_USER:-afrodita_user} WITH PASSWORD '${POSTGRES_PASSWORD}';
+ALTER USER ${POSTGRES_USER:-afrodita_user} CREATEDB;
+CREATE DATABASE ${POSTGRES_DB:-afrodita} OWNER ${POSTGRES_USER:-afrodita_user};
+GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB:-afrodita} TO ${POSTGRES_USER:-afrodita_user};
+EOF
+                print_success "Пользователь и база данных созданы"
+            else
+                print_error "Не удалось подключиться к PostgreSQL даже после пересоздания volume"
+                exit 1
+            fi
+        else
+            print_error "Не удалось подключиться к базе данных"
+            print_info "Выполните следующие команды вручную:"
+            echo "  docker compose down"
+            echo "  docker volume rm afrodita_postgres_data"
+            echo "  docker compose up -d postgres"
+            echo "  ./deploy.sh"
+            exit 1
+        fi
     fi
 fi
 
@@ -460,6 +511,14 @@ fi
 
 # Шаг 11: Финальная проверка
 print_info "Шаг 11: Финальная проверка..."
+
+# Ожидание готовности сервисов
+print_info "Ожидание 30 секунд для инициализации всех сервисов..."
+sleep 30
+
+# Проверка статуса контейнеров
+print_info "Проверка статуса контейнеров..."
+$DOCKER_COMPOSE_CMD ps
 
 # Проверка доступности сервисов
 print_info "Проверка доступности сервисов..."
