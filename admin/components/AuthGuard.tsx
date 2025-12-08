@@ -10,7 +10,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const token = localStorage.getItem('admin-token');
-    const isLoginPage = pathname === '/login';
+    // Определяем базовый путь из window.location, так как Nginx удаляет префикс /admin
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+    const basePath = currentPath.startsWith('/admin') ? '/admin' : '';
+    const isLoginPage = pathname === '/login' || currentPath.includes('/login');
 
     // Синхронизируем токен с cookies для Server Components
     if (token) {
@@ -25,9 +28,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         document.cookie = `admin-token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
       }
     }
-
-    // Определяем базовый путь из текущего URL
-    const basePath = pathname.startsWith('/admin') ? '/admin' : '';
     
     if (!token && !isLoginPage) {
       router.push(`${basePath}/login`);

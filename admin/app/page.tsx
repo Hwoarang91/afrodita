@@ -1,17 +1,17 @@
 'use client';
 
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 export default function Home() {
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
-    // Определяем базовый путь из текущего URL
-    const basePath = pathname.startsWith('/admin') ? '/admin' : '';
+    // Определяем базовый путь из window.location, так как Nginx удаляет префикс /admin
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+    const basePath = currentPath.startsWith('/admin') ? '/admin' : '';
     router.push(`${basePath}/dashboard`);
-  }, [router, pathname]);
+  }, [router]);
 
   return null;
 }
