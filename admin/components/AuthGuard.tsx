@@ -26,10 +26,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Определяем базовый путь из текущего URL
+    const basePath = pathname.startsWith('/admin') ? '/admin' : '';
+    
     if (!token && !isLoginPage) {
-      router.push('/login');
+      router.push(`${basePath}/login`);
     } else if (token && isLoginPage) {
-      router.push('/dashboard');
+      router.push(`${basePath}/dashboard`);
     } else {
       setIsChecking(false);
     }
