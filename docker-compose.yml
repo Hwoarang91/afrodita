@@ -132,7 +132,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider --no-verbose --tries=1 --timeout=3 http://127.0.0.1/health 2>&1 | grep -q '200 OK' || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- --timeout=3 http://127.0.0.1/health 2>&1 | grep -q '\"status\":\"ok\"' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
