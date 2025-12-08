@@ -166,9 +166,9 @@ async function bootstrap() {
     }),
   );
 
-  // API prefix (исключаем health endpoint)
+  // API prefix (исключаем health endpoint и корневые API роуты)
   app.setGlobalPrefix('api/v1', {
-    exclude: ['/health'],
+    exclude: ['/health', '/api', '/api/v1', '/api/docs'],
   });
   logger.log('API prefix установлен');
 
