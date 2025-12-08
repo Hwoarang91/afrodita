@@ -7,7 +7,8 @@ export default function Home() {
     // Используем window.location.href для редиректа, чтобы сохранить префикс /admin
     if (typeof window !== 'undefined') {
       const currentPath = window.location.pathname;
-      const basePath = currentPath.startsWith('/admin') ? '/admin' : '';
+      const basePath = currentPath.startsWith('/admin') ? '/admin' : '/admin';
+      // Редиректим на /admin/dashboard
       window.location.href = `${basePath}/dashboard`;
     }
   }, []);
