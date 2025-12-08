@@ -34,7 +34,8 @@ export default function LoginPage() {
         }
         // Сохраняем токен в cookies для Server Components
         document.cookie = `admin-token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-        router.push('/dashboard');
+        // Используем window.location для редиректа с учетом basePath
+        window.location.href = '/admin/dashboard';
       } else {
         setError('Неверный email или пароль');
       }

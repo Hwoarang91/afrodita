@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Базовый путь для работы под /admin
-  basePath: '/admin',
+  basePath: '/admin', // Добавлено для работы под префиксом /admin
   env: {
     // Загружаем переменные из корневого .env
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || 'http://localhost:3001/api/v1',
