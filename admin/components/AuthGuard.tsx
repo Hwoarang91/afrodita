@@ -33,18 +33,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Проверяем, есть ли пользователи в системе
+      // Проверяем, есть ли администраторы в системе
       try {
         const { data } = await apiClient.get('/auth/check-setup');
         const hasUsers = data.hasUsers;
 
-        // Если нет пользователей и мы не на странице регистрации - редиректим на регистрацию
+        // Если нет администраторов и мы не на странице регистрации - редиректим на регистрацию
         if (!hasUsers && !isRegisterPage) {
           window.location.href = `${basePath}/register`;
           return;
         }
 
-        // Если есть пользователи и мы на странице регистрации - редиректим на логин
+        // Если есть администраторы и мы на странице регистрации - редиректим на логин
         if (hasUsers && isRegisterPage) {
           window.location.href = `${basePath}/login`;
           return;
@@ -52,6 +52,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       } catch (error) {
         // Если ошибка при проверке, продолжаем с обычной логикой
         console.error('Ошибка при проверке настройки системы:', error);
+        // Если ошибка и мы на странице регистрации - редиректим на логин (безопаснее)
+        if (isRegisterPage) {
+          window.location.href = `${basePath}/login`;
+          return;
+        }
       }
       
       // Используем window.location.href для редиректа, чтобы сохранить префикс /admin

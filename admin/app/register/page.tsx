@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,27 @@ export default function RegisterPage() {
   const [lastName, setLastName] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
   const router = useRouter();
+
+  // Проверяем наличие администраторов при загрузке страницы
+  useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const { data } = await apiClient.get('/auth/check-setup');
+        if (data.hasUsers) {
+          // Если администраторы уже есть - редиректим на логин
+          window.location.href = '/admin/login';
+        }
+      } catch (error) {
+        console.error('Ошибка при проверке настройки системы:', error);
+      } finally {
+        setIsChecking(false);
+      }
+    };
+
+    checkSetup();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +70,14 @@ export default function RegisterPage() {
       setIsLoading(false);
     }
   };
+
+  if (isChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">Загрузка...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
