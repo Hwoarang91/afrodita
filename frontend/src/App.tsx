@@ -6,6 +6,7 @@ import { TelegramProvider } from './contexts/TelegramContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import OfflineIndicator from './components/OfflineIndicator';
+import AdminRedirect from './components/AdminRedirect';
 import toast from 'react-hot-toast';
 
 // Code splitting - ленивая загрузка страниц
@@ -20,6 +21,7 @@ const Profile = lazy(() => import('./pages/Profile'));
 const History = lazy(() => import('./pages/History'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Reschedule = lazy(() => import('./pages/Reschedule'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Настройка QueryClient с retry механизмом и обработкой ошибок
 const queryClient = new QueryClient({
@@ -70,6 +72,11 @@ function App() {
                 <Route path="/history" element={<History />} />
                 <Route path="/notifications" element={<Notifications />} />
                 <Route path="/reschedule/:id" element={<Reschedule />} />
+                {/* Редирект админ-панели на правильный путь */}
+                <Route path="/login" element={<AdminRedirect />} />
+                <Route path="/register" element={<AdminRedirect />} />
+                {/* Страница 404 для всех остальных путей */}
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
             <Toaster 
