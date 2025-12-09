@@ -74,11 +74,17 @@ function App() {
             </Suspense>
             <Toaster 
               position="top-center"
+              containerStyle={{
+                top: '1rem',
+              }}
               toastOptions={{
                 duration: 4000,
                 style: {
                   background: '#363636',
                   color: '#fff',
+                  fontSize: '0.875rem',
+                  padding: '0.75rem 1rem',
+                  maxWidth: '90vw',
                 },
                 success: {
                   duration: 3000,

@@ -39,45 +39,45 @@ export default function MasterSelection() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background p-2 sm:p-4">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-foreground mb-6">Выберите мастера</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6">Выберите мастера</h1>
         {isLoading ? (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <ServiceCardSkeleton />
             <ServiceCardSkeleton />
             <ServiceCardSkeleton />
           </div>
         ) : masters && masters.length > 0 ? (
           <>
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {masters.map((master: Master) => (
                 <div
                   key={master.id}
                   onClick={() => setSelectedMaster(master.id)}
-                  className={`bg-card rounded-lg shadow-md p-6 cursor-pointer transition border border-border ${
+                  className={`bg-card rounded-lg shadow-md p-4 sm:p-6 cursor-pointer transition border border-border ${
                     selectedMaster === master.id ? 'ring-2 ring-primary' : ''
                   }`}
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 sm:gap-4">
                     {master.photoUrl && (
                       <img
                         src={master.photoUrl}
                         alt={master.name}
-                        className="w-20 h-20 rounded-full object-cover border border-border"
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border border-border flex-shrink-0"
                       />
                     )}
-                    <div className="flex-1">
-                      <h3 className="text-xl font-semibold text-foreground">{master.name}</h3>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg sm:text-xl font-semibold text-foreground truncate">{master.name}</h3>
                       {/* Отображаем specialties (из админки) или bio (для обратной совместимости) */}
                       {master.specialties && master.specialties.length > 0 ? (
-                        <p className="text-muted-foreground mt-1">{master.specialties.join(', ')}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2">{master.specialties.join(', ')}</p>
                       ) : master.bio ? (
-                        <p className="text-muted-foreground mt-1">{master.bio}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2">{master.bio}</p>
                       ) : null}
-                      <div className="flex gap-4 mt-2">
-                        <span className="text-sm text-muted-foreground">⭐ {master.rating}</span>
-                        <span className="text-sm text-muted-foreground">💼 {master.experience} лет</span>
+                      <div className="flex gap-3 sm:gap-4 mt-2">
+                        <span className="text-xs sm:text-sm text-muted-foreground">⭐ {master.rating}</span>
+                        <span className="text-xs sm:text-sm text-muted-foreground">💼 {master.experience} лет</span>
                       </div>
                     </div>
                   </div>
@@ -87,7 +87,7 @@ export default function MasterSelection() {
             {selectedMaster && (
               <button
                 onClick={handleNext}
-                className="w-full mt-6 bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:bg-primary/90 transition"
+                className="w-full mt-4 sm:mt-6 bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:bg-primary/90 transition text-base sm:text-lg"
               >
                 Выбрать время
               </button>

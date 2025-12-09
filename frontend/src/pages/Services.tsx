@@ -4,9 +4,15 @@ import { servicesApi } from '../api/services';
 import { ServiceCardSkeleton } from '../components/SkeletonLoader';
 import EmptyState from '../components/EmptyState';
 import ServiceCard from '../components/ServiceCard';
+import { useTelegramBackButton } from '../hooks/useTelegramBackButton';
+import { useTelegram } from '../contexts/TelegramContext';
 
 export default function Services() {
   const navigate = useNavigate();
+  const { hapticFeedback } = useTelegram();
+  
+  // Настройка BackButton для Telegram Web App
+  useTelegramBackButton();
   const { data: services, isLoading, error } = useQuery({
     queryKey: ['services'],
     queryFn: () => servicesApi.getAll(),
@@ -19,11 +25,11 @@ export default function Services() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background p-2 sm:p-4">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-foreground mb-6">Наши услуги</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6">Наши услуги</h1>
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <ServiceCardSkeleton />
             <ServiceCardSkeleton />
             <ServiceCardSkeleton />
@@ -38,12 +44,15 @@ export default function Services() {
             onAction={() => window.location.reload()}
           />
         ) : services && services.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {services.map((service) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {services.map((service) => (
               <ServiceCard
                 key={service.id}
                 service={service}
-                onClick={() => navigate(`/services/${service.id}`)}
+                onClick={() => {
+                  hapticFeedback.selectionChanged();
+                  navigate(`/services/${service.id}`);
+                }}
               />
             ))}
           </div>

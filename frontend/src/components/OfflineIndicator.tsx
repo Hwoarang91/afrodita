@@ -24,8 +24,8 @@ export default function OfflineIndicator() {
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-50">
-      <p className="text-sm font-medium">⚠️ Нет подключения к интернету</p>
+    <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 sm:py-2.5 z-50">
+      <p className="text-xs sm:text-sm font-medium px-2">⚠️ Нет подключения к интернету</p>
     </div>
   );
 }

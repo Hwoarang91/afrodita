@@ -74,12 +74,12 @@ export default function Reschedule() {
 
   if (!appointment) {
     return (
-      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+      <div className="min-h-screen bg-background p-2 sm:p-4 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">Запись не найдена</p>
+          <p className="text-sm sm:text-base text-muted-foreground mb-4">Запись не найдена</p>
           <button
             onClick={() => navigate('/profile')}
-            className="bg-primary text-primary-foreground px-6 py-2 rounded-lg"
+            className="bg-primary text-primary-foreground px-4 sm:px-6 py-2 rounded-lg text-sm sm:text-base"
           >
             Вернуться в профиль
           </button>
@@ -101,13 +101,13 @@ export default function Reschedule() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background p-2 sm:p-4">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-foreground mb-6">Перенос записи</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6">Перенос записи</h1>
 
-        <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Текущая запись</h2>
-          <div className="space-y-2 text-muted-foreground">
+        <div className="bg-card rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6 border border-border">
+          <h2 className="text-lg sm:text-xl font-semibold text-foreground mb-3 sm:mb-4">Текущая запись</h2>
+          <div className="space-y-2 text-xs sm:text-sm text-muted-foreground">
             <p>
               <span className="font-semibold text-foreground">Услуга:</span> {appointment.service?.name}
             </p>
@@ -124,8 +124,8 @@ export default function Reschedule() {
           </div>
         </div>
 
-        <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Выберите новую дату</h2>
+        <div className="bg-card rounded-lg shadow-md p-3 sm:p-6 mb-4 sm:mb-6 border border-border">
+          <h2 className="text-lg sm:text-xl font-semibold text-foreground mb-3 sm:mb-4">Выберите новую дату</h2>
           <Calendar
             onChange={(value) => {
               if (value instanceof Date) {
@@ -141,12 +141,12 @@ export default function Reschedule() {
         </div>
 
         {selectedDate && (
-          <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Выберите время</h2>
+          <div className="bg-card rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6 border border-border">
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground mb-3 sm:mb-4">Выберите время</h2>
             {slotsLoading ? (
               <LoadingSpinner />
             ) : slots && slots.length > 0 ? (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {slots.map((slot: string) => {
                   const slotDate = new Date(slot);
                   const timeStr = format(slotDate, 'HH:mm');
@@ -155,7 +155,7 @@ export default function Reschedule() {
                     <button
                       key={slot}
                       onClick={() => handleTimeSelect(slot)}
-                      className={`py-3 px-4 rounded-lg font-semibold transition ${
+                      className={`py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg font-semibold text-sm sm:text-base transition ${
                         isSelected
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
@@ -167,7 +167,7 @@ export default function Reschedule() {
                 })}
               </div>
             ) : (
-              <p className="text-muted-foreground text-center py-4">
+              <p className="text-xs sm:text-sm text-muted-foreground text-center py-4">
                 На выбранную дату нет свободных слотов
               </p>
             )}
@@ -175,25 +175,25 @@ export default function Reschedule() {
         )}
 
         {selectedTime && (
-          <div className="bg-card rounded-lg shadow-md p-6 mb-6 border border-border">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Подтверждение</h2>
-            <div className="space-y-2 text-muted-foreground mb-4">
+          <div className="bg-card rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6 border border-border">
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground mb-3 sm:mb-4">Подтверждение</h2>
+            <div className="space-y-2 text-xs sm:text-sm text-muted-foreground mb-4">
               <p>
                 <span className="font-semibold text-foreground">Новая дата и время:</span>{' '}
                 {format(new Date(selectedTime), 'd MMMM yyyy, HH:mm', { locale: ru })}
               </p>
             </div>
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
               <button
                 onClick={handleConfirm}
                 disabled={rescheduleMutation.isPending}
-                className="flex-1 bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:bg-primary/90 transition disabled:opacity-50"
+                className="flex-1 bg-primary text-primary-foreground py-3 rounded-lg font-semibold hover:bg-primary/90 transition disabled:opacity-50 text-sm sm:text-base"
               >
                 {rescheduleMutation.isPending ? 'Перенос...' : 'Подтвердить перенос'}
               </button>
               <button
                 onClick={() => navigate('/profile')}
-                className="flex-1 bg-secondary text-secondary-foreground py-3 rounded-lg font-semibold hover:bg-secondary/80 transition"
+                className="flex-1 bg-secondary text-secondary-foreground py-3 rounded-lg font-semibold hover:bg-secondary/80 transition text-sm sm:text-base"
               >
                 Отмена
               </button>

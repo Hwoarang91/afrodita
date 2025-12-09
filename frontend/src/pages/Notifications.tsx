@@ -15,25 +15,25 @@ export default function Notifications() {
   });
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background p-2 sm:p-4">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-foreground mb-6">Уведомления</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6">Уведомления</h1>
         {isLoading ? (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <AppointmentCardSkeleton />
             <AppointmentCardSkeleton />
             <AppointmentCardSkeleton />
           </div>
         ) : notifications && notifications.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {notifications.map((notif: any) => (
               <div
                 key={notif.id}
-                className="bg-card rounded-lg shadow-md p-6 border border-border"
+                className="bg-card rounded-lg shadow-md p-4 sm:p-6 border border-border"
               >
-                <h3 className="font-semibold text-foreground mb-2">{notif.title}</h3>
-                <p className="text-muted-foreground mb-2">{notif.message}</p>
-                <p className="text-muted-foreground text-sm">
+                <h3 className="text-sm sm:text-base font-semibold text-foreground mb-2">{notif.title}</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-2">{notif.message}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   {format(new Date(notif.createdAt), 'd MMMM yyyy, HH:mm', { locale: ru })}
                 </p>
               </div>

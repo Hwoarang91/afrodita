@@ -92,17 +92,17 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
   }, [onReset]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-destructive/10 to-destructive/5 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-card rounded-2xl shadow-xl p-8 text-center border border-border">
-        <div className="text-6xl mb-4">⚠️</div>
-        <h1 className="text-2xl font-bold text-foreground mb-4">Что-то пошло не так</h1>
-        <p className="text-muted-foreground mb-6">
+    <div className="min-h-screen bg-gradient-to-br from-destructive/10 to-destructive/5 flex items-center justify-center p-3 sm:p-4">
+      <div className="max-w-md w-full bg-card rounded-2xl shadow-xl p-5 sm:p-8 text-center border border-border">
+        <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">⚠️</div>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground mb-3 sm:mb-4">Что-то пошло не так</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6">
           Произошла непредвиденная ошибка. Мы уже работаем над её исправлением.
         </p>
         
         {import.meta.env.DEV && error && (
-          <details className="mt-4 text-left bg-muted rounded-lg p-4 mb-4">
-            <summary className="cursor-pointer text-sm font-medium text-foreground mb-2">
+          <details className="mt-3 sm:mt-4 text-left bg-muted rounded-lg p-3 sm:p-4 mb-3 sm:mb-4">
+            <summary className="cursor-pointer text-xs sm:text-sm font-medium text-foreground mb-2">
               Детали ошибки (только в режиме разработки)
             </summary>
             <pre className="text-xs text-destructive overflow-auto max-h-40">
@@ -114,7 +114,7 @@ function ErrorFallback({ error, errorInfo, onReset }: ErrorFallbackProps) {
 
         <button
           onClick={onReset}
-          className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:bg-primary/90 transition-colors font-medium"
+          className="w-full bg-primary text-primary-foreground px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-primary/90 transition-colors font-medium text-sm sm:text-base"
         >
           Вернуться на главную
         </button>

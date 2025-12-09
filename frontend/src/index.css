@@ -24,6 +24,19 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 0 72.2% 50.6%;
     --radius: 0.5rem;
+    
+    /* Telegram Web App theme variables (fallback values) */
+    --tg-theme-bg-color: var(--background);
+    --tg-theme-text-color: var(--foreground);
+    --tg-theme-hint-color: var(--muted-foreground);
+    --tg-theme-link-color: var(--primary);
+    --tg-theme-button-color: var(--primary);
+    --tg-theme-button-text-color: var(--primary-foreground);
+    --tg-theme-secondary-bg-color: var(--secondary);
+    --tg-theme-header-bg-color: var(--background);
+    --tg-theme-accent-text-color: var(--primary);
+    --tg-theme-section-bg-color: var(--card);
+    --tg-theme-destructive-text-color: var(--destructive);
   }
 
   .dark {
@@ -67,6 +80,18 @@
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    
+    /* Учет безопасной области viewport для Telegram Web App */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  
+  /* Использование Telegram theme colors если доступны */
+  body {
+    background-color: var(--tg-theme-bg-color, var(--background));
+    color: var(--tg-theme-text-color, var(--foreground));
   }
 }
 
