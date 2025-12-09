@@ -96,15 +96,16 @@ apiClient.interceptors.response.use(
         const isLoginPage = currentPath === '/login' || currentPath === '/admin/login' || currentPath.endsWith('/login');
         const isRegisterPage = currentPath === '/register' || currentPath === '/admin/register' || currentPath.endsWith('/register');
         
-        // Если пользователь уже на странице логина или регистрации - не делаем редирект
-        // Просто удаляем токен и позволяем странице обработать ошибку
-        localStorage.removeItem('admin-token');
-        localStorage.removeItem('admin-user');
-        // Удаляем токен из cookies
-        document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
-        
-        // Редиректим только если пользователь НЕ на странице логина/регистрации
+        // Если пользователь уже на странице логина или регистрации - НЕ удаляем токен и НЕ делаем редирект
+        // Позволяем странице обработать ошибку самостоятельно
         if (!isLoginPage && !isRegisterPage) {
+          // Удаляем токен только если мы НЕ на странице логина/регистрации
+          localStorage.removeItem('admin-token');
+          localStorage.removeItem('admin-user');
+          // Удаляем токен из cookies
+          document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+          
+          // Редиректим только если пользователь НЕ на странице логина/регистрации
           const basePath = currentPath.startsWith('/admin') ? '/admin' : '';
           window.location.href = `${basePath}/login`;
         }

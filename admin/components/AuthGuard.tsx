@@ -19,6 +19,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       const isLoginPage = pathname === '/login' || currentPath === '/admin/login' || currentPath.endsWith('/login');
       const isRegisterPage = pathname === '/register' || currentPath === '/admin/register' || currentPath.endsWith('/register');
 
+      // Если мы на странице логина или регистрации - не делаем проверку авторизации
+      // Позволяем странице обрабатывать ошибки самостоятельно
+      if (isLoginPage || isRegisterPage) {
+        setIsChecking(false);
+        return;
+      }
+
       // Синхронизируем токен с cookies для Server Components
       if (token) {
         // Проверяем, есть ли уже cookie
