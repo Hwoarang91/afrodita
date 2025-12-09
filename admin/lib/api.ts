@@ -95,22 +95,31 @@ apiClient.interceptors.response.use(
         const currentPath = window.location.pathname;
         const currentUrl = window.location.href;
         
-        // Более надежная проверка - проверяем и pathname, и полный URL
-        // В Next.js с basePath='/admin', pathname может быть '/login' или '/admin/login'
-        // Проверяем оба варианта и полный URL
+        // В Next.js с basePath='/admin', usePathname() возвращает путь БЕЗ basePath
+        // Но window.location.pathname возвращает полный путь С basePath
+        // Проверяем оба варианта для надежности
         const isLoginPage = 
-          currentPath === '/login' || 
-          currentPath === '/admin/login' || 
-          (currentPath.endsWith('/login') && !currentPath.includes('/admin/register')) ||
-          (currentUrl.includes('/admin/login') && !currentUrl.includes('/admin/register')) ||
-          (currentUrl.includes('/login') && !currentUrl.includes('/register') && !currentUrl.includes('/admin/register'));
+          currentPath === '/admin/login' ||  // Полный путь с basePath
+          currentPath === '/login' ||  // Путь без basePath (если Next.js его удалил)
+          currentPath.endsWith('/login') ||  // Любой путь, заканчивающийся на /login
+          currentUrl.includes('/admin/login');  // Проверка по полному URL
           
         const isRegisterPage = 
-          currentPath === '/register' || 
-          currentPath === '/admin/register' || 
-          (currentPath.endsWith('/register') && !currentPath.includes('/admin/login')) ||
-          (currentUrl.includes('/admin/register') && !currentUrl.includes('/admin/login')) ||
-          (currentUrl.includes('/register') && !currentUrl.includes('/login') && !currentUrl.includes('/admin/login'));
+          currentPath === '/admin/register' ||  // Полный путь с basePath
+          currentPath === '/register' ||  // Путь без basePath
+          currentPath.endsWith('/register') ||  // Любой путь, заканчивающийся на /register
+          currentUrl.includes('/admin/register');  // Проверка по полному URL
+        
+        // Логирование для отладки (только в development)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('401 Error - Path check:', {
+            currentPath,
+            currentUrl,
+            isLoginPage,
+            isRegisterPage,
+            willRedirect: !isLoginPage && !isRegisterPage,
+          });
+        }
         
         // Если пользователь НЕ на странице логина/регистрации - удаляем токен и редиректим
         if (!isLoginPage && !isRegisterPage) {
