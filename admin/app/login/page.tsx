@@ -40,11 +40,11 @@ export default function LoginPage() {
         setError('Неверный email или пароль');
       }
     } catch (err: any) {
-      setError(
-        err.response?.data?.message || 'Ошибка при входе. Проверьте данные.',
-      );
-    } finally {
+      // Обрабатываем ошибку авторизации - показываем сообщение и остаемся на странице
+      const errorMessage = err.response?.data?.message || 'Ошибка при входе. Проверьте данные.';
+      setError(errorMessage);
       setIsLoading(false);
+      // НЕ делаем редирект при ошибке - остаемся на странице логина
     }
   };
 
