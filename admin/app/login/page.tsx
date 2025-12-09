@@ -45,6 +45,9 @@ export default function LoginPage() {
       setError(errorMessage);
       setIsLoading(false);
       // НЕ делаем редирект при ошибке - остаемся на странице логина
+      // Предотвращаем любые возможные редиректы
+      e.preventDefault();
+      e.stopPropagation();
     }
   };
 

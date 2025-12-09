@@ -93,8 +93,22 @@ apiClient.interceptors.response.use(
       // Обработка 401 - неавторизован
       if (status === 401) {
         const currentPath = window.location.pathname;
-        const isLoginPage = currentPath === '/login' || currentPath === '/admin/login' || currentPath.endsWith('/login');
-        const isRegisterPage = currentPath === '/register' || currentPath === '/admin/register' || currentPath.endsWith('/register');
+        const currentUrl = window.location.href;
+        
+        // Более надежная проверка - проверяем и pathname, и полный URL
+        const isLoginPage = 
+          currentPath === '/login' || 
+          currentPath === '/admin/login' || 
+          currentPath.endsWith('/login') ||
+          currentUrl.includes('/admin/login') ||
+          currentUrl.includes('/login');
+          
+        const isRegisterPage = 
+          currentPath === '/register' || 
+          currentPath === '/admin/register' || 
+          currentPath.endsWith('/register') ||
+          currentUrl.includes('/admin/register') ||
+          currentUrl.includes('/register');
         
         // Если пользователь НЕ на странице логина/регистрации - удаляем токен и редиректим
         if (!isLoginPage && !isRegisterPage) {
@@ -107,7 +121,8 @@ apiClient.interceptors.response.use(
           // Всегда редиректим на /admin/login
           window.location.href = '/admin/login';
         }
-        // Если пользователь на странице логина/регистрации - НЕ делаем ничего
+        // Если пользователь на странице логина/регистрации - НЕ делаем НИЧЕГО
+        // НЕ удаляем токен, НЕ делаем редирект - просто возвращаем ошибку
         // Позволяем странице обработать ошибку самостоятельно
         
         // Всегда возвращаем ошибку, чтобы страница логина могла её обработать
