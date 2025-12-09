@@ -47,13 +47,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
         // Если нет администраторов и мы не на странице регистрации - редиректим на регистрацию
         if (!hasUsers && !isRegisterPage) {
-          window.location.href = `${basePath}/register`;
+          window.location.href = '/admin/register';
           return;
         }
 
         // Если есть администраторы и мы на странице регистрации - редиректим на логин
         if (hasUsers && isRegisterPage) {
-          window.location.href = `${basePath}/login`;
+          window.location.href = '/admin/login';
           return;
         }
       } catch (error) {
@@ -61,7 +61,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         console.error('Ошибка при проверке настройки системы:', error);
         // Если ошибка и мы на странице регистрации - редиректим на логин (безопаснее)
         if (isRegisterPage) {
-          window.location.href = `${basePath}/login`;
+          window.location.href = '/admin/login';
           return;
         }
       }
