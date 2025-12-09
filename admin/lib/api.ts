@@ -96,19 +96,21 @@ apiClient.interceptors.response.use(
         const currentUrl = window.location.href;
         
         // Более надежная проверка - проверяем и pathname, и полный URL
+        // В Next.js с basePath='/admin', pathname может быть '/login' или '/admin/login'
+        // Проверяем оба варианта и полный URL
         const isLoginPage = 
           currentPath === '/login' || 
           currentPath === '/admin/login' || 
-          currentPath.endsWith('/login') ||
-          currentUrl.includes('/admin/login') ||
-          currentUrl.includes('/login');
+          (currentPath.endsWith('/login') && !currentPath.includes('/admin/register')) ||
+          (currentUrl.includes('/admin/login') && !currentUrl.includes('/admin/register')) ||
+          (currentUrl.includes('/login') && !currentUrl.includes('/register') && !currentUrl.includes('/admin/register'));
           
         const isRegisterPage = 
           currentPath === '/register' || 
           currentPath === '/admin/register' || 
-          currentPath.endsWith('/register') ||
-          currentUrl.includes('/admin/register') ||
-          currentUrl.includes('/register');
+          (currentPath.endsWith('/register') && !currentPath.includes('/admin/login')) ||
+          (currentUrl.includes('/admin/register') && !currentUrl.includes('/admin/login')) ||
+          (currentUrl.includes('/register') && !currentUrl.includes('/login') && !currentUrl.includes('/admin/login'));
         
         // Если пользователь НЕ на странице логина/регистрации - удаляем токен и редиректим
         if (!isLoginPage && !isRegisterPage) {
