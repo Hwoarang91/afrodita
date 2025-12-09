@@ -45,9 +45,8 @@ export default function LoginPage() {
       setError(errorMessage);
       setIsLoading(false);
       // НЕ делаем редирект при ошибке - остаемся на странице логина
-      // Предотвращаем любые возможные редиректы
-      e.preventDefault();
-      e.stopPropagation();
+      // Ошибка будет обработана interceptor в api.ts, который не должен делать редирект
+      // если мы уже на странице логина
     }
   };
 
