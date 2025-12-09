@@ -92,13 +92,24 @@ apiClient.interceptors.response.use(
     if (typeof window !== 'undefined') {
       // Обработка 401 - неавторизован
       if (status === 401) {
+        const currentPath = window.location.pathname;
+        const isLoginPage = currentPath === '/login' || currentPath === '/admin/login' || currentPath.endsWith('/login');
+        const isRegisterPage = currentPath === '/register' || currentPath === '/admin/register' || currentPath.endsWith('/register');
+        
+        // Если пользователь уже на странице логина или регистрации - не делаем редирект
+        // Просто удаляем токен и позволяем странице обработать ошибку
         localStorage.removeItem('admin-token');
         localStorage.removeItem('admin-user');
         // Удаляем токен из cookies
         document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+        
+        // Редиректим только если пользователь НЕ на странице логина/регистрации
+        if (!isLoginPage && !isRegisterPage) {
+          const basePath = currentPath.startsWith('/admin') ? '/admin' : '';
+          window.location.href = `${basePath}/login`;
         }
+        
+        // Всегда возвращаем ошибку, чтобы страница логина могла её обработать
         return Promise.reject(error);
       }
       
