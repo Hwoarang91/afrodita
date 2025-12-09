@@ -4,12 +4,12 @@ import axios from 'axios';
 // Next.js автоматически подхватывает переменные с префиксом NEXT_PUBLIC_
 // В браузере всегда используем относительный путь для работы через Nginx
 // На сервере (SSR) используем полный URL или переменную окружения
-function getApiUrl(): string {
+const getApiUrl = (): string => {
   // Если есть явно заданный URL в переменных окружения - используем его
-  if (process.env.NEXT_PUBLIC_API_URL) {
+  if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
-  if (process.env.API_URL) {
+  if (typeof process !== 'undefined' && process.env?.API_URL) {
     return process.env.API_URL;
   }
   
@@ -20,16 +20,31 @@ function getApiUrl(): string {
   
   // На сервере (SSR) используем localhost
   return 'http://localhost:3001/api/v1';
-}
+};
 
-const API_URL = getApiUrl();
-
+// Используем функцию для получения baseURL, чтобы она вызывалась динамически
 export const apiClient = axios.create({
-  baseURL: API_URL,
+  baseURL: getApiUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Переопределяем baseURL в interceptor для гарантии правильного URL в браузере
+apiClient.interceptors.request.use((config) => {
+  // В браузере всегда используем относительный путь
+  if (typeof window !== 'undefined') {
+    // Если baseURL не задан явно через переменные окружения, используем относительный путь
+    const explicitUrl = typeof process !== 'undefined' && (
+      process.env?.NEXT_PUBLIC_API_URL || 
+      process.env?.API_URL
+    );
+    if (!explicitUrl) {
+      config.baseURL = '/api/v1';
+    }
+  }
+  
+  // Добавляем токен авторизации
 
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
