@@ -14,12 +14,14 @@ export default function LayoutContent({
 }) {
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
+  const isRegisterPage = pathname === '/register';
+  const isAuthPage = isLoginPage || isRegisterPage;
 
   return (
     <ErrorBoundary>
       <ErrorToastContainer>
         <AuthGuard>
-          {isLoginPage ? (
+          {isAuthPage ? (
             <>{children}</>
           ) : (
             <div className="flex h-screen bg-background transition-colors">
