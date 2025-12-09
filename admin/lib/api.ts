@@ -32,26 +32,23 @@ export const apiClient = axios.create({
 
 // Переопределяем baseURL в interceptor для гарантии правильного URL в браузере
 apiClient.interceptors.request.use((config) => {
-  // В браузере всегда используем относительный путь
   if (typeof window !== 'undefined') {
+    // В браузере всегда используем относительный путь
     // Если baseURL не задан явно через переменные окружения, используем относительный путь
     const explicitUrl = typeof process !== 'undefined' && (
       process.env?.NEXT_PUBLIC_API_URL || 
       process.env?.API_URL
     );
-    if (!explicitUrl) {
+    if (!explicitUrl || config.baseURL?.includes('localhost')) {
       config.baseURL = '/api/v1';
     }
-  }
-  
-  // Добавляем токен авторизации
-
-apiClient.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
+    
+    // Добавляем токен авторизации
     const token = localStorage.getItem('admin-token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
     // Логирование только в development режиме
     if (process.env.NODE_ENV === 'development') {
       console.log('API Request:', {
