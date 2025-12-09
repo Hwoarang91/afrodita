@@ -21,6 +21,45 @@ export default function AppointmentConfirmation() {
   // Настройка BackButton для Telegram Web App
   useTelegramBackButton();
   
+  const createMutation = useMutation({
+    mutationFn: appointmentsApi.create,
+    onMutate: async (newAppointment) => {
+      // Оптимистично обновляем список записей
+      await queryClient.cancelQueries({ queryKey: ['appointments'] });
+      const previousAppointments = queryClient.getQueryData(['appointments']);
+      
+      // Добавляем новую запись в список
+      queryClient.setQueryData(['appointments'], (old: any) => {
+        if (!old) return old;
+        const optimisticAppointment = {
+          id: `temp-${Date.now()}`,
+          ...newAppointment,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        };
+        return Array.isArray(old) ? [...old, optimisticAppointment] : old;
+      });
+      
+      return { previousAppointments };
+    },
+    onError: (error: any, _variables, context) => {
+      // Откатываем изменения при ошибке
+      if (context?.previousAppointments) {
+        queryClient.setQueryData(['appointments'], context.previousAppointments);
+      }
+      hapticFeedback.notificationOccurred('error');
+      toast.error(error.response?.data?.message || 'Ошибка создания записи');
+    },
+    onSuccess: () => {
+      hapticFeedback.notificationOccurred('success');
+      toast.success('Запись успешно создана!');
+      navigate('/profile');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+    },
+  });
+  
   const handleConfirm = () => {
     if (masterId && serviceId && startTime) {
       createMutation.mutate({
@@ -65,45 +104,6 @@ export default function AppointmentConfirmation() {
       return data;
     },
     enabled: !!masterId,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: appointmentsApi.create,
-    onMutate: async (newAppointment) => {
-      // Оптимистично обновляем список записей
-      await queryClient.cancelQueries({ queryKey: ['appointments'] });
-      const previousAppointments = queryClient.getQueryData(['appointments']);
-      
-      // Добавляем новую запись в список
-      queryClient.setQueryData(['appointments'], (old: any) => {
-        if (!old) return old;
-        const optimisticAppointment = {
-          id: `temp-${Date.now()}`,
-          ...newAppointment,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-        };
-        return Array.isArray(old) ? [...old, optimisticAppointment] : old;
-      });
-      
-      return { previousAppointments };
-    },
-    onError: (error: any, _variables, context) => {
-      // Откатываем изменения при ошибке
-      if (context?.previousAppointments) {
-        queryClient.setQueryData(['appointments'], context.previousAppointments);
-      }
-      hapticFeedback.notificationOccurred('error');
-      toast.error(error.response?.data?.message || 'Ошибка создания записи');
-    },
-    onSuccess: () => {
-      hapticFeedback.notificationOccurred('success');
-      toast.success('Запись успешно создана!');
-      navigate('/profile');
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
-    },
   });
 
   if (!service || !master) {
