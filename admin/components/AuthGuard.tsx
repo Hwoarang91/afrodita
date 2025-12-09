@@ -14,7 +14,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem('admin-token');
       // Определяем базовый путь из window.location, так как Nginx удаляет префикс /admin
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
-      const basePath = currentPath.startsWith('/admin') ? '/admin' : '';
+      const basePath = '/admin'; // Всегда используем /admin для админ панели
       // Проверяем, находимся ли мы на странице логина или регистрации (с учетом basePath)
       const isLoginPage = pathname === '/login' || currentPath === '/admin/login' || currentPath.endsWith('/login');
       const isRegisterPage = pathname === '/register' || currentPath === '/admin/register' || currentPath.endsWith('/register');
@@ -66,16 +66,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         }
       }
       
-      // Используем window.location.href для редиректа, чтобы сохранить префикс /admin
+      // Используем window.location.href для редиректа, всегда через /admin
       if (!token && !isLoginPage && !isRegisterPage) {
-        // Редиректим на /admin/login, а не на /login
-        if (basePath) {
-          window.location.href = `${basePath}/login`;
-        } else {
-          window.location.href = '/admin/login';
-        }
+        // Всегда редиректим на /admin/login
+        window.location.href = '/admin/login';
       } else if (token && (isLoginPage || isRegisterPage)) {
-        window.location.href = `${basePath}/dashboard`;
+        window.location.href = '/admin/dashboard';
       } else {
         setIsChecking(false);
       }

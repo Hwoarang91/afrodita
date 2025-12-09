@@ -65,7 +65,8 @@ export default function Sidebar() {
     localStorage.removeItem('admin-user');
     // Удаляем токен из cookies для Server Components
     document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
-    router.push('/login');
+    // Используем window.location для редиректа с учетом basePath
+    window.location.href = '/admin/login';
   };
 
   const sidebarContent = (

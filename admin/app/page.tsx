@@ -12,14 +12,13 @@ export default function Home() {
         // Проверяем наличие администраторов в системе
         const { data } = await apiClient.get('/auth/check-setup');
         const hasUsers = data.hasUsers;
-        const basePath = '/admin';
 
         if (!hasUsers) {
           // Если нет администраторов - редиректим на регистрацию
-          window.location.href = `${basePath}/register`;
+          window.location.href = '/admin/register';
         } else {
           // Если есть администраторы - редиректим на логин
-          window.location.href = `${basePath}/login`;
+          window.location.href = '/admin/login';
         }
       } catch (error) {
         console.error('Ошибка при проверке настройки системы:', error);

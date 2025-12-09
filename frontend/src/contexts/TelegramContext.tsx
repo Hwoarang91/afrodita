@@ -163,11 +163,19 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
       }
       
       // Настройка headerColor и backgroundColor из themeParams
-      if (tg.themeParams?.header_bg_color) {
-        tg.setHeaderColor(tg.themeParams.header_bg_color);
-      }
-      if (tg.themeParams?.bg_color) {
-        tg.setBackgroundColor(tg.themeParams.bg_color);
+      // Используем try-catch, чтобы не ломать приложение, если методы недоступны
+      try {
+        if (tg.themeParams?.header_bg_color) {
+          tg.setHeaderColor(tg.themeParams.header_bg_color);
+        }
+        if (tg.themeParams?.bg_color) {
+          tg.setBackgroundColor(tg.themeParams.bg_color);
+        }
+      } catch (error) {
+        // Игнорируем ошибки при установке цветов (могут быть в некоторых версиях Telegram)
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Не удалось установить цвета Telegram Web App:', error);
+        }
       }
       
       // Обработка изменения темы
@@ -178,11 +186,18 @@ export const TelegramProvider = ({ children }: { children: ReactNode }) => {
         if (tg.colorScheme) {
           applyColorScheme(tg.colorScheme);
         }
-        if (tg.themeParams?.header_bg_color) {
-          tg.setHeaderColor(tg.themeParams.header_bg_color);
-        }
-        if (tg.themeParams?.bg_color) {
-          tg.setBackgroundColor(tg.themeParams.bg_color);
+        try {
+          if (tg.themeParams?.header_bg_color) {
+            tg.setHeaderColor(tg.themeParams.header_bg_color);
+          }
+          if (tg.themeParams?.bg_color) {
+            tg.setBackgroundColor(tg.themeParams.bg_color);
+          }
+        } catch (error) {
+          // Игнорируем ошибки при установке цветов
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Не удалось установить цвета Telegram Web App:', error);
+          }
         }
       };
       
