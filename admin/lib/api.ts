@@ -96,48 +96,59 @@ apiClient.interceptors.response.use(
         const currentUrl = window.location.href;
         const requestUrl = error.config?.url || '';
         
-        // В Next.js с basePath='/admin', window.location.pathname возвращает полный путь С basePath
-        // Но usePathname() возвращает путь БЕЗ basePath
-        // Проверяем оба варианта для надежности
-        // Важно: проверяем сначала полный URL, так как он самый надежный
-        
-        // Специальная обработка для /auth/check-setup - не делаем редирект при ошибке 401
-        // Это нормально, если мы на странице логина и проверяем наличие пользователей
+        // ВАЖНО: Проверяем URL запроса - если это /auth/login, то мы точно на странице логина
+        // Это самый надежный способ определить, что ошибка произошла при попытке входа
+        const isLoginRequest = requestUrl === '/auth/login' || requestUrl.includes('/auth/login');
+        const isRegisterRequest = requestUrl === '/auth/register' || requestUrl.includes('/auth/register');
         const isCheckSetupRequest = requestUrl.includes('/auth/check-setup');
         
+        // Проверяем текущий путь страницы (с учетом basePath и без него)
         const isLoginPage = 
+          isLoginRequest ||  // Если это запрос логина - мы точно на странице логина
           currentUrl.includes('/admin/login') ||  // Проверка по полному URL (самый надежный)
+          currentUrl.includes('/login') ||  // Проверка по URL без префикса
           currentPath === '/admin/login' ||  // Полный путь с basePath
           currentPath === '/login' ||  // Путь без basePath (если Next.js его удалил)
           currentPath.endsWith('/login');  // Любой путь, заканчивающийся на /login
           
         const isRegisterPage = 
+          isRegisterRequest ||  // Если это запрос регистрации - мы точно на странице регистрации
           currentUrl.includes('/admin/register') ||  // Проверка по полному URL (самый надежный)
+          currentUrl.includes('/register') ||  // Проверка по URL без префикса
           currentPath === '/admin/register' ||  // Полный путь с basePath
           currentPath === '/register' ||  // Путь без basePath
           currentPath.endsWith('/register');  // Любой путь, заканчивающийся на /register
         
-        // Логирование для отладки (только в development)
-        if (process.env.NODE_ENV === 'development') {
-          console.log('401 Error - Path check:', {
-            currentPath,
-            currentUrl,
-            requestUrl,
-            isCheckSetupRequest,
-            isLoginPage,
-            isRegisterPage,
-            willRedirect: !isLoginPage && !isRegisterPage && !isCheckSetupRequest,
-          });
+        // Логирование для отладки (включаем в production для диагностики)
+        console.log('401 Error - Path check:', {
+          currentPath,
+          currentUrl,
+          requestUrl,
+          isLoginRequest,
+          isRegisterRequest,
+          isCheckSetupRequest,
+          isLoginPage,
+          isRegisterPage,
+          willRedirect: !isLoginPage && !isRegisterPage && !isCheckSetupRequest,
+        });
+        
+        // Если это запрос логина или регистрации - НЕ делаем редирект
+        // Это нормальная ошибка авторизации, которую должна обработать страница
+        if (isLoginRequest || isRegisterRequest) {
+          console.log('401 при логине/регистрации - не делаем редирект, возвращаем ошибку');
+          return Promise.reject(error);
         }
         
         // Если это запрос check-setup и мы на странице логина/регистрации - просто возвращаем ошибку
         // Не делаем редирект, так как это нормальная ситуация
         if (isCheckSetupRequest && (isLoginPage || isRegisterPage)) {
+          console.log('401 при check-setup на странице логина/регистрации - не делаем редирект');
           return Promise.reject(error);
         }
         
         // Если пользователь НЕ на странице логина/регистрации - удаляем токен и редиректим
         if (!isLoginPage && !isRegisterPage) {
+          console.log('401 на другой странице - делаем редирект на /admin/login');
           // Удаляем токен только если мы НЕ на странице логина/регистрации
           localStorage.removeItem('admin-token');
           localStorage.removeItem('admin-user');
@@ -146,6 +157,8 @@ apiClient.interceptors.response.use(
           
           // Всегда редиректим на /admin/login
           window.location.href = '/admin/login';
+        } else {
+          console.log('401 на странице логина/регистрации - не делаем редирект');
         }
         // Если пользователь на странице логина/регистрации - НЕ делаем НИЧЕГО
         // НЕ удаляем токен, НЕ делаем редирект - просто возвращаем ошибку
