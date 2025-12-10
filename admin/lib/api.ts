@@ -132,17 +132,27 @@ apiClient.interceptors.response.use(
           willRedirect: !isLoginPage && !isRegisterPage && !isCheckSetupRequest,
         });
         
-        // Если это запрос логина или регистрации - НЕ делаем редирект
+        // Если это запрос логина или регистрации - очищаем токен и НЕ делаем редирект
         // Это нормальная ошибка авторизации, которую должна обработать страница
+        // Но нужно очистить старый токен, чтобы избежать бесконечного редиректа
         if (isLoginRequest || isRegisterRequest) {
-          console.log('401 при логине/регистрации - не делаем редирект, возвращаем ошибку');
+          console.log('401 при логине/регистрации - очищаем токен, не делаем редирект');
+          // Очищаем токен, так как он невалидный
+          localStorage.removeItem('admin-token');
+          localStorage.removeItem('admin-user');
+          document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
           return Promise.reject(error);
         }
         
-        // Если это запрос check-setup и мы на странице логина/регистрации - просто возвращаем ошибку
-        // Не делаем редирект, так как это нормальная ситуация
+        // Если это запрос check-setup и мы на странице логина/регистрации - очищаем токен
+        // Это означает, что токен невалидный (пользователя нет в БД или токен истек)
+        // Очищаем токен, чтобы избежать бесконечного редиректа
         if (isCheckSetupRequest && (isLoginPage || isRegisterPage)) {
-          console.log('401 при check-setup на странице логина/регистрации - не делаем редирект');
+          console.log('401 при check-setup на странице логина/регистрации - очищаем токен');
+          // Очищаем токен, так как он невалидный
+          localStorage.removeItem('admin-token');
+          localStorage.removeItem('admin-user');
+          document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
           return Promise.reject(error);
         }
         

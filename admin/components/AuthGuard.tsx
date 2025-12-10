@@ -19,9 +19,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       const isLoginPage = pathname === '/login' || currentPath === '/admin/login' || currentPath.endsWith('/login');
       const isRegisterPage = pathname === '/register' || currentPath === '/admin/register' || currentPath.endsWith('/register');
 
-      // Если мы на странице логина или регистрации - не делаем проверку авторизации
-      // Позволяем странице обрабатывать ошибки самостоятельно
+      // Если мы на странице логина или регистрации - очищаем токен и не делаем проверку авторизации
+      // Это предотвращает бесконечный редирект, если токен есть, но пользователя нет в БД
       if (isLoginPage || isRegisterPage) {
+        // Очищаем токен на страницах логина/регистрации, чтобы избежать проблем
+        // с невалидными токенами от предыдущих сессий
+        if (token) {
+          console.log('Очистка токена на странице логина/регистрации');
+          localStorage.removeItem('admin-token');
+          localStorage.removeItem('admin-user');
+          document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+        }
         setIsChecking(false);
         return;
       }
@@ -59,11 +67,34 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             return;
           }
         } catch (error: any) {
-          // Если ошибка при проверке (например, 401), продолжаем с обычной логикой
-          // НЕ делаем редирект при ошибке 401 на странице логина
-          if (error?.response?.status === 401 && isLoginPage) {
-            // Это нормально - просто продолжаем без редиректа
-            console.log('401 при проверке setup на странице логина - это нормально');
+          // Если ошибка при проверке (например, 401) - очищаем токен
+          // Это означает, что токен невалидный или пользователя нет в БД
+          if (error?.response?.status === 401) {
+            console.log('401 при проверке setup - очищаем токен');
+            // Очищаем токен, так как он невалидный
+            localStorage.removeItem('admin-token');
+            localStorage.removeItem('admin-user');
+            document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+            
+            // Если нет пользователей - редиректим на регистрацию
+            // Если есть пользователи, но токен невалидный - редиректим на логин
+            // Но только если мы не на странице логина/регистрации
+            if (!isLoginPage && !isRegisterPage) {
+              // Проверяем, есть ли пользователи (без токена)
+              try {
+                const checkResponse = await apiClient.get('/auth/check-setup');
+                if (!checkResponse.data.hasUsers) {
+                  window.location.href = '/admin/register';
+                  return;
+                }
+              } catch (checkError) {
+                // Если не удалось проверить - редиректим на логин
+                window.location.href = '/admin/login';
+                return;
+              }
+              window.location.href = '/admin/login';
+              return;
+            }
           } else {
             console.error('Ошибка при проверке настройки системы:', error);
             // Если ошибка и мы на странице регистрации - редиректим на логин (безопаснее)

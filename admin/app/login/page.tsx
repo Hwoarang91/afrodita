@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,14 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+
+  // Очищаем токен при загрузке страницы логина
+  // Это предотвращает проблемы с невалидными токенами от предыдущих сессий
+  useEffect(() => {
+    localStorage.removeItem('admin-token');
+    localStorage.removeItem('admin-user');
+    document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

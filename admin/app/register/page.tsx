@@ -19,8 +19,14 @@ export default function RegisterPage() {
   const [isChecking, setIsChecking] = useState(true);
   const router = useRouter();
 
-  // Проверяем наличие администраторов при загрузке страницы
+  // Очищаем токен и проверяем наличие администраторов при загрузке страницы
   useEffect(() => {
+    // Очищаем токен при загрузке страницы регистрации
+    // Это предотвращает проблемы с невалидными токенами от предыдущих сессий
+    localStorage.removeItem('admin-token');
+    localStorage.removeItem('admin-user');
+    document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+
     const checkSetup = async () => {
       try {
         const { data } = await apiClient.get('/auth/check-setup');
@@ -30,6 +36,8 @@ export default function RegisterPage() {
         }
       } catch (error) {
         console.error('Ошибка при проверке настройки системы:', error);
+        // При ошибке (например, 401) продолжаем показывать страницу регистрации
+        // так как токен уже очищен
       } finally {
         setIsChecking(false);
       }
