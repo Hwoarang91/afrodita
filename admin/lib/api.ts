@@ -5,17 +5,21 @@ import axios from 'axios';
 // В браузере всегда используем относительный путь для работы через Nginx
 // На сервере (SSR) используем полный URL или переменную окружения
 const getApiUrl = (): string => {
-  // Если есть явно заданный URL в переменных окружения - используем его
-  if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  if (typeof process !== 'undefined' && process.env?.API_URL) {
-    return process.env.API_URL;
-  }
-  
-  // В браузере всегда используем относительный путь
+  // В браузере ВСЕГДА используем относительный путь
+  // Это предотвращает проблемы с SSL сертификатами и обеспечивает работу через Nginx
   if (typeof window !== 'undefined') {
     return '/api/v1';
+  }
+  
+  // На сервере (SSR) используем переменные окружения или localhost
+  if (typeof process !== 'undefined') {
+    // Для SSR можно использовать переменные окружения, но в браузере всегда относительный путь
+    if (process.env?.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.startsWith('http')) {
+      return process.env.NEXT_PUBLIC_API_URL;
+    }
+    if (process.env?.API_URL && !process.env.API_URL.startsWith('http')) {
+      return process.env.API_URL;
+    }
   }
   
   // На сервере (SSR) используем localhost
@@ -33,15 +37,10 @@ export const apiClient = axios.create({
 // Переопределяем baseURL в interceptor для гарантии правильного URL в браузере
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    // В браузере всегда используем относительный путь
-    // Если baseURL не задан явно через переменные окружения, используем относительный путь
-    const explicitUrl = typeof process !== 'undefined' && (
-      process.env?.NEXT_PUBLIC_API_URL || 
-      process.env?.API_URL
-    );
-    if (!explicitUrl || config.baseURL?.includes('localhost')) {
-      config.baseURL = '/api/v1';
-    }
+    // В браузере ВСЕГДА используем относительный путь, независимо от переменных окружения
+    // Это предотвращает проблемы с SSL сертификатами (ERR_CERT_AUTHORITY_INVALID)
+    // и обеспечивает работу через Nginx proxy
+    config.baseURL = '/api/v1';
     
     // Добавляем токен авторизации
     const token = localStorage.getItem('admin-token');
