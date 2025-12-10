@@ -67,11 +67,11 @@ services:
       retries: 5
       start_period: 40s
 
-  frontend:
+  app:
     build:
-      context: ./frontend
+      context: ./app
       dockerfile: Dockerfile
-    container_name: afrodita-frontend
+    container_name: afrodita-app
     env_file:
       - .env
     expose:
@@ -125,7 +125,7 @@ services:
       SERVER_IP: ${SERVER_IP:-localhost}
       TZ: Europe/Moscow
     depends_on:
-      frontend:
+      app:
         condition: service_healthy
       backend:
         condition: service_healthy

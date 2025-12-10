@@ -100,7 +100,7 @@ npm run dev
 ✅ Добавлены endpoints в AuthController: GET /auth/check-setup и POST /auth/register
 ✅ Создана страница регистрации /admin/register/page.tsx
 ✅ Обновлен AuthGuard для проверки наличия пользователей и редиректа на регистрацию
-✅ Адаптированы все страницы frontend под мобильные устройства (mobile-first подход)
+✅ Адаптированы все страницы app под мобильные устройства (mobile-first подход)
 ✅ Добавлен компонент AdminRedirect для редиректа /login и /register на /admin/*
 ✅ Создана страница NotFound (404) для обработки неверных путей
 ✅ Обновлен App.tsx с маршрутами для редиректа и 404 страницы
@@ -118,7 +118,7 @@ npm run dev
 ✅ Адаптированы ErrorBoundary, LoadingSpinner, SkeletonLoader
 ✅ Улучшен Toaster для мобильных устройств (maxWidth, адаптивные размеры)
 ✅ Улучшен OfflineIndicator для мобильных устройств
-✅ Оптимизирован frontend для Telegram Web App:
+✅ Оптимизирован app для Telegram Web App:
 - Реализовано расширение viewport при загрузке (expand())
 - Применены themeParams для адаптации цветов под тему Telegram
 - Добавлена настройка BackButton на страницах с историей навигации
@@ -131,7 +131,7 @@ npm run dev
 
 ✅ Сборка и запуск Docker контейнеров - done
 ✅ Реализация страницы регистрации первого администратора - done
-✅ Адаптация frontend под мобильные устройства - done
+✅ Адаптация app под мобильные устройства - done
 ✅ Оптимизация Telegram Web App - done
 ✅ Исправление редиректа при ошибке авторизации - done
 ✅ Оптимизация обработки ошибок 401 в админ-панели - done
@@ -166,10 +166,10 @@ npm run dev
 **Выполнено:**
 - ✅ Добавлен вызов `webApp.expand()` в TelegramContext после инициализации
 - ✅ Вызов происходит после `ready()` для корректной работы
-- ✅ Реализовано в `frontend/src/contexts/TelegramContext.tsx`
+- ✅ Реализовано в `app/src/contexts/TelegramContext.tsx`
 
 **Файлы изменены:**
-- `frontend/src/contexts/TelegramContext.tsx`
+- `app/src/contexts/TelegramContext.tsx`
 
 **Ресурсы:**
 - [Telegram Web Apps: Initializing Mini Apps](https://core.telegram.org/bots/webapps#initializing-mini-apps)
@@ -188,8 +188,8 @@ npm run dev
 - ✅ Добавлены fallback значения для CSS переменных Telegram в `index.css`
 
 **Файлы изменены:**
-- `frontend/src/contexts/TelegramContext.tsx`
-- `frontend/src/index.css`
+- `app/src/contexts/TelegramContext.tsx`
+- `app/src/index.css`
 
 **Ресурсы:**
 - [Telegram Web Apps: Theme Parameters](https://core.telegram.org/bots/webapps#theme-parameters)
@@ -207,12 +207,12 @@ npm run dev
 - ✅ Добавлен хук на страницы: Services, ServiceDetail, Calendar, Profile, AppointmentConfirmation
 
 **Файлы изменены:**
-- `frontend/src/hooks/useTelegramBackButton.ts` (новый файл)
-- `frontend/src/pages/Services.tsx`
-- `frontend/src/pages/ServiceDetail.tsx`
-- `frontend/src/pages/Calendar.tsx`
-- `frontend/src/pages/Profile.tsx`
-- `frontend/src/pages/AppointmentConfirmation.tsx`
+- `app/src/hooks/useTelegramBackButton.ts` (новый файл)
+- `app/src/pages/Services.tsx`
+- `app/src/pages/ServiceDetail.tsx`
+- `app/src/pages/Calendar.tsx`
+- `app/src/pages/Profile.tsx`
+- `app/src/pages/AppointmentConfirmation.tsx`
 
 **Ресурсы:**
 - [Telegram Web Apps: Back Button](https://core.telegram.org/bots/webapps#back-button)
@@ -236,13 +236,13 @@ npm run dev
   - Выбор мастера (ServiceDetail.tsx)
 
 **Файлы изменены:**
-- `frontend/src/contexts/TelegramContext.tsx`
-- `frontend/src/pages/Auth.tsx`
-- `frontend/src/pages/Services.tsx`
-- `frontend/src/pages/ServiceDetail.tsx`
-- `frontend/src/pages/Calendar.tsx`
-- `frontend/src/pages/AppointmentConfirmation.tsx`
-- `frontend/src/pages/Profile.tsx`
+- `app/src/contexts/TelegramContext.tsx`
+- `app/src/pages/Auth.tsx`
+- `app/src/pages/Services.tsx`
+- `app/src/pages/ServiceDetail.tsx`
+- `app/src/pages/Calendar.tsx`
+- `app/src/pages/AppointmentConfirmation.tsx`
+- `app/src/pages/Profile.tsx`
 
 **Ресурсы:**
 - [Telegram Web Apps: Haptic Feedback](https://core.telegram.org/bots/webapps#haptic-feedback)
@@ -265,8 +265,8 @@ npm run dev
 - ✅ Удалены дублирующие обычные кнопки, заменены на MainButton
 
 **Файлы изменены:**
-- `frontend/src/pages/AppointmentConfirmation.tsx`
-- `frontend/src/pages/Calendar.tsx`
+- `app/src/pages/AppointmentConfirmation.tsx`
+- `app/src/pages/Calendar.tsx`
 
 **Ресурсы:**
 - [Telegram Web Apps: Main Button](https://core.telegram.org/bots/webapps#main-button)
@@ -285,8 +285,8 @@ npm run dev
 - ✅ Тема обновляется динамически при изменении настроек пользователя в Telegram
 
 **Файлы изменены:**
-- `frontend/src/contexts/TelegramContext.tsx`
-- `frontend/src/index.css`
+- `app/src/contexts/TelegramContext.tsx`
+- `app/src/index.css`
 
 **Ресурсы:**
 - [Telegram Web Apps: Theme Parameters](https://core.telegram.org/bots/webapps#theme-parameters)
@@ -307,8 +307,8 @@ npm run dev
 - ✅ Добавлено логирование изменений viewport для отладки
 
 **Файлы изменены:**
-- `frontend/src/contexts/TelegramContext.tsx`
-- `frontend/src/index.css`
+- `app/src/contexts/TelegramContext.tsx`
+- `app/src/index.css`
 
 **Ресурсы:**
 - [Telegram Web Apps: Viewport](https://core.telegram.org/bots/webapps#viewport)
@@ -342,9 +342,9 @@ npm run dev
 - Применить на страницах: `/calendar`, `/confirm`, `/reschedule/:id`
 
 **Файлы для изменения:**
-- `frontend/src/pages/Calendar.tsx`
-- `frontend/src/pages/AppointmentConfirmation.tsx`
-- `frontend/src/pages/Reschedule.tsx`
+- `app/src/pages/Calendar.tsx`
+- `app/src/pages/AppointmentConfirmation.tsx`
+- `app/src/pages/Reschedule.tsx`
 
 **Ресурсы:**
 - [Telegram Web Apps: Closing Behavior](https://core.telegram.org/bots/webapps#closing-behavior)
@@ -361,7 +361,7 @@ npm run dev
 - Протестировать на всех платформах
 
 **Файлы для изменения:**
-- `frontend/src/contexts/TelegramContext.tsx`
+- `app/src/contexts/TelegramContext.tsx`
 - Все страницы приложения
 
 **Ресурсы:**
@@ -436,8 +436,8 @@ npm run dev
 
 Технологический стек:
 - Backend: NestJS, TypeORM, PostgreSQL
-- Frontend: React, Vite, Tailwind CSS
-- Admin: Next.js, shadcn/ui
+- App: React, Vite, Tailwind CSS (клиентское приложение для Telegram)
+- Admin: Next.js, shadcn/ui (админ-панель)
 - Telegram Bot: node-telegram-bot-api
 
 ### BACKEND
@@ -466,9 +466,9 @@ npm run dev
 - Добавлен метод registerFirstAdmin() для регистрации первого администратора
 - Добавлены endpoints: GET /auth/check-setup и POST /auth/register
 
-### FRONTEND
+### APP (клиентское приложение для Telegram)
 
-Состояние frontend после изменений.
+Состояние app после изменений.
 
 🔄 Dockerfile оптимизирован для production:
 - Исправлен порядок команд (удаление default.conf перед копированием nginx.conf)
@@ -478,7 +478,7 @@ npm run dev
 Структура файлов стандартная для React приложения.
 
 ✅ Telegram WebApp JS SDK подключен:
-- Скрипт подключен в `frontend/index.html`: `<script src="https://telegram.org/js/telegram-web-app.js"></script>`
+- Скрипт подключен в `app/index.html`: `<script src="https://telegram.org/js/telegram-web-app.js"></script>`
 - SDK доступен через `window.Telegram.WebApp`
 - Инициализация происходит в `TelegramContext.tsx` через `TelegramProvider`
 
@@ -514,7 +514,7 @@ Nginx конфигурация:
 - Gzip compression
 - Кеширование статических файлов
 
-🔄 Frontend полностью адаптирован под мобильные устройства и ПК:
+🔄 App полностью адаптирован под мобильные устройства и ПК:
 - Все страницы используют mobile-first подход Tailwind CSS
 - Адаптивные размеры шрифтов (text-sm sm:text-base, text-2xl sm:text-3xl)
 - Адаптивные отступы (p-2 sm:p-4, mb-4 sm:mb-6)
@@ -527,7 +527,7 @@ Nginx конфигурация:
 - Обновлен tailwind.config.js с адаптивными padding для container
 - Viewport meta tag настроен правильно (width=device-width, initial-scale=1.0)
 
-✅ Frontend оптимизирован для Telegram Web App:
+✅ App оптимизирован для Telegram Web App:
 - Расширение viewport при загрузке через `expand()`
 - Применение themeParams для адаптации цветов под тему Telegram
 - Настройка BackButton на страницах с историей навигации (хук `useTelegramBackButton`)

@@ -57,11 +57,11 @@ services:
     # Примечание: entrypoint скрипт автоматически переустанавливает bcrypt
     # при каждом старте контейнера для правильной архитектуры
 
-  frontend:
+  app:
     build:
-      context: ./frontend
+      context: ./app
       dockerfile: Dockerfile.dev
-    container_name: afrodita-frontend-dev
+    container_name: afrodita-app-dev
     env_file:
       - .env
     ports:
@@ -73,7 +73,7 @@ services:
     depends_on:
       - backend
     volumes:
-      - ./frontend:/app
+      - ./app:/app
       - /app/node_modules
 
   admin:
