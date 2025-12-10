@@ -434,6 +434,13 @@ npm run dev
 
 Проект Афродита - Telegram-бот и Web App для массажного салона.
 
+**Структура проекта:**
+- `app/` — клиентское приложение для Telegram (12 страниц)
+- `admin/` — админ-панель для управления (16 страниц)
+- `backend/` — серверная часть (NestJS API)
+- `nginx/` — конфигурация reverse proxy
+- `frontend/` — заготовка для лендинга (будет реализовано позже)
+
 Технологический стек:
 - Backend: NestJS, TypeORM, PostgreSQL
 - App: React, Vite, Tailwind CSS (клиентское приложение для Telegram)
