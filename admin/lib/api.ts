@@ -94,31 +94,46 @@ apiClient.interceptors.response.use(
       if (status === 401) {
         const currentPath = window.location.pathname;
         const currentUrl = window.location.href;
+        const requestUrl = error.config?.url || '';
         
-        // В Next.js с basePath='/admin', usePathname() возвращает путь БЕЗ basePath
-        // Но window.location.pathname возвращает полный путь С basePath
+        // В Next.js с basePath='/admin', window.location.pathname возвращает полный путь С basePath
+        // Но usePathname() возвращает путь БЕЗ basePath
         // Проверяем оба варианта для надежности
+        // Важно: проверяем сначала полный URL, так как он самый надежный
+        
+        // Специальная обработка для /auth/check-setup - не делаем редирект при ошибке 401
+        // Это нормально, если мы на странице логина и проверяем наличие пользователей
+        const isCheckSetupRequest = requestUrl.includes('/auth/check-setup');
+        
         const isLoginPage = 
+          currentUrl.includes('/admin/login') ||  // Проверка по полному URL (самый надежный)
           currentPath === '/admin/login' ||  // Полный путь с basePath
           currentPath === '/login' ||  // Путь без basePath (если Next.js его удалил)
-          currentPath.endsWith('/login') ||  // Любой путь, заканчивающийся на /login
-          currentUrl.includes('/admin/login');  // Проверка по полному URL
+          currentPath.endsWith('/login');  // Любой путь, заканчивающийся на /login
           
         const isRegisterPage = 
+          currentUrl.includes('/admin/register') ||  // Проверка по полному URL (самый надежный)
           currentPath === '/admin/register' ||  // Полный путь с basePath
           currentPath === '/register' ||  // Путь без basePath
-          currentPath.endsWith('/register') ||  // Любой путь, заканчивающийся на /register
-          currentUrl.includes('/admin/register');  // Проверка по полному URL
+          currentPath.endsWith('/register');  // Любой путь, заканчивающийся на /register
         
         // Логирование для отладки (только в development)
         if (process.env.NODE_ENV === 'development') {
           console.log('401 Error - Path check:', {
             currentPath,
             currentUrl,
+            requestUrl,
+            isCheckSetupRequest,
             isLoginPage,
             isRegisterPage,
-            willRedirect: !isLoginPage && !isRegisterPage,
+            willRedirect: !isLoginPage && !isRegisterPage && !isCheckSetupRequest,
           });
+        }
+        
+        // Если это запрос check-setup и мы на странице логина/регистрации - просто возвращаем ошибку
+        // Не делаем редирект, так как это нормальная ситуация
+        if (isCheckSetupRequest && (isLoginPage || isRegisterPage)) {
+          return Promise.reject(error);
         }
         
         // Если пользователь НЕ на странице логина/регистрации - удаляем токен и редиректим

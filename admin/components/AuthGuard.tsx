@@ -41,28 +41,37 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
 
       // Проверяем, есть ли администраторы в системе
-      try {
-        const { data } = await apiClient.get('/auth/check-setup');
-        const hasUsers = data.hasUsers;
+      // НЕ проверяем на странице логина/регистрации, чтобы избежать лишних запросов
+      if (!isLoginPage && !isRegisterPage) {
+        try {
+          const { data } = await apiClient.get('/auth/check-setup');
+          const hasUsers = data.hasUsers;
 
-        // Если нет администраторов и мы не на странице регистрации - редиректим на регистрацию
-        if (!hasUsers && !isRegisterPage) {
-          window.location.href = '/admin/register';
-          return;
-        }
+          // Если нет администраторов и мы не на странице регистрации - редиректим на регистрацию
+          if (!hasUsers && !isRegisterPage) {
+            window.location.href = '/admin/register';
+            return;
+          }
 
-        // Если есть администраторы и мы на странице регистрации - редиректим на логин
-        if (hasUsers && isRegisterPage) {
-          window.location.href = '/admin/login';
-          return;
-        }
-      } catch (error) {
-        // Если ошибка при проверке, продолжаем с обычной логикой
-        console.error('Ошибка при проверке настройки системы:', error);
-        // Если ошибка и мы на странице регистрации - редиректим на логин (безопаснее)
-        if (isRegisterPage) {
-          window.location.href = '/admin/login';
-          return;
+          // Если есть администраторы и мы на странице регистрации - редиректим на логин
+          if (hasUsers && isRegisterPage) {
+            window.location.href = '/admin/login';
+            return;
+          }
+        } catch (error: any) {
+          // Если ошибка при проверке (например, 401), продолжаем с обычной логикой
+          // НЕ делаем редирект при ошибке 401 на странице логина
+          if (error?.response?.status === 401 && isLoginPage) {
+            // Это нормально - просто продолжаем без редиректа
+            console.log('401 при проверке setup на странице логина - это нормально');
+          } else {
+            console.error('Ошибка при проверке настройки системы:', error);
+            // Если ошибка и мы на странице регистрации - редиректим на логин (безопаснее)
+            if (isRegisterPage) {
+              window.location.href = '/admin/login';
+              return;
+            }
+          }
         }
       }
       
