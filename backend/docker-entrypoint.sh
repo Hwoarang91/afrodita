@@ -1,6 +1,48 @@
 #!/bin/sh
 set -e
 
+# Создание симлинка для shared если его нет (для dev режима с volume)
+if [ ! -L /app/shared ] && [ -d /shared ]; then
+  echo "🔗 Создание симлинка для shared..."
+  ln -sf /shared /app/shared
+  echo "✅ Симлинк создан: /app/shared -> /shared"
+fi
+
+# Проверка доступности shared
+if [ -d /shared ] || [ -L /app/shared ]; then
+  echo "✅ Shared доступен"
+  if [ -f /shared/types/index.ts ] || [ -f /app/shared/types/index.ts ]; then
+    echo "✅ Shared types найдены"
+  else
+    echo "⚠️  Shared types не найдены"
+  fi
+else
+  echo "⚠️  Shared не доступен"
+fi
+
+# Создание симлинка для shared в src (для TypeScript rootDir)
+if [ ! -e /app/src/shared ] && [ -d /shared ]; then
+  echo "🔗 Создание симлинка для shared в src..."
+  ln -sf /shared /app/src/shared
+  echo "✅ Симлинк создан: /app/src/shared -> /shared"
+fi
+
+# Функция для создания симлинка main.js (вызывается после компиляции)
+create_main_symlink() {
+  if [ -f /app/dist/app/src/main.js ] && [ ! -f /app/dist/main.js ]; then
+    echo "🔗 Создание симлинка для main.js..."
+    mkdir -p /app/dist
+    ln -sf app/src/main.js /app/dist/main.js
+    echo "✅ Симлинк создан: /app/dist/main.js -> app/src/main.js"
+  fi
+}
+
+# Пытаемся создать симлинк сразу (если dist уже существует)
+create_main_symlink
+
+# Запускаем создание симлинка в фоне после задержки (для случая, когда dist создается позже)
+(sleep 20 && create_main_symlink) &
+
 echo "🔧 Проверка и переустановка bcrypt для текущей архитектуры..."
 
 # Переустанавливаем bcrypt для правильной архитектуры контейнера

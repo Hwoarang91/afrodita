@@ -1,0 +1,24 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Установка зависимостей backend
+COPY backend/package*.json ./
+RUN npm ci
+
+# Копирование исходного кода backend
+COPY backend/ ./
+
+# Копирование shared (для TypeScript компиляции)
+COPY shared/ /shared/
+
+# Копируем entrypoint скрипт
+COPY backend/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# В development режиме не собираем проект, запускаем в watch режиме
+EXPOSE 3001
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["npm", "run", "start:dev"]
+

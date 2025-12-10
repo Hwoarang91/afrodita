@@ -38,8 +38,8 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: infrastructure/docker/backend.Dockerfile
     container_name: afrodita-backend
     env_file:
       - .env
@@ -69,8 +69,8 @@ services:
 
   app:
     build:
-      context: ./app
-      dockerfile: Dockerfile
+      context: ./apps/telegram
+      dockerfile: ../../infrastructure/docker/app.Dockerfile
     container_name: afrodita-app
     env_file:
       - .env
@@ -92,7 +92,7 @@ services:
   admin:
     build:
       context: ./admin
-      dockerfile: Dockerfile
+      dockerfile: ../infrastructure/docker/admin.Dockerfile
     container_name: afrodita-admin
     env_file:
       - .env
@@ -115,8 +115,8 @@ services:
 
   nginx:
     build:
-      context: ./nginx
-      dockerfile: Dockerfile
+      context: ./infrastructure/nginx
+      dockerfile: ../docker/nginx.Dockerfile
     container_name: afrodita-nginx
     ports:
       - "80:80"

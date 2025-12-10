@@ -34,8 +34,8 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: infrastructure/docker/backend.Dockerfile.dev
     container_name: afrodita-backend-dev
     env_file:
       - .env
@@ -53,14 +53,15 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - ./shared:/shared
       - /app/node_modules
     # Примечание: entrypoint скрипт автоматически переустанавливает bcrypt
     # при каждом старте контейнера для правильной архитектуры
 
   app:
     build:
-      context: ./app
-      dockerfile: Dockerfile.dev
+      context: ./apps/telegram
+      dockerfile: ../../infrastructure/docker/app.Dockerfile.dev
     container_name: afrodita-app-dev
     env_file:
       - .env
@@ -73,13 +74,13 @@ services:
     depends_on:
       - backend
     volumes:
-      - ./app:/app
+      - ./apps/telegram:/app
       - /app/node_modules
 
   admin:
     build:
       context: ./admin
-      dockerfile: Dockerfile.dev
+      dockerfile: ../infrastructure/docker/admin.Dockerfile.dev
     container_name: afrodita-admin-dev
     env_file:
       - .env

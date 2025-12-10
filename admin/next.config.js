@@ -9,6 +9,14 @@ const nextConfig = {
   },
   // Настройка для правильной работы чанков в Docker
   webpack: (config, { isServer, dev }) => {
+    // Добавляем алиасы для shared
+    const path = require('path');
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname, '.'),
+      '@shared': path.resolve(__dirname, '../shared'),
+    };
+    
     // Исправление для динамических импортов
     if (!isServer) {
       config.resolve.fallback = {

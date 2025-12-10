@@ -1,9 +1,9 @@
 import { Test } from '@nestjs/testing';
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { RolesGuard } from './roles.guard';
-import { Roles } from '../decorators/roles.decorator';
-import { UserRole } from '../../../entities/user.entity';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { UserRole } from '@shared/types';
 
 describe('RolesGuard', () => {
   let guard: RolesGuard;

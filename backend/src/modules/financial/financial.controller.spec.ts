@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FinancialController } from './financial.controller';
 import { FinancialService } from './financial.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Transaction, TransactionType } from '../../entities/transaction.entity';
 
 describe('FinancialController', () => {

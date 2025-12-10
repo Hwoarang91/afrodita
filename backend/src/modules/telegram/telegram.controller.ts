@@ -4,9 +4,9 @@ import { TelegramService } from './telegram.service';
 import { TelegramBotService } from './telegram-bot.service';
 import { TelegramChatsService } from './telegram-chats.service';
 import { SettingsService } from '../settings/settings.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../entities/user.entity';
 import { ChatType } from '../../entities/telegram-chat.entity';
 import {

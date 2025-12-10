@@ -1,9 +1,9 @@
 import { Controller, Post, UseGuards, Request, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SchedulerService } from './scheduler.service';
-import { JwtAuthGuard } from '../modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../modules/auth/guards/roles.guard';
-import { Roles } from '../modules/auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../entities/user.entity';
 
 @ApiTags('scheduler')

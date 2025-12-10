@@ -5,7 +5,7 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import * as compression from 'compression';
-import { authLimiter, appointmentLimiter } from './middleware/rate-limit.middleware';
+import { authLimiter, appointmentLimiter } from './common/middleware/rate-limit.middleware';
 import { AppDataSource } from './config/data-source';
 
 async function bootstrap() {

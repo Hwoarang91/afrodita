@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SettingsController } from './settings.controller';
 import { SettingsService } from './settings.service';
 import { AuditService } from '../audit/audit.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { AuditAction } from '../../entities/audit-log.entity';
 
 describe('SettingsController', () => {

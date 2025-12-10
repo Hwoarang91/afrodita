@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Delete, UseGuards, Request, Body, Query, Pa
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { AuditService } from '../audit/audit.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { UserRole } from '../../entities/user.entity';
 import { AuditAction } from '../../entities/audit-log.entity';
 

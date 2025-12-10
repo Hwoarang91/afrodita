@@ -5,9 +5,9 @@ import { AuditService } from '../audit/audit.service';
 import { CreateMasterDto } from './dto/create-master.dto';
 import { UpdateMasterDto } from './dto/update-master.dto';
 import { CreateWorkScheduleDto } from './dto/create-work-schedule.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { AuditAction } from '../../entities/audit-log.entity';
 import { UserRole } from '../../entities/user.entity';
 
