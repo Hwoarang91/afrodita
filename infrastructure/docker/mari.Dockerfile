@@ -41,9 +41,6 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Копируем конфигурацию Nginx
 COPY landing/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Добавляем healthcheck endpoint
-RUN echo 'location /health { return 200 "ok"; add_header Content-Type text/plain; }' >> /etc/nginx/conf.d/default.conf
-
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 
