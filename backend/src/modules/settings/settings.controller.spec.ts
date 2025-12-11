@@ -144,6 +144,103 @@ describe('SettingsController', () => {
     });
   });
 
+  describe('updateSettings', () => {
+    it('должен вернуть success: true если bookingSettings не указан', async () => {
+      const req = {
+        user: { sub: 'admin-1' },
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const body = {};
+
+      const result = await controller.updateSettings(req, body);
+
+      expect(result).toEqual({ success: true });
+    });
+  });
+
+  describe('setTimezone', () => {
+    it('должен установить часовой пояс', async () => {
+      const req = {
+        user: { sub: 'admin-1' },
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const body = { value: 'Europe/Kiev' };
+
+      mockSettingsService.set.mockResolvedValue({} as any);
+      mockAuditService.log.mockResolvedValue({} as any);
+
+      const result = await controller.setTimezone(req, body);
+
+      expect(result.success).toBe(true);
+      expect(result.value).toBe('Europe/Kiev');
+      expect(mockAuditService.log).toHaveBeenCalled();
+    });
+  });
+
+  describe('getWorkingHours', () => {
+    it('должен вернуть рабочие часы', async () => {
+      const workingHours = { start: '09:00', end: '21:00' };
+      mockSettingsService.get.mockResolvedValue(workingHours);
+
+      const result = await controller.getWorkingHours();
+
+      expect(result).toEqual({ value: workingHours });
+    });
+  });
+
+  describe('setWorkingHours', () => {
+    it('должен установить рабочие часы', async () => {
+      const req = {
+        user: { sub: 'admin-1' },
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const body = { value: { start: '08:00', end: '20:00' } };
+
+      mockSettingsService.set.mockResolvedValue({} as any);
+      mockAuditService.log.mockResolvedValue({} as any);
+
+      const result = await controller.setWorkingHours(req, body);
+
+      expect(result.success).toBe(true);
+      expect(result.value).toEqual({ start: '08:00', end: '20:00' });
+      expect(mockAuditService.log).toHaveBeenCalled();
+    });
+  });
+
+  describe('getReminderIntervals', () => {
+    it('должен вернуть интервалы напоминаний', async () => {
+      const intervals = [24, 2, 1];
+      mockSettingsService.get.mockResolvedValue(intervals);
+
+      const result = await controller.getReminderIntervals();
+
+      expect(result).toEqual({ value: intervals });
+    });
+  });
+
+  describe('setReminderIntervals', () => {
+    it('должен установить интервалы напоминаний', async () => {
+      const req = {
+        user: { sub: 'admin-1' },
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const body = { value: [24, 12, 2, 1] };
+
+      mockSettingsService.set.mockResolvedValue({} as any);
+      mockAuditService.log.mockResolvedValue({} as any);
+
+      const result = await controller.setReminderIntervals(req, body);
+
+      expect(result.success).toBe(true);
+      expect(result.value).toEqual([24, 12, 2, 1]);
+      expect(mockAuditService.log).toHaveBeenCalled();
+    });
+  });
+
   describe('getFirstVisitDiscount', () => {
     it('должен вернуть настройки скидки', async () => {
       const discountSettings = {
@@ -157,6 +254,37 @@ describe('SettingsController', () => {
       const result = await controller.getFirstVisitDiscount();
 
       expect(result).toEqual({ value: discountSettings });
+    });
+  });
+
+  describe('setFirstVisitDiscount', () => {
+    it('должен установить настройки скидки на первый визит', async () => {
+      const req = {
+        user: { sub: 'admin-1' },
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const body = {
+        value: {
+          enabled: true,
+          type: 'percent' as const,
+          value: 15,
+        },
+      };
+      const mockSetting = {
+        id: 'setting-1',
+        key: 'firstVisitDiscount',
+        value: body.value,
+      };
+
+      mockSettingsService.setFirstVisitDiscountSettings.mockResolvedValue(mockSetting as any);
+      mockAuditService.log.mockResolvedValue({} as any);
+
+      const result = await controller.setFirstVisitDiscount(req, body);
+
+      expect(result.success).toBe(true);
+      expect(result.value).toEqual(body.value);
+      expect(mockAuditService.log).toHaveBeenCalled();
     });
   });
 });

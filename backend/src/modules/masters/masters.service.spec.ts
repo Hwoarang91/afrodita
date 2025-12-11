@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { MastersService } from './masters.service';
 import { Master } from '../../entities/master.entity';
 import { Service } from '../../entities/service.entity';
@@ -22,6 +22,7 @@ describe('MastersService', () => {
     create: jest.fn(),
     save: jest.fn(),
     update: jest.fn(),
+    remove: jest.fn(),
   };
 
   const mockServiceRepository = {
@@ -34,7 +35,7 @@ describe('MastersService', () => {
     create: jest.fn(),
     save: jest.fn(),
     remove: jest.fn(),
-    delete: jest.fn(),
+    delete: jest.fn().mockResolvedValue({ affected: 1 }),
   };
 
   const mockBlockIntervalRepository = {
@@ -43,11 +44,12 @@ describe('MastersService', () => {
     create: jest.fn(),
     save: jest.fn(),
     remove: jest.fn(),
-    delete: jest.fn(),
+    delete: jest.fn().mockResolvedValue({ affected: 1 }),
   };
 
   const mockAppointmentRepository = {
     find: jest.fn(),
+    count: jest.fn(),
   };
 
   const mockCacheService = {
@@ -101,6 +103,51 @@ describe('MastersService', () => {
   });
 
   describe('findAll', () => {
+    it('должен вернуть список мастеров с фильтром isActive', async () => {
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(1),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([{ id: 'master-1' } as Master]),
+      };
+
+      mockMasterRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockCacheService.get.mockReturnValue(null);
+      mockCacheService.set.mockReturnValue(undefined);
+
+      const result = await service.findAll(1, 20, undefined, true);
+
+      expect(result).toHaveProperty('data');
+      expect(result.data).toHaveLength(1);
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith('master.isActive = :isActive', { isActive: true });
+    });
+
+    it('должен вернуть список мастеров с поиском', async () => {
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(1),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([{ id: 'master-1' } as Master]),
+      };
+
+      mockMasterRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockCacheService.get.mockReturnValue(null);
+
+      const result = await service.findAll(1, 20, 'test', undefined);
+
+      expect(result).toHaveProperty('data');
+      expect(result.data).toHaveLength(1);
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalled();
+    });
+
     it('должен вернуть список мастеров', async () => {
       const mockMasters: Master[] = [
         {
@@ -384,6 +431,230 @@ describe('MastersService', () => {
       await service.deleteBlockInterval(intervalId);
 
       expect(mockBlockIntervalRepository.remove).toHaveBeenCalledWith(mockInterval);
+    });
+
+    it('должен выбросить NotFoundException если интервал не найден', async () => {
+      const intervalId = 'interval-1';
+
+      mockBlockIntervalRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.deleteBlockInterval(intervalId)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('create', () => {
+    it('должен создать мастера', async () => {
+      const dto = {
+        name: 'New Master',
+        bio: 'Test bio',
+        specialties: ['Haircut'],
+        experience: 5,
+        rating: 4.5,
+        breakDuration: 15,
+        isActive: true,
+      };
+
+      const mockMaster: Master = {
+        id: 'master-1',
+        ...dto,
+        userId: '00000000-0000-0000-0000-000000000000',
+        services: [],
+      } as Master;
+
+      mockMasterRepository.create.mockReturnValue(mockMaster);
+      mockMasterRepository.save.mockResolvedValue(mockMaster);
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+
+      const result = await service.create(dto);
+
+      expect(result).toEqual(mockMaster);
+      expect(mockMasterRepository.create).toHaveBeenCalled();
+    });
+
+    it('должен создать мастера с serviceIds', async () => {
+      const dto = {
+        name: 'New Master',
+        serviceIds: ['service-1', 'service-2'],
+      };
+
+      const mockServices: Service[] = [
+        { id: 'service-1' } as Service,
+        { id: 'service-2' } as Service,
+      ];
+
+      const mockMaster: Master = {
+        id: 'master-1',
+        name: 'New Master',
+        services: [],
+      } as Master;
+
+      mockMasterRepository.create.mockReturnValue(mockMaster);
+      mockMasterRepository.save
+        .mockResolvedValueOnce(mockMaster)
+        .mockResolvedValueOnce({ ...mockMaster, services: mockServices } as Master);
+      mockServiceRepository.find.mockResolvedValue(mockServices);
+      mockMasterRepository.findOne.mockResolvedValue({ ...mockMaster, services: mockServices } as Master);
+
+      const result = await service.create(dto);
+
+      expect(result.services).toEqual(mockServices);
+      expect(mockServiceRepository.find).toHaveBeenCalled();
+    });
+
+    it('должен создать мастера с specialization вместо bio', async () => {
+      const dto = {
+        name: 'New Master',
+        specialization: 'Haircut specialist',
+      };
+
+      const mockMaster: Master = {
+        id: 'master-1',
+        name: 'New Master',
+        bio: 'Haircut specialist',
+        specialties: ['Haircut specialist'],
+        userId: '00000000-0000-0000-0000-000000000000',
+      } as Master;
+
+      mockMasterRepository.create.mockReturnValue(mockMaster);
+      mockMasterRepository.save.mockResolvedValue(mockMaster);
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+
+      const result = await service.create(dto);
+
+      expect(result.bio).toBe('Haircut specialist');
+      expect(result.specialties).toEqual(['Haircut specialist']);
+    });
+  });
+
+  describe('update', () => {
+    it('должен обновить мастера с bio', async () => {
+      const id = 'master-1';
+      const dto = {
+        bio: 'Updated bio',
+      };
+      const mockMaster: Master = {
+        id,
+        name: 'Test Master',
+        bio: 'Old bio',
+      } as Master;
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockMasterRepository.save.mockResolvedValue({
+        ...mockMaster,
+        bio: 'Updated bio',
+      } as Master);
+
+      const result = await service.update(id, dto);
+
+      expect(result.bio).toBe('Updated bio');
+    });
+
+    it('должен обновить мастера с specialization (обновляет bio)', async () => {
+      const id = 'master-1';
+      const dto = {
+        specialization: 'New specialization',
+      };
+      const mockMaster: Master = {
+        id,
+        name: 'Test Master',
+        bio: 'Old bio',
+        specialties: ['Old'],
+      } as Master;
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockMasterRepository.save.mockResolvedValue({
+        ...mockMaster,
+        bio: 'New specialization',
+        specialties: ['New specialization'],
+      } as Master);
+
+      const result = await service.update(id, dto);
+
+      expect(result.bio).toBe('New specialization');
+      expect(result.specialties).toEqual(['New specialization']);
+    });
+
+    it('должен обновить мастера с serviceIds (непустой массив)', async () => {
+      const id = 'master-1';
+      const dto = {
+        serviceIds: ['service-1', 'service-2'],
+      };
+      const mockMaster: Master = {
+        id,
+        name: 'Test Master',
+        services: [],
+      } as Master;
+      const mockServices: Service[] = [
+        { id: 'service-1' } as Service,
+        { id: 'service-2' } as Service,
+      ];
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockServiceRepository.find.mockResolvedValue(mockServices);
+      mockMasterRepository.save.mockResolvedValue({
+        ...mockMaster,
+        services: mockServices,
+      } as Master);
+
+      const result = await service.update(id, dto);
+
+      expect(result.services).toEqual(mockServices);
+      expect(mockServiceRepository.find).toHaveBeenCalled();
+    });
+  });
+
+  describe('delete', () => {
+    it('должен удалить мастера', async () => {
+      const id = 'master-1';
+      const mockMaster: Master = {
+        id,
+        name: 'Test Master',
+        services: [],
+      } as Master;
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockWorkScheduleRepository.delete.mockResolvedValue({ affected: 1 });
+      mockBlockIntervalRepository.delete.mockResolvedValue({ affected: 1 });
+      mockMasterRepository.save.mockResolvedValue(mockMaster);
+      mockMasterRepository.remove.mockResolvedValue(mockMaster);
+
+      await service.delete(id);
+
+      expect(mockMasterRepository.remove).toHaveBeenCalledWith(mockMaster);
+      expect(mockWorkScheduleRepository.delete).toHaveBeenCalledWith({ masterId: id });
+      expect(mockBlockIntervalRepository.delete).toHaveBeenCalledWith({ masterId: id });
+    });
+
+    it('должен выбросить BadRequestException если у мастера есть записи', async () => {
+      const id = 'master-1';
+      const mockMaster: Master = {
+        id,
+        name: 'Test Master',
+      } as Master;
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockAppointmentRepository.count.mockResolvedValue(5);
+
+      await expect(service.delete(id)).rejects.toThrow('Невозможно удалить мастера');
+    });
+
+    it('должен выбросить NotFoundException если мастер не найден', async () => {
+      const id = 'master-1';
+
+      mockMasterRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.delete(id)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('deleteSchedule', () => {
+    it('должен выбросить NotFoundException если расписание не найдено', async () => {
+      const scheduleId = 'schedule-1';
+
+      mockWorkScheduleRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.deleteSchedule(scheduleId)).rejects.toThrow(NotFoundException);
     });
   });
 });

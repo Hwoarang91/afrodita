@@ -93,6 +93,66 @@ describe('ReviewsController', () => {
       expect(result).toEqual(mockReviews);
       expect(mockReviewsService.findAll).toHaveBeenCalledWith(masterId, undefined, undefined);
     });
+
+    it('должен нормализовать статус "approved"', async () => {
+      const status = 'approved';
+      const mockReviews: Review[] = [];
+
+      mockReviewsService.findAll.mockResolvedValue(mockReviews);
+
+      const result = await controller.findAll(undefined, undefined, status);
+
+      expect(result).toEqual(mockReviews);
+      expect(mockReviewsService.findAll).toHaveBeenCalledWith(undefined, undefined, 'approved');
+    });
+
+    it('должен нормализовать статус "pending"', async () => {
+      const status = 'PENDING';
+      const mockReviews: Review[] = [];
+
+      mockReviewsService.findAll.mockResolvedValue(mockReviews);
+
+      const result = await controller.findAll(undefined, undefined, status);
+
+      expect(result).toEqual(mockReviews);
+      expect(mockReviewsService.findAll).toHaveBeenCalledWith(undefined, undefined, 'pending');
+    });
+
+    it('должен нормализовать статус "rejected"', async () => {
+      const status = 'Rejected';
+      const mockReviews: Review[] = [];
+
+      mockReviewsService.findAll.mockResolvedValue(mockReviews);
+
+      const result = await controller.findAll(undefined, undefined, status);
+
+      expect(result).toEqual(mockReviews);
+      expect(mockReviewsService.findAll).toHaveBeenCalledWith(undefined, undefined, 'rejected');
+    });
+
+    it('должен оставить неизвестный статус как есть', async () => {
+      const status = 'unknown';
+      const mockReviews: Review[] = [];
+
+      mockReviewsService.findAll.mockResolvedValue(mockReviews);
+
+      const result = await controller.findAll(undefined, undefined, status);
+
+      expect(result).toEqual(mockReviews);
+      expect(mockReviewsService.findAll).toHaveBeenCalledWith(undefined, undefined, 'unknown');
+    });
+
+    it('должен фильтровать по serviceId', async () => {
+      const serviceId = 'service-1';
+      const mockReviews: Review[] = [];
+
+      mockReviewsService.findAll.mockResolvedValue(mockReviews);
+
+      const result = await controller.findAll(undefined, serviceId);
+
+      expect(result).toEqual(mockReviews);
+      expect(mockReviewsService.findAll).toHaveBeenCalledWith(undefined, serviceId, undefined);
+    });
   });
 
   describe('moderate', () => {

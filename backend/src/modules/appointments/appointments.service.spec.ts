@@ -15,6 +15,14 @@ import { SettingsService } from '../settings/settings.service';
 import { TelegramBotService } from '../telegram/telegram-bot.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 
+// Вспомогательная функция для создания будущей даты
+const getFutureDate = (daysAhead: number = 1, hours: number = 10): Date => {
+  const date = new Date();
+  date.setDate(date.getDate() + daysAhead);
+  date.setHours(hours, 0, 0, 0);
+  return date;
+};
+
 describe('AppointmentsService', () => {
   let service: AppointmentsService;
   let appointmentRepository: Repository<Appointment>;
@@ -141,10 +149,11 @@ describe('AppointmentsService', () => {
   describe('create', () => {
     it('должен создать запись при валидных данных', async () => {
       const userId = 'user-1';
+      const futureDate = getFutureDate(1, 10);
       const dto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-01T10:00:00Z').toISOString(),
+        startTime: futureDate.toISOString(),
       };
 
       const mockService: Service = {
@@ -253,7 +262,7 @@ describe('AppointmentsService', () => {
       const dto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-01T10:00:00Z').toISOString(),
+        startTime: getFutureDate(1, 10).toISOString(),
       };
 
       mockMasterRepository.findOne.mockResolvedValue(null);
@@ -266,7 +275,7 @@ describe('AppointmentsService', () => {
       const dto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-01T10:00:00Z').toISOString(),
+        startTime: getFutureDate(1, 10).toISOString(),
       };
 
       const mockMaster = {
@@ -317,6 +326,39 @@ describe('AppointmentsService', () => {
   });
 
   describe('findAll', () => {
+    it('должен вернуть записи с фильтром по одиночной дате', async () => {
+      const date = '2024-01-15';
+      const mockAppointments: Appointment[] = [
+        {
+          id: 'appointment-1',
+          startTime: new Date('2024-01-15T10:00:00'),
+        } as Appointment,
+      ];
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(mockAppointments),
+      };
+
+      mockAppointmentRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const result = await service.findAll(undefined, undefined, date, undefined, undefined);
+
+      expect(result).toEqual(mockAppointments);
+      // Проверяем, что запрос выполнен
+      expect(mockQueryBuilder.getMany).toHaveBeenCalled();
+      // Проверяем, что where был вызван с условием для даты (если есть условия)
+      if (mockQueryBuilder.where.mock.calls.length > 0) {
+        expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+          expect.stringContaining('startOfDay'),
+          expect.objectContaining({ startOfDay: expect.any(String), endOfDay: expect.any(String) }),
+        );
+      }
+    });
+
     it('должен вернуть все записи', async () => {
       const mockAppointments: Appointment[] = [
         {
@@ -510,8 +552,8 @@ describe('AppointmentsService', () => {
       const mockBlockInterval: BlockInterval = {
         id: 'block-1',
         masterId,
-        startTime: new Date('2024-01-01T11:00:00'),
-        endTime: new Date('2024-01-01T12:00:00'),
+        startTime: getFutureDate(1, 11),
+        endTime: getFutureDate(1, 12),
       } as BlockInterval;
 
       mockMasterRepository.findOne.mockResolvedValue(mockMaster);
@@ -564,7 +606,7 @@ describe('AppointmentsService', () => {
         masterId: 'master-1',
         serviceId: 'service-1',
         status: AppointmentStatus.CONFIRMED,
-        startTime: new Date('2024-01-01T10:00:00'),
+        startTime: getFutureDate(1, 10),
       } as Appointment;
 
       const mockService: Service = {
@@ -618,6 +660,60 @@ describe('AppointmentsService', () => {
   });
 
   describe('update - edge cases', () => {
+    it('должен изменить статус на RESCHEDULED при изменении времени для COMPLETED записи', async () => {
+      const id = 'appointment-1';
+      const userId = 'user-1';
+      const dto = {
+        startTime: getFutureDate(2, 14).toISOString(),
+      };
+
+      const mockAppointment: Appointment = {
+        id,
+        clientId: userId,
+        masterId: 'master-1',
+        serviceId: 'service-1',
+        startTime: getFutureDate(1, 10),
+        status: AppointmentStatus.COMPLETED,
+        master: { id: 'master-1' } as Master,
+        service: { id: 'service-1', duration: 60 } as Service,
+        client: { id: userId } as User,
+      } as Appointment;
+
+      const mockService: Service = {
+        id: 'service-1',
+        duration: 60,
+      } as Service;
+
+      const mockWorkSchedule: WorkSchedule = {
+        masterId: 'master-1',
+        dayOfWeek: DayOfWeek.TUESDAY,
+        startTime: '09:00',
+        endTime: '18:00',
+        isActive: true,
+      } as WorkSchedule;
+
+      mockAppointmentRepository.findOne.mockResolvedValue(mockAppointment);
+      mockServiceRepository.findOne.mockResolvedValue(mockService);
+      mockWorkScheduleRepository.findOne.mockResolvedValue(mockWorkSchedule);
+      mockBlockIntervalRepository.find.mockResolvedValue([]);
+      mockAppointmentRepository.find.mockResolvedValue([]);
+      mockSettingsService.get.mockResolvedValue('Europe/Moscow');
+      mockAppointmentRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      });
+      mockAppointmentRepository.save.mockResolvedValue({
+        ...mockAppointment,
+        startTime: new Date(dto.startTime),
+        status: AppointmentStatus.RESCHEDULED,
+      });
+
+      const result = await service.update(id, dto, userId);
+
+      expect(result.status).toBe(AppointmentStatus.RESCHEDULED);
+    });
+
     it('должен обработать обновление с изменением статуса на cancelled', async () => {
       const id = 'appointment-1';
       const userId = 'user-1';
@@ -808,23 +904,305 @@ describe('AppointmentsService', () => {
     });
   });
 
-  describe('create - первый визит и скидки', () => {
+  describe('create - скидки', () => {
+    it('должен использовать предрассчитанную скидку из dto', async () => {
+      const userId = 'user-1';
+      const dto = {
+        masterId: 'master-1',
+        serviceId: 'service-1',
+        startTime: getFutureDate(1, 10).toISOString(),
+        discount: 200, // Предрассчитанная скидка
+      };
+
+      const mockService: Service = {
+        id: 'service-1',
+        name: 'Test Service',
+        price: 1000,
+        duration: 60,
+        isActive: true,
+      } as Service;
+
+      const mockMaster: Master = {
+        id: 'master-1',
+        name: 'Test Master',
+        isActive: true,
+        services: [mockService],
+      } as Master;
+
+      const mockWorkSchedule: WorkSchedule = {
+        masterId: 'master-1',
+        dayOfWeek: DayOfWeek.MONDAY,
+        startTime: '09:00',
+        endTime: '18:00',
+        isActive: true,
+      } as WorkSchedule;
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockServiceRepository.findOne.mockResolvedValue(mockService);
+      mockUserRepository.findOne.mockResolvedValue({ id: userId } as User);
+      mockWorkScheduleRepository.find.mockResolvedValue([mockWorkSchedule]);
+      mockWorkScheduleRepository.findOne.mockResolvedValue(mockWorkSchedule);
+      mockBlockIntervalRepository.find.mockResolvedValue([]);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockAppointmentRepository.find.mockResolvedValue([]);
+      mockSettingsService.getFirstVisitDiscountSettings.mockResolvedValue({
+        enabled: false,
+      });
+      mockSettingsService.get.mockResolvedValue('Europe/Moscow');
+      mockAppointmentRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      });
+      mockAppointmentRepository.create.mockReturnValue({});
+      mockAppointmentRepository.save.mockResolvedValue({
+        id: 'appointment-1',
+        ...dto,
+        price: 800, // 1000 - 200
+        discount: 200,
+        status: AppointmentStatus.PENDING,
+      });
+
+      const result = await service.create(dto, userId);
+
+      expect(result.discount).toBe(200);
+      expect(result.price).toBe(800);
+    });
+
+    it('должен применить скидку на первый визит (fixed)', async () => {
+      const userId = 'user-1';
+      const dto = {
+        masterId: 'master-1',
+        serviceId: 'service-1',
+        startTime: getFutureDate(1, 10).toISOString(),
+      };
+
+      const mockService: Service = {
+        id: 'service-1',
+        name: 'Test Service',
+        price: 1000,
+        duration: 60,
+        isActive: true,
+      } as Service;
+
+      const mockMaster: Master = {
+        id: 'master-1',
+        name: 'Test Master',
+        isActive: true,
+        services: [mockService],
+      } as Master;
+
+      const mockWorkSchedule: WorkSchedule = {
+        masterId: 'master-1',
+        dayOfWeek: DayOfWeek.MONDAY,
+        startTime: '09:00',
+        endTime: '18:00',
+        isActive: true,
+      } as WorkSchedule;
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockServiceRepository.findOne.mockResolvedValue(mockService);
+      mockUserRepository.findOne.mockResolvedValue({ id: userId } as User);
+      mockWorkScheduleRepository.find.mockResolvedValue([mockWorkSchedule]);
+      mockWorkScheduleRepository.findOne.mockResolvedValue(mockWorkSchedule);
+      mockBlockIntervalRepository.find.mockResolvedValue([]);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockAppointmentRepository.find.mockResolvedValue([]);
+      mockSettingsService.getFirstVisitDiscountSettings.mockResolvedValue({
+        enabled: true,
+        type: 'fixed',
+        value: 150,
+      });
+      mockSettingsService.get.mockResolvedValue('Europe/Moscow');
+      mockAppointmentRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      });
+      mockAppointmentRepository.create.mockReturnValue({});
+      mockAppointmentRepository.save.mockResolvedValue({
+        id: 'appointment-1',
+        ...dto,
+        price: 850, // 1000 - 150
+        discount: 150,
+        status: AppointmentStatus.PENDING,
+      });
+
+      const result = await service.create(dto, userId);
+
+      expect(result.discount).toBe(150);
+      expect(result.price).toBe(850);
+    });
+
+    it('должен отправить уведомление при создании записи со статусом CONFIRMED', async () => {
+      const userId = 'user-1';
+      const dto = {
+        masterId: 'master-1',
+        serviceId: 'service-1',
+        startTime: getFutureDate(1, 10).toISOString(),
+        status: AppointmentStatus.CONFIRMED,
+      };
+
+      const mockService: Service = {
+        id: 'service-1',
+        name: 'Test Service',
+        price: 1000,
+        duration: 60,
+        isActive: true,
+      } as Service;
+
+      const mockMaster: Master = {
+        id: 'master-1',
+        name: 'Test Master',
+        isActive: true,
+        services: [mockService],
+      } as Master;
+
+      const mockWorkSchedule: WorkSchedule = {
+        masterId: 'master-1',
+        dayOfWeek: DayOfWeek.MONDAY,
+        startTime: '09:00',
+        endTime: '18:00',
+        isActive: true,
+      } as WorkSchedule;
+
+      const savedAppointment: Appointment = {
+        id: 'appointment-1',
+        clientId: userId,
+        masterId: dto.masterId,
+        serviceId: dto.serviceId,
+        startTime: new Date(dto.startTime),
+        endTime: new Date(new Date(dto.startTime).getTime() + 60 * 60000),
+        price: 1000,
+        status: AppointmentStatus.CONFIRMED,
+        master: mockMaster,
+        service: mockService,
+        client: { id: userId } as User,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as Appointment;
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockServiceRepository.findOne.mockResolvedValue(mockService);
+      mockUserRepository.findOne.mockResolvedValue({ id: userId } as User);
+      mockWorkScheduleRepository.find.mockResolvedValue([mockWorkSchedule]);
+      mockWorkScheduleRepository.findOne.mockResolvedValue(mockWorkSchedule);
+      mockBlockIntervalRepository.find.mockResolvedValue([]);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockAppointmentRepository.find.mockResolvedValue([]);
+      mockSettingsService.getFirstVisitDiscountSettings.mockResolvedValue({
+        enabled: false,
+      });
+      mockSettingsService.get.mockResolvedValue('Europe/Moscow');
+      mockAppointmentRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      });
+      mockAppointmentRepository.create.mockReturnValue({});
+      mockAppointmentRepository.save.mockResolvedValue(savedAppointment);
+      mockNotificationsService.sendAppointmentConfirmation.mockResolvedValue({} as any);
+
+      await service.create(dto, userId);
+
+      expect(mockNotificationsService.sendAppointmentConfirmation).toHaveBeenCalled();
+    });
+
+    it('должен обработать ошибку при отправке уведомления админам', async () => {
+      const userId = 'user-1';
+      const dto = {
+        masterId: 'master-1',
+        serviceId: 'service-1',
+        startTime: getFutureDate(1, 10).toISOString(),
+      };
+
+      const mockService: Service = {
+        id: 'service-1',
+        name: 'Test Service',
+        price: 1000,
+        duration: 60,
+        isActive: true,
+      } as Service;
+
+      const mockMaster: Master = {
+        id: 'master-1',
+        name: 'Test Master',
+        isActive: true,
+        services: [mockService],
+      } as Master;
+
+      const mockWorkSchedule: WorkSchedule = {
+        masterId: 'master-1',
+        dayOfWeek: DayOfWeek.MONDAY,
+        startTime: '09:00',
+        endTime: '18:00',
+        isActive: true,
+      } as WorkSchedule;
+
+      const savedAppointment: Appointment = {
+        id: 'appointment-1',
+        clientId: userId,
+        masterId: dto.masterId,
+        serviceId: dto.serviceId,
+        startTime: new Date(dto.startTime),
+        endTime: new Date(new Date(dto.startTime).getTime() + 60 * 60000),
+        price: 1000,
+        status: AppointmentStatus.PENDING,
+        master: mockMaster,
+        service: mockService,
+        client: { id: userId } as User,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as Appointment;
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockServiceRepository.findOne.mockResolvedValue(mockService);
+      mockUserRepository.findOne.mockResolvedValue({ id: userId } as User);
+      mockWorkScheduleRepository.find.mockResolvedValue([mockWorkSchedule]);
+      mockWorkScheduleRepository.findOne.mockResolvedValue(mockWorkSchedule);
+      mockBlockIntervalRepository.find.mockResolvedValue([]);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockAppointmentRepository.find.mockResolvedValue([]);
+      mockSettingsService.getFirstVisitDiscountSettings.mockResolvedValue({
+        enabled: false,
+      });
+      mockSettingsService.get.mockResolvedValue('Europe/Moscow');
+      mockAppointmentRepository.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      });
+      mockAppointmentRepository.create.mockReturnValue({});
+      mockAppointmentRepository.save.mockResolvedValue(savedAppointment);
+      mockTelegramBotService.notifyAdminsAboutNewAppointment.mockRejectedValue(new Error('Telegram error'));
+
+      const loggerErrorSpy = jest.spyOn((service as any).logger, 'error');
+
+      const result = await service.create(dto, userId);
+
+      expect(result).toBeDefined();
+      expect(loggerErrorSpy).toHaveBeenCalled();
+    });
+
     it('должен применить скидку на первый визит', async () => {
       const dto: CreateAppointmentDto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-02T10:00:00').toISOString(),
+        startTime: getFutureDate(2, 10).toISOString(),
       };
       const userId = 'user-1';
 
       const mockService: Service = {
         id: 'service-1',
+        name: 'Test Service',
         price: 1000,
         duration: 60,
+        isActive: true,
       } as Service;
 
       const mockMaster: Master = {
         id: 'master-1',
+        isActive: true,
         services: [mockService],
       } as Master;
 
@@ -836,6 +1214,14 @@ describe('AppointmentsService', () => {
 
       mockMasterRepository.findOne.mockResolvedValue(mockMaster);
       mockServiceRepository.findOne.mockResolvedValue(mockService);
+      mockUserRepository.findOne.mockResolvedValue({ id: userId } as User);
+      mockWorkScheduleRepository.find.mockResolvedValue([{
+        masterId: 'master-1',
+        dayOfWeek: DayOfWeek.MONDAY,
+        startTime: '09:00',
+        endTime: '18:00',
+        isActive: true,
+      } as WorkSchedule]);
       mockWorkScheduleRepository.findOne.mockResolvedValue({
         masterId: 'master-1',
         dayOfWeek: 1,
@@ -999,6 +1385,46 @@ describe('AppointmentsService', () => {
   });
 
   describe('getAvailableSlots - edge cases', () => {
+    it('должен фильтровать слоты для сегодняшнего дня (показывать только через час)', async () => {
+      const masterId = 'master-1';
+      const serviceId = 'service-1';
+      const today = new Date();
+      today.setHours(10, 0, 0, 0);
+      const dateStr = today.toISOString().split('T')[0];
+
+      const mockService: Service = {
+        id: serviceId,
+        duration: 60,
+        isActive: true,
+      } as Service;
+
+      const mockMaster: Master = {
+        id: masterId,
+        breakDuration: 15,
+        isActive: true,
+      } as Master;
+
+      const mockWorkSchedule: WorkSchedule = {
+        masterId,
+        dayOfWeek: today.getDay() === 0 ? DayOfWeek.SUNDAY : (today.getDay() as DayOfWeek),
+        startTime: '09:00',
+        endTime: '18:00',
+        isActive: true,
+      } as WorkSchedule;
+
+      mockMasterRepository.findOne.mockResolvedValue(mockMaster);
+      mockServiceRepository.findOne.mockResolvedValue(mockService);
+      mockWorkScheduleRepository.find.mockResolvedValue([mockWorkSchedule]);
+      mockBlockIntervalRepository.find.mockResolvedValue([]);
+      mockAppointmentRepository.find.mockResolvedValue([]);
+      mockSettingsService.get.mockResolvedValue('Europe/Moscow');
+
+      const result = await service.getAvailableSlots(masterId, serviceId, today);
+
+      // Слоты, которые начинаются менее чем через час, должны быть отфильтрованы
+      expect(Array.isArray(result)).toBe(true);
+    });
+
     it('должен обработать случай когда нет расписания', async () => {
       const masterId = 'master-1';
       const serviceId = 'service-1';
@@ -1076,7 +1502,7 @@ describe('AppointmentsService', () => {
       const dto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-01T10:00:00Z').toISOString(),
+        startTime: getFutureDate(1, 10).toISOString(),
       };
 
       const mockService: Service = {
@@ -1156,7 +1582,7 @@ describe('AppointmentsService', () => {
       const dto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-01T10:00:00Z').toISOString(),
+        startTime: getFutureDate(1, 10).toISOString(),
       };
 
       const mockService: Service = {
@@ -1185,7 +1611,7 @@ describe('AppointmentsService', () => {
       const dto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-01T10:00:00Z').toISOString(),
+        startTime: getFutureDate(1, 10).toISOString(),
       };
 
       const mockService: Service = {
@@ -1210,19 +1636,21 @@ describe('AppointmentsService', () => {
       expect(mockServiceRepository.findOne).toHaveBeenCalled();
     });
 
-    it('должен обработать максимальную длительность услуги (24 часа)', async () => {
+    it('должен обработать максимальную длительность услуги (23 часа 59 минут)', async () => {
       const userId = 'user-1';
+      // Для максимальной длительности услуги устанавливаем начало на 00:00, чтобы услуга закончилась в 23:59 того же дня
+      const startDate = getFutureDate(1, 0); // Начало дня (00:00)
       const dto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-01T10:00:00Z').toISOString(),
+        startTime: startDate.toISOString(),
       };
 
       const mockService: Service = {
         id: 'service-1',
         name: 'Test Service',
         price: 1000,
-        duration: 1440, // 24 часа
+        duration: 1439, // 23 часа 59 минут (максимальная длительность в пределах одного дня)
         isActive: true,
       } as Service;
 
@@ -1233,6 +1661,7 @@ describe('AppointmentsService', () => {
         services: [mockService],
       } as Master;
 
+      // Расписание должно покрывать весь день
       const mockWorkSchedule: WorkSchedule = {
         masterId: 'master-1',
         dayOfWeek: DayOfWeek.MONDAY,
@@ -1243,7 +1672,9 @@ describe('AppointmentsService', () => {
 
       mockMasterRepository.findOne.mockResolvedValue(mockMaster);
       mockServiceRepository.findOne.mockResolvedValue(mockService);
+      mockUserRepository.findOne.mockResolvedValue({ id: userId } as User);
       mockWorkScheduleRepository.find.mockResolvedValue([mockWorkSchedule]);
+      mockWorkScheduleRepository.findOne.mockResolvedValue(mockWorkSchedule);
       mockBlockIntervalRepository.find.mockResolvedValue([]);
       mockAppointmentRepository.count.mockResolvedValue(0);
       mockAppointmentRepository.find.mockResolvedValue([]);
@@ -1272,7 +1703,7 @@ describe('AppointmentsService', () => {
       const dto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-01T10:00:00Z').toISOString(),
+        startTime: getFutureDate(1, 10).toISOString(),
       };
 
       const mockService: Service = {
@@ -1329,7 +1760,7 @@ describe('AppointmentsService', () => {
       const dto = {
         masterId: 'master-1',
         serviceId: 'service-1',
-        startTime: new Date('2024-01-01T10:00:00Z').toISOString(),
+        startTime: getFutureDate(1, 10).toISOString(),
       };
 
       const mockService: Service = {

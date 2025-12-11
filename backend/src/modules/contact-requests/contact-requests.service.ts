@@ -17,8 +17,20 @@ export class ContactRequestsService {
     return await this.contactRequestRepository.save(contactRequest);
   }
 
-  async findAll(page: number = 1, limit: number = 20): Promise<{ data: ContactRequest[]; total: number }> {
+  async findAll(
+    page: number = 1,
+    limit: number = 20,
+    status?: 'new' | 'processed',
+  ): Promise<{ data: ContactRequest[]; total: number }> {
+    const where: any = {};
+    if (status === 'new') {
+      where.isRead = false;
+    } else if (status === 'processed') {
+      where.isProcessed = true;
+    }
+
     const [data, total] = await this.contactRequestRepository.findAndCount({
+      where,
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,

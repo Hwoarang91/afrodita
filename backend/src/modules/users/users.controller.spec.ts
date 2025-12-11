@@ -17,6 +17,7 @@ describe('UsersController', () => {
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
+    getInteractionHistory: jest.fn(),
   };
 
   const mockAuditService = {
@@ -156,6 +157,127 @@ describe('UsersController', () => {
 
       expect(result).toEqual(mockUser);
       expect(mockAuditService.log).toHaveBeenCalled();
+    });
+
+    it('должен выбросить ошибку для не-админа', async () => {
+      const req = {
+        user: { sub: 'user-1', role: 'client' },
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const data = {
+        firstName: 'New',
+        lastName: 'User',
+      };
+
+      await expect(controller.create(req, data)).rejects.toThrow('Access denied');
+    });
+  });
+
+  describe('findById', () => {
+    it('должен выбросить ошибку для не-админа', async () => {
+      const id = 'user-1';
+      const req = { user: { role: 'client' } };
+
+      await expect(controller.findById(req, id)).rejects.toThrow('Access denied');
+    });
+  });
+
+  describe('updateUser', () => {
+    it('должен обновить пользователя для админа', async () => {
+      const id = 'user-1';
+      const req = {
+        user: { sub: 'admin-1', role: 'admin' },
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const data = { firstName: 'Updated' };
+      const oldUser: User = {
+        id,
+        firstName: 'Old',
+        lastName: 'User',
+      } as User;
+      const updatedUser: User = {
+        id,
+        ...data,
+        lastName: 'User',
+      } as User;
+
+      mockUsersService.findById.mockResolvedValueOnce(oldUser);
+      mockUsersService.update.mockResolvedValue(updatedUser);
+      mockAuditService.log.mockResolvedValue({} as any);
+
+      const result = await controller.updateUser(req, id, data);
+
+      expect(result).toEqual(updatedUser);
+      expect(mockAuditService.log).toHaveBeenCalled();
+    });
+
+    it('должен выбросить ошибку для не-админа', async () => {
+      const id = 'user-1';
+      const req = { user: { role: 'client' } };
+      const data = { firstName: 'Updated' };
+
+      await expect(controller.updateUser(req, id, data)).rejects.toThrow('Access denied');
+    });
+  });
+
+  describe('delete', () => {
+    it('должен удалить пользователя для админа', async () => {
+      const id = 'user-1';
+      const req = {
+        user: { sub: 'admin-1', role: 'admin' },
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const mockUser: User = {
+        id,
+        firstName: 'Test',
+        lastName: 'User',
+        role: UserRole.CLIENT,
+      } as User;
+
+      mockUsersService.findById.mockResolvedValue(mockUser);
+      mockUsersService.delete.mockResolvedValue(undefined);
+      mockAuditService.log.mockResolvedValue({} as any);
+
+      const result = await controller.delete(req, id);
+
+      expect(result).toEqual({ success: true, message: 'Пользователь успешно удален' });
+      expect(mockAuditService.log).toHaveBeenCalled();
+    });
+
+    it('должен выбросить ошибку для не-админа', async () => {
+      const id = 'user-1';
+      const req = { user: { role: 'client' } };
+
+      await expect(controller.delete(req, id)).rejects.toThrow('Access denied');
+    });
+  });
+
+  describe('getInteractionHistory', () => {
+    it('должен вернуть историю взаимодействий для админа', async () => {
+      const id = 'user-1';
+      const req = { user: { role: 'admin' } };
+      const mockHistory = {
+        appointments: [],
+        reviews: [],
+        transactions: [],
+      };
+
+      mockUsersService.getInteractionHistory = jest.fn().mockResolvedValue(mockHistory);
+
+      const result = await controller.getInteractionHistory(req, id);
+
+      expect(result).toEqual(mockHistory);
+      expect(mockUsersService.getInteractionHistory).toHaveBeenCalledWith(id);
+    });
+
+    it('должен выбросить ошибку для не-админа', async () => {
+      const id = 'user-1';
+      const req = { user: { role: 'client' } };
+
+      await expect(controller.getInteractionHistory(req, id)).rejects.toThrow('Access denied');
     });
   });
 });

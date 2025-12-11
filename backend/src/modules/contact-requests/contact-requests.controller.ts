@@ -37,10 +37,15 @@ export class ContactRequestsController {
   @ApiOperation({ summary: 'Получение списка заявок' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
-  async findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+  @ApiQuery({ name: 'status', required: false, enum: ['new', 'processed'], description: 'Фильтр по статусу' })
+  async findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: 'new' | 'processed',
+  ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    return await this.contactRequestsService.findAll(pageNum, limitNum);
+    return await this.contactRequestsService.findAll(pageNum, limitNum, status);
   }
 
   @Get(':id')
@@ -96,7 +101,7 @@ export class ContactRequestsController {
   @ApiOperation({ summary: 'Массовое удаление заявок' })
   async bulkDelete(@Body() body: { ids: string[] }) {
     await this.contactRequestsService.bulkDelete(body.ids);
-    return { message: 'Заявки успешно удалены' };
+    return { message: `Успешно удалено ${body.ids.length} заявок` };
   }
 }
 

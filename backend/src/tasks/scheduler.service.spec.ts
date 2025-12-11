@@ -220,6 +220,584 @@ describe('SchedulerService', () => {
       expect(mockFinancialService.calculateBonusPoints).toHaveBeenCalled();
       expect(mockFinancialService.awardBonusPoints).toHaveBeenCalled();
     });
+
+    it('должен пропустить запись если service не найден', async () => {
+      const mockAppointment: Appointment = {
+        id: 'appointment-1',
+        status: AppointmentStatus.COMPLETED,
+        bonusPointsEarned: 0,
+        price: 1000,
+        clientId: 'user-1',
+        serviceId: 'service-1',
+        client: {} as any,
+        service: {} as any,
+      } as Appointment;
+
+      mockAppointmentRepository.find.mockResolvedValue([mockAppointment]);
+      mockServiceRepository.findOne.mockResolvedValue(null);
+
+      await service.processBonusPoints();
+
+      expect(mockFinancialService.calculateBonusPoints).not.toHaveBeenCalled();
+    });
+
+    it('должен пропустить запись если bonusPoints = 0', async () => {
+      const mockAppointment: Appointment = {
+        id: 'appointment-1',
+        status: AppointmentStatus.COMPLETED,
+        bonusPointsEarned: 0,
+        price: 1000,
+        clientId: 'user-1',
+        serviceId: 'service-1',
+        client: {} as any,
+        service: {
+          id: 'service-1',
+          bonusPointsPercent: 10,
+        } as any,
+      } as Appointment;
+
+      const mockService: Service = {
+        id: 'service-1',
+        bonusPointsPercent: 10,
+      } as Service;
+
+      mockAppointmentRepository.find.mockResolvedValue([mockAppointment]);
+      mockServiceRepository.findOne.mockResolvedValue(mockService);
+      mockFinancialService.calculateBonusPoints.mockResolvedValue(0);
+
+      await service.processBonusPoints();
+
+      expect(mockFinancialService.awardBonusPoints).not.toHaveBeenCalled();
+      expect(mockNotificationsService.sendBonusEarned).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('onModuleInit', () => {
+    it('должен логировать инициализацию', async () => {
+      const loggerSpy = jest.spyOn(service['logger'], 'log');
+      await service.onModuleInit();
+      expect(loggerSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('onApplicationBootstrap', () => {
+    it('должен логировать bootstrap и проверять cron задачи', async () => {
+      const mockCronJobs = new Map();
+      mockCronJobs.set('test-job', { running: true });
+      mockSchedulerRegistry.getCronJobs.mockReturnValue(mockCronJobs);
+
+      const loggerSpy = jest.spyOn(service['logger'], 'log');
+      await service.onApplicationBootstrap();
+
+      expect(loggerSpy).toHaveBeenCalled();
+      expect(mockSchedulerRegistry.getCronJobs).toHaveBeenCalled();
+    });
+
+    it('должен обработать ошибку при проверке cron задач', async () => {
+      mockSchedulerRegistry.getCronJobs.mockImplementation(() => {
+        throw new Error('Test error');
+      });
+
+      const loggerErrorSpy = jest.spyOn(service['logger'], 'error');
+      await service.onApplicationBootstrap();
+
+      expect(loggerErrorSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('sendAppointmentReminders', () => {
+    it('должен пропустить записи без клиента', async () => {
+      const now = new Date();
+      const futureTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const mockAppointment: Appointment = {
+        id: 'appointment-1',
+        startTime: futureTime,
+        status: AppointmentStatus.CONFIRMED,
+        client: null,
+      } as Appointment;
+
+      mockAppointmentRepository.find.mockResolvedValue([mockAppointment]);
+      mockSettingsService.get.mockResolvedValue([24, 2]);
+
+      await service.sendAppointmentReminders();
+
+      expect(mockNotificationsService.sendAppointmentReminder).not.toHaveBeenCalled();
+    });
+
+    it('должен использовать индивидуальные настройки интервалов клиента', async () => {
+      const now = new Date();
+      const futureTime = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+
+      const mockAppointment: Appointment = {
+        id: 'appointment-1',
+        startTime: futureTime,
+        status: AppointmentStatus.CONFIRMED,
+        clientId: 'user-1',
+        client: {
+          id: 'user-1',
+          notificationSettings: {
+            remindersEnabled: true,
+            reminderIntervals: [12, 6],
+          },
+        } as any,
+        master: { name: 'Master 1' } as any,
+        service: { name: 'Service 1' } as any,
+      } as Appointment;
+
+      const mockQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(null),
+      };
+
+      mockAppointmentRepository.find.mockResolvedValue([mockAppointment]);
+      mockSettingsService.get.mockResolvedValue([24, 2]);
+      mockNotificationRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockNotificationsService.sendAppointmentReminder.mockResolvedValue({} as any);
+
+      await service.sendAppointmentReminders();
+
+      expect(mockNotificationsService.sendAppointmentReminder).toHaveBeenCalled();
+    });
+
+    it('должен пропустить напоминание если оно уже было отправлено', async () => {
+      const now = new Date();
+      const futureTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const mockAppointment: Appointment = {
+        id: 'appointment-1',
+        startTime: futureTime,
+        status: AppointmentStatus.CONFIRMED,
+        clientId: 'user-1',
+        client: {
+          id: 'user-1',
+          notificationSettings: { remindersEnabled: true },
+        } as any,
+        master: { name: 'Master 1' } as any,
+        service: { name: 'Service 1' } as any,
+      } as Appointment;
+
+      const mockExistingReminder = {
+        id: 'notification-1',
+        userId: 'user-1',
+        type: NotificationType.APPOINTMENT_REMINDER,
+      };
+
+      const mockQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(mockExistingReminder),
+      };
+
+      mockAppointmentRepository.find.mockResolvedValue([mockAppointment]);
+      mockSettingsService.get.mockResolvedValue([24, 2]);
+      mockNotificationRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      await service.sendAppointmentReminders();
+
+      expect(mockNotificationsService.sendAppointmentReminder).not.toHaveBeenCalled();
+    });
+
+    it('должен обработать ошибку при обработке записи', async () => {
+      const now = new Date();
+      const futureTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const mockAppointment: Appointment = {
+        id: 'appointment-1',
+        startTime: futureTime,
+        status: AppointmentStatus.CONFIRMED,
+        client: {
+          id: 'user-1',
+          notificationSettings: { remindersEnabled: true },
+        } as any,
+        master: { name: 'Master 1' } as any,
+        service: { name: 'Service 1' } as any,
+      } as Appointment;
+
+      mockAppointmentRepository.find.mockResolvedValue([mockAppointment]);
+      mockSettingsService.get.mockResolvedValue([24, 2]);
+      mockNotificationRepository.createQueryBuilder.mockImplementation(() => {
+        throw new Error('Test error');
+      });
+
+      const loggerErrorSpy = jest.spyOn(service['logger'], 'error');
+      await service.sendAppointmentReminders();
+
+      expect(loggerErrorSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('sendBirthdayReminders', () => {
+    it('должен отправить напоминания о днях рождения', async () => {
+      const today = new Date();
+      const mockUser: User = {
+        id: 'user-1',
+        dateOfBirth: new Date(today.getFullYear() - 30, today.getMonth(), today.getDate()),
+        role: UserRole.CLIENT,
+        telegramId: '123456789',
+        notificationSettings: { birthdayRemindersEnabled: true },
+      } as User;
+
+      const mockQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([mockUser]),
+      };
+
+      mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockNotificationRepository.findOne.mockResolvedValue(null);
+      mockNotificationsService.sendBroadcast.mockResolvedValue({} as any);
+
+      await service.sendBirthdayReminders();
+
+      expect(mockNotificationsService.sendBroadcast).toHaveBeenCalled();
+    });
+
+    it('должен пропустить пользователей с отключенными напоминаниями о днях рождения', async () => {
+      const today = new Date();
+      const mockUser: User = {
+        id: 'user-1',
+        dateOfBirth: new Date(today.getFullYear() - 30, today.getMonth(), today.getDate()),
+        role: UserRole.CLIENT,
+        notificationSettings: { birthdayRemindersEnabled: false },
+      } as User;
+
+      const mockQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([mockUser]),
+      };
+
+      mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      await service.sendBirthdayReminders();
+
+      expect(mockNotificationsService.sendBroadcast).not.toHaveBeenCalled();
+    });
+
+    it('должен пропустить пользователей без telegramId', async () => {
+      const today = new Date();
+      const mockUser: User = {
+        id: 'user-1',
+        dateOfBirth: new Date(today.getFullYear() - 30, today.getMonth(), today.getDate()),
+        role: UserRole.CLIENT,
+        telegramId: null,
+        notificationSettings: { birthdayRemindersEnabled: true },
+      } as User;
+
+      const mockQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([mockUser]),
+      };
+
+      mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockNotificationRepository.findOne.mockResolvedValue(null);
+
+      await service.sendBirthdayReminders();
+
+      expect(mockNotificationsService.sendBroadcast).not.toHaveBeenCalled();
+    });
+
+    it('должен пропустить если напоминание уже было отправлено сегодня', async () => {
+      const today = new Date();
+      const mockUser: User = {
+        id: 'user-1',
+        dateOfBirth: new Date(today.getFullYear() - 30, today.getMonth(), today.getDate()),
+        role: UserRole.CLIENT,
+        telegramId: '123456789',
+        notificationSettings: { birthdayRemindersEnabled: true },
+      } as User;
+
+      const mockExistingReminder = {
+        id: 'notification-1',
+        userId: 'user-1',
+        type: NotificationType.MARKETING,
+      };
+
+      const mockQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([mockUser]),
+      };
+
+      mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockNotificationRepository.findOne.mockResolvedValue(mockExistingReminder);
+
+      await service.sendBirthdayReminders();
+
+      expect(mockNotificationsService.sendBroadcast).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateClientSegments', () => {
+    it('должен установить сегмент "новый" для клиента без записей', async () => {
+      const mockUser: User = {
+        id: 'user-1',
+        role: UserRole.CLIENT,
+        segment: null,
+        appointments: [],
+      } as User;
+
+      mockUserRepository.find.mockResolvedValue([mockUser]);
+      mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'новый' } as User);
+
+      await service.updateClientSegments();
+
+      expect(mockUserRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ segment: 'новый' }),
+      );
+    });
+
+    it('должен установить сегмент "неактивный" для клиента без визитов более 90 дней', async () => {
+      const oldDate = new Date();
+      oldDate.setDate(oldDate.getDate() - 100);
+      const mockUser: User = {
+        id: 'user-1',
+        role: UserRole.CLIENT,
+        segment: 'постоянный',
+        appointments: [
+          {
+            id: 'appointment-1',
+            status: AppointmentStatus.COMPLETED,
+            startTime: oldDate,
+            price: 1000,
+          } as Appointment,
+        ],
+      } as User;
+
+      mockUserRepository.find.mockResolvedValue([mockUser]);
+      mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'неактивный' } as User);
+
+      await service.updateClientSegments();
+
+      expect(mockUserRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ segment: 'неактивный' }),
+      );
+    });
+
+    it('должен установить сегмент "VIP" для клиента с 10+ визитами и 10000+ потрачено', async () => {
+      const recentDate = new Date();
+      recentDate.setDate(recentDate.getDate() - 10);
+      const mockAppointments = Array.from({ length: 10 }, (_, i) => ({
+        id: `appointment-${i}`,
+        status: AppointmentStatus.COMPLETED,
+        startTime: recentDate,
+        price: 1500,
+      })) as Appointment[];
+
+      const mockUser: User = {
+        id: 'user-1',
+        role: UserRole.CLIENT,
+        segment: 'постоянный',
+        appointments: mockAppointments,
+      } as User;
+
+      mockUserRepository.find.mockResolvedValue([mockUser]);
+      mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'VIP' } as User);
+
+      await service.updateClientSegments();
+
+      expect(mockUserRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ segment: 'VIP' }),
+      );
+    });
+
+    it('должен установить сегмент "постоянный" для клиента с 5+ визитами', async () => {
+      const recentDate = new Date();
+      recentDate.setDate(recentDate.getDate() - 10);
+      const mockAppointments = Array.from({ length: 5 }, (_, i) => ({
+        id: `appointment-${i}`,
+        status: AppointmentStatus.COMPLETED,
+        startTime: recentDate,
+        price: 1000,
+      })) as Appointment[];
+
+      const mockUser: User = {
+        id: 'user-1',
+        role: UserRole.CLIENT,
+        segment: 'новый',
+        appointments: mockAppointments,
+      } as User;
+
+      mockUserRepository.find.mockResolvedValue([mockUser]);
+      mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'постоянный' } as User);
+
+      await service.updateClientSegments();
+
+      expect(mockUserRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ segment: 'постоянный' }),
+      );
+    });
+
+    it('не должен обновлять сегмент если он не изменился', async () => {
+      const recentDate = new Date();
+      recentDate.setDate(recentDate.getDate() - 10);
+      const mockAppointments = Array.from({ length: 5 }, (_, i) => ({
+        id: `appointment-${i}`,
+        status: AppointmentStatus.COMPLETED,
+        startTime: recentDate,
+        price: 1000,
+      })) as Appointment[];
+
+      const mockUser: User = {
+        id: 'user-1',
+        role: UserRole.CLIENT,
+        segment: 'постоянный',
+        appointments: mockAppointments,
+      } as User;
+
+      mockUserRepository.find.mockResolvedValue([mockUser]);
+
+      await service.updateClientSegments();
+
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('должен установить сегмент "новый" для клиента с 1-2 визитами (остается новый)', async () => {
+      const recentDate = new Date();
+      recentDate.setDate(recentDate.getDate() - 10);
+      const mockAppointments = [
+        {
+          id: 'appointment-1',
+          status: AppointmentStatus.COMPLETED,
+          startTime: recentDate,
+          price: 1000,
+        } as Appointment,
+      ];
+
+      const mockUser: User = {
+        id: 'user-1',
+        role: UserRole.CLIENT,
+        segment: null,
+        appointments: mockAppointments,
+      } as User;
+
+      mockUserRepository.find.mockResolvedValue([mockUser]);
+      mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'новый' } as User);
+
+      await service.updateClientSegments();
+
+      // Для 1-2 визитов сегмент остается "новый"
+      expect(mockUserRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ segment: 'новый' }),
+      );
+    });
+
+    it('должен установить сегмент "новый" для клиента с 3-4 визитами (еще не постоянный)', async () => {
+      const recentDate = new Date();
+      recentDate.setDate(recentDate.getDate() - 10);
+      const mockAppointments = Array.from({ length: 3 }, (_, i) => ({
+        id: `appointment-${i}`,
+        status: AppointmentStatus.COMPLETED,
+        startTime: recentDate,
+        price: 1000,
+      })) as Appointment[];
+
+      const mockUser: User = {
+        id: 'user-1',
+        role: UserRole.CLIENT,
+        segment: null,
+        appointments: mockAppointments,
+      } as User;
+
+      mockUserRepository.find.mockResolvedValue([mockUser]);
+      // Для 3 визитов сегмент остается "новый" (нужно 5+ для "постоянный")
+      mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'новый' } as User);
+
+      await service.updateClientSegments();
+
+      expect(mockUserRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ segment: 'новый' }),
+      );
+    });
+
+    it('должен обработать клиента без lastVisit', async () => {
+      const mockUser: User = {
+        id: 'user-1',
+        role: UserRole.CLIENT,
+        segment: null,
+        appointments: [],
+      } as User;
+
+      mockUserRepository.find.mockResolvedValue([mockUser]);
+      mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'новый' } as User);
+
+      await service.updateClientSegments();
+
+      expect(mockUserRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ segment: 'новый' }),
+      );
+    });
+  });
+
+  describe('sendAppointmentReminders - edge cases', () => {
+    it('должен обработать критическую ошибку', async () => {
+      mockAppointmentRepository.find.mockRejectedValue(new Error('Database error'));
+
+      const loggerErrorSpy = jest.spyOn(service['logger'], 'error');
+      await service.sendAppointmentReminders();
+
+      expect(loggerErrorSpy).toHaveBeenCalled();
+    });
+
+    it('должен обработать записи вне окна интервала', async () => {
+      const now = new Date();
+      const futureTime = new Date(now.getTime() + 50 * 60 * 60 * 1000); // 50 часов вперед
+
+      const mockAppointment: Appointment = {
+        id: 'appointment-1',
+        startTime: futureTime,
+        status: AppointmentStatus.CONFIRMED,
+        client: {
+          id: 'user-1',
+          notificationSettings: { remindersEnabled: true },
+        } as any,
+        master: { name: 'Master 1' } as any,
+        service: { name: 'Service 1' } as any,
+      } as Appointment;
+
+      mockAppointmentRepository.find.mockResolvedValue([mockAppointment]);
+      mockSettingsService.get.mockResolvedValue([24, 2]);
+
+      await service.sendAppointmentReminders();
+
+      // Запись вне окна 48 часов, должна быть отфильтрована
+      expect(mockNotificationsService.sendAppointmentReminder).not.toHaveBeenCalled();
+    });
+
+    it('должен обработать запись с startTime как строкой', async () => {
+      const now = new Date();
+      const futureTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      const mockAppointment: Appointment = {
+        id: 'appointment-1',
+        startTime: futureTime.toISOString() as any,
+        status: AppointmentStatus.CONFIRMED,
+        client: {
+          id: 'user-1',
+          notificationSettings: { remindersEnabled: true },
+        } as any,
+        master: { name: 'Master 1' } as any,
+        service: { name: 'Service 1' } as any,
+      } as Appointment;
+
+      const mockQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(null),
+      };
+
+      mockAppointmentRepository.find.mockResolvedValue([mockAppointment]);
+      mockSettingsService.get.mockResolvedValue([24, 2]);
+      mockNotificationRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockNotificationsService.sendAppointmentReminder.mockResolvedValue({} as any);
+
+      await service.sendAppointmentReminders();
+
+      expect(mockAppointmentRepository.find).toHaveBeenCalled();
+    });
   });
 });
 

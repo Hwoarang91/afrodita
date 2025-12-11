@@ -89,6 +89,34 @@ describe('AppointmentsController', () => {
   });
 
   describe('findAll', () => {
+    it('должен вернуть список записей с фильтрами для обычного пользователя', async () => {
+      const req = {
+        user: { sub: 'user-1', role: 'client' },
+      };
+      const mockAppointments = [{ id: 'appointment-1' } as any];
+
+      mockAppointmentsService.findAll.mockResolvedValue(mockAppointments);
+
+      const result = await controller.findAll(
+        AppointmentStatus.CONFIRMED,
+        '2024-01-01',
+        '2024-01-01',
+        '2024-01-31',
+        'master-1',
+        req,
+      );
+
+      expect(result).toEqual(mockAppointments);
+      expect(mockAppointmentsService.findAll).toHaveBeenCalledWith(
+        'user-1',
+        AppointmentStatus.CONFIRMED,
+        '2024-01-01',
+        '2024-01-01',
+        '2024-01-31',
+        'master-1',
+      );
+    });
+
     it('должен вернуть список записей для обычного пользователя', async () => {
       const req = { user: { sub: 'user-1', role: 'client' } };
       const mockAppointments: Appointment[] = [
@@ -115,6 +143,34 @@ describe('AppointmentsController', () => {
 
       expect(result).toEqual(mockAppointments);
       expect(mockAppointmentsService.findAll).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, undefined, undefined);
+    });
+
+    it('должен вернуть все записи для админа с фильтрами', async () => {
+      const req = {
+        user: { sub: 'admin-1', role: 'admin' },
+      };
+      const mockAppointments = [{ id: 'appointment-1' } as any];
+
+      mockAppointmentsService.findAll.mockResolvedValue(mockAppointments);
+
+      const result = await controller.findAll(
+        AppointmentStatus.CONFIRMED,
+        '2024-01-01',
+        '2024-01-01',
+        '2024-01-31',
+        'master-1',
+        req,
+      );
+
+      expect(result).toEqual(mockAppointments);
+      expect(mockAppointmentsService.findAll).toHaveBeenCalledWith(
+        undefined,
+        AppointmentStatus.CONFIRMED,
+        '2024-01-01',
+        '2024-01-01',
+        '2024-01-31',
+        'master-1',
+      );
     });
   });
 
@@ -366,6 +422,30 @@ describe('AppointmentsController', () => {
   });
 
   describe('cancelByAdmin', () => {
+    it('должен отменить запись админом с причиной и логированием', async () => {
+      const id = 'appointment-1';
+      const req = {
+        user: { sub: 'admin-1', role: 'admin' },
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const body = { reason: 'Test reason' };
+      const mockAppointment: Appointment = {
+        id,
+        status: AppointmentStatus.CANCELLED,
+        cancellationReason: 'Test reason',
+      } as Appointment;
+
+      mockAppointmentsService.cancelByAdmin.mockResolvedValue(mockAppointment);
+      mockAuditService.log.mockResolvedValue(undefined);
+
+      const result = await controller.cancelByAdmin(id, body, req as any);
+
+      expect(result).toEqual(mockAppointment);
+      expect(mockAppointmentsService.cancelByAdmin).toHaveBeenCalledWith(id, 'Test reason');
+      expect(mockAuditService.log).toHaveBeenCalled();
+    });
+
     it('должен отменить запись админом', async () => {
       const id = 'appointment-1';
       const req = {

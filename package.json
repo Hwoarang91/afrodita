@@ -1,9 +1,32 @@
 {
+  "scripts": {
+    "prepare": "husky"
+  },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "shadcn": "^3.5.0"
   },
   "dependencies": {
     "lucide": "^0.555.0",
     "mcp-ssh": "^1.0.1"
+  },
+  "lint-staged": {
+    "backend/src/**/*.{ts,tsx}": [
+      "cd backend && npm run lint -- --fix",
+      "cd backend && npm run test -- --findRelatedTests --passWithNoTests --bail"
+    ],
+    "admin/**/*.{ts,tsx,js,jsx}": [
+      "cd admin && npm run lint -- --fix"
+    ],
+    "apps/telegram/**/*.{ts,tsx,js,jsx}": [
+      "cd apps/telegram && npm run lint -- --fix"
+    ],
+    "landing/**/*.{ts,tsx,js,jsx}": [
+      "cd landing && npm run lint -- --fix"
+    ],
+    "shared/**/*.{ts,tsx}": [
+      "cd backend && npm run lint -- --fix"
+    ]
   }
 }

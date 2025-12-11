@@ -2250,7 +2250,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       this.logger.log(`[handleConfirmAppointment] Создано ${appointments.length} записи(ей)`);
 
-      let finalAppointments = appointments;
+      const finalAppointments = appointments;
 
       // Если ручное подтверждение выключено, автоматически подтверждаем все записи
       if (!manualConfirmation) {
