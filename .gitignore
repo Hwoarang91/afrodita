@@ -242,6 +242,8 @@ site/
 # ==========================================
 # Project specific
 # ==========================================
+# Symlinks (created by prepare-build.js)
+backend/src/shared/
 # SQL scripts (если генерируются автоматически)
 # *.generated.sql
 

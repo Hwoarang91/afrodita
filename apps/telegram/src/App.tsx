@@ -57,7 +57,7 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TelegramProvider>
-          <BrowserRouter>
+          <BrowserRouter basename="/app">
             <OfflineIndicator />
             <Suspense fallback={<LoadingSpinner />}>
               <Routes>

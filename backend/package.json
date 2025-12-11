@@ -4,6 +4,7 @@
   "description": "Backend для Telegram-бота и Web App массажного салона",
   "main": "dist/main.js",
   "scripts": {
+    "prebuild": "node prepare-build.js",
     "build": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -13,6 +14,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
+    "test:e2e": "jest --config ./jest-e2e.config.js",
+    "test:e2e:watch": "jest --config ./jest-e2e.config.js --watch",
+    "test:all": "npm run test && npm run test:e2e",
     "migration:generate": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:generate -d src/config/data-source.ts",
     "migration:run": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/config/data-source.ts",
     "migration:run:prod": "node -r ts-node/register ./node_modules/typeorm/cli.js migration:run -d dist/config/data-source.js",

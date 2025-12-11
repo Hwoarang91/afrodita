@@ -771,6 +771,138 @@ describe('ServicesService', () => {
         expect.objectContaining({ isActive: false }),
       );
     });
+
+    it('должен выбросить ошибку при удалении несуществующей услуги', async () => {
+      const id = 'non-existent';
+      mockServiceRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.delete(id)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('create - edge cases', () => {
+    it('должен обработать создание услуги с минимальной ценой (1)', async () => {
+      const dto = {
+        name: 'Test Service',
+        description: 'Test',
+        duration: 15,
+        price: 1, // Минимальная цена согласно @Min(0) в DTO
+        isCategory: false,
+      };
+
+      mockServiceRepository.create.mockReturnValue(dto as Service);
+      mockServiceRepository.save.mockResolvedValue({ id: '1', ...dto } as Service);
+      mockServiceRepository.findOne.mockResolvedValue({ id: '1', ...dto } as Service);
+      mockCacheService.clearByPattern.mockResolvedValue(undefined);
+
+      const result = await service.create(dto);
+
+      expect(result.price).toBe(1);
+    });
+
+    it('должен обработать создание услуги с максимальной длительностью (1440 минут)', async () => {
+      const dto = {
+        name: 'Test Service',
+        description: 'Test',
+        duration: 1440, // 24 часа
+        price: 1000,
+        isCategory: false,
+      };
+
+      mockServiceRepository.create.mockReturnValue(dto as Service);
+      mockServiceRepository.save.mockResolvedValue({ id: '1', ...dto } as Service);
+      mockCacheService.clearByPattern.mockResolvedValue(undefined);
+
+      const result = await service.create(dto);
+
+      expect(result.duration).toBe(1440);
+    });
+
+    it('должен обработать создание услуги с минимальной длительностью (15 минут)', async () => {
+      const dto = {
+        name: 'Test Service',
+        description: 'Test',
+        duration: 15,
+        price: 1000,
+        isCategory: false,
+      };
+
+      mockServiceRepository.create.mockReturnValue(dto as Service);
+      mockServiceRepository.save.mockResolvedValue({ id: '1', ...dto } as Service);
+      mockCacheService.clearByPattern.mockResolvedValue(undefined);
+
+      const result = await service.create(dto);
+
+      expect(result.duration).toBe(15);
+    });
+
+    it('должен обработать создание категории без цены и длительности', async () => {
+      const dto = {
+        name: 'Category',
+        description: 'Category description',
+        duration: 0,
+        price: 0,
+        isCategory: true,
+      };
+
+      mockServiceRepository.create.mockReturnValue(dto as Service);
+      mockServiceRepository.save.mockResolvedValue({ id: '1', ...dto } as Service);
+      mockCacheService.clearByPattern.mockResolvedValue(undefined);
+
+      const result = await service.create(dto);
+
+      expect(result.isCategory).toBe(true);
+      expect(result.price).toBe(0);
+      expect(result.duration).toBe(0);
+    });
+  });
+
+  describe('update - edge cases', () => {
+    it('должен обработать обновление с нулевой ценой', async () => {
+      const id = 'service-1';
+      const existingService: Service = {
+        id,
+        name: 'Test',
+        price: 1000,
+        duration: 60,
+        isActive: true,
+      } as Service;
+
+      const updateDto = {
+        price: 0,
+      };
+
+      mockServiceRepository.findOne.mockResolvedValue(existingService);
+      mockServiceRepository.save.mockResolvedValue({
+        ...existingService,
+        ...updateDto,
+      });
+      mockCacheService.clearByPattern.mockResolvedValue(undefined);
+
+      const result = await service.update(id, updateDto);
+
+      expect(result.price).toBe(0);
+    });
+
+    it('должен обработать обновление с отрицательной длительностью (должна быть ошибка валидации)', async () => {
+      const id = 'service-1';
+      const existingService: Service = {
+        id,
+        name: 'Test',
+        price: 1000,
+        duration: 60,
+        isActive: true,
+      } as Service;
+
+      const updateDto = {
+        duration: -10,
+      };
+
+      mockServiceRepository.findOne.mockResolvedValue(existingService);
+
+      // Валидация должна происходить на уровне DTO, но проверяем что сервис обрабатывает
+      await expect(service.update(id, updateDto as any)).rejects.toThrow();
+    });
   });
 });
 

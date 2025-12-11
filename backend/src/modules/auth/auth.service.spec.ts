@@ -441,5 +441,176 @@ describe('AuthService', () => {
       await expect(service.updatePhone('non-existent', '+79991234567')).rejects.toThrow(UnauthorizedException);
     });
   });
+
+  describe('validateEmailPassword - edge cases', () => {
+    it('должен обработать пустой email', async () => {
+      await expect(service.validateEmailPassword('', 'password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('должен обработать пустой password', async () => {
+      const user = {
+        id: '1',
+        email: 'test@example.com',
+        password: 'hashed',
+        isActive: true,
+      } as User;
+
+      mockUserRepository.findOne.mockResolvedValue(user);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(service.validateEmailPassword('test@example.com', '')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('должен обработать очень длинный email (255+ символов)', async () => {
+      const longEmail = 'a'.repeat(250) + '@example.com';
+      
+      mockUserRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.validateEmailPassword(longEmail, 'password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('должен обработать email с невалидными символами', async () => {
+      mockUserRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.validateEmailPassword('test@example@com', 'password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('должен обработать SQL injection попытку в email', async () => {
+      const sqlInjectionEmail = "admin' OR '1'='1";
+      
+      mockUserRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.validateEmailPassword(sqlInjectionEmail, 'password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('должен обработать очень длинный password (1000+ символов)', async () => {
+      const longPassword = 'a'.repeat(1000);
+      const user = {
+        id: '1',
+        email: 'test@example.com',
+        password: 'hashed',
+        isActive: true,
+      } as User;
+
+      mockUserRepository.findOne.mockResolvedValue(user);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(service.validateEmailPassword('test@example.com', longPassword)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('должен обработать пользователя без пароля (только Telegram)', async () => {
+      const user = {
+        id: '1',
+        email: 'test@example.com',
+        password: null, // Пользователь без пароля
+        isActive: true,
+      } as User;
+
+      mockUserRepository.findOne.mockResolvedValue(user);
+
+      await expect(service.validateEmailPassword('test@example.com', 'password')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+
+  describe('validateTelegramAuth - edge cases', () => {
+    it('должен обработать устаревшие Telegram данные (auth_date > 86400 секунд)', async () => {
+      const oldAuthDate = Math.floor(Date.now() / 1000) - 86401; // Более 24 часов назад
+      const telegramData = {
+        id: '123456789',
+        first_name: 'Test',
+        auth_date: oldAuthDate,
+        hash: 'hash',
+      };
+
+      mockConfigService.get.mockReturnValue('bot_token');
+      
+      // Мокируем verifyTelegramAuth как false для устаревших данных
+      jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(false);
+
+      await expect(service.validateTelegramAuth(telegramData as any)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('должен обработать пустой first_name в Telegram данных', async () => {
+      const telegramData = {
+        id: '123456789',
+        first_name: '',
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: 'hash',
+      };
+
+      mockConfigService.get.mockReturnValue('bot_token');
+      jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
+      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserRepository.create.mockReturnValue({} as User);
+      mockUserRepository.save.mockResolvedValue({ id: '1' } as User);
+
+      const result = await service.validateTelegramAuth(telegramData as any);
+      expect(result).toBeDefined();
+    });
+
+    it('должен обработать очень длинный first_name (100+ символов)', async () => {
+      const telegramData = {
+        id: '123456789',
+        first_name: 'A'.repeat(100),
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: 'hash',
+      };
+
+      mockConfigService.get.mockReturnValue('bot_token');
+      jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
+      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserRepository.create.mockReturnValue({} as User);
+      mockUserRepository.save.mockResolvedValue({ id: '1' } as User);
+
+      const result = await service.validateTelegramAuth(telegramData as any);
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('login - edge cases', () => {
+    it('должен обработать истечение refresh token', async () => {
+      const user = {
+        id: '1',
+        email: 'test@example.com',
+        role: UserRole.CLIENT,
+        isActive: true,
+      } as User;
+
+      mockJwtService.sign.mockReturnValue('token');
+      mockJwtService.verify.mockImplementation((token: string) => {
+        if (token === 'expired_refresh_token') {
+          throw new Error('Token expired');
+        }
+        return { sub: '1' };
+      });
+
+      mockSessionRepository.findOne.mockResolvedValue({
+        userId: '1',
+        refreshToken: 'expired_refresh_token',
+      });
+
+      await expect(service.refreshToken('expired_refresh_token')).rejects.toThrow();
+    });
+
+    it('должен обработать невалидный формат refresh token', async () => {
+      await expect(service.refreshToken('invalid.token.format')).rejects.toThrow();
+    });
+  });
 });
 

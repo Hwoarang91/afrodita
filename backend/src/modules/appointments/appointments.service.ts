@@ -59,6 +59,16 @@ export class AppointmentsService {
       throw new NotFoundException('Service not found');
     }
 
+    // Проверка активности мастера
+    if (!master.isActive) {
+      throw new BadRequestException('Master is not active');
+    }
+
+    // Проверка активности услуги
+    if (!service.isActive) {
+      throw new BadRequestException('Service is not active');
+    }
+
     // Проверка доступности мастера для услуги
     if (!master.services.some((s) => s.id === service.id)) {
       throw new BadRequestException('Master does not provide this service');
@@ -66,6 +76,12 @@ export class AppointmentsService {
 
     const startTime = new Date(dto.startTime);
     const endTime = new Date(startTime.getTime() + service.duration * 60000);
+
+    // Проверка что время не в прошлом
+    const now = new Date();
+    if (startTime < now) {
+      throw new BadRequestException('Cannot create appointment in the past');
+    }
 
     // Проверка доступности времени
     await this.validateTimeSlot(master.id, startTime, endTime);

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore } from '../../store/authStore';
 
 // API URL загружается из переменных окружения
 // Vite автоматически подхватывает переменные с префиксом VITE_

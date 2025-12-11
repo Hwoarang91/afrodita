@@ -26,6 +26,7 @@ export default function Reschedule() {
     queryKey: ['slots', appointment?.masterId, appointment?.serviceId, selectedDate?.toISOString()],
     queryFn: () => {
       if (!appointment || !selectedDate) return [];
+      if (!appointment.masterId) return [];
       return appointmentsApi.getAvailableSlots(
         appointment.masterId,
         appointment.serviceId,
@@ -112,7 +113,7 @@ export default function Reschedule() {
               <span className="font-semibold text-foreground">Услуга:</span> {appointment.service?.name}
             </p>
             <p>
-              <span className="font-semibold text-foreground">Мастер:</span> {appointment.master?.name}
+              <span className="font-semibold text-foreground">Мастер:</span> {appointment.master?.user ? `${appointment.master.user.firstName} ${appointment.master.user.lastName || ''}`.trim() : 'Не указан'}
             </p>
             <p>
               <span className="font-semibold text-foreground">Дата и время:</span>{' '}

@@ -8,7 +8,8 @@
     "deleteOutDir": true,
     "webpack": false,
     "tsConfigPath": "tsconfig.json",
-    "assets": []
+    "assets": [],
+    "watchAssets": true
   }
 }
 

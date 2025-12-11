@@ -101,6 +101,22 @@ services:
       - /app/node_modules
       - /app/.next
 
+  mari_landing:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/mari.Dockerfile
+      target: dev
+    container_name: afrodita-mari-landing-dev
+    ports:
+      - "${LANDING_PORT:-8090}:8090"
+    environment:
+      TZ: Europe/Moscow
+      NODE_ENV: development
+    volumes:
+      - ./landing:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0 --port 8090
+
 volumes:
   postgres_data_dev:
   redis_data_dev:

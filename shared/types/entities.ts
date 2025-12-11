@@ -56,6 +56,7 @@ export interface Service {
   subcategory?: string;
   isCategory: boolean;
   isActive: boolean;
+  imageUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

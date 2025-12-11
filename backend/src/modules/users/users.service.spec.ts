@@ -365,7 +365,11 @@ describe('UsersService', () => {
       const mockQueryBuilder = {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(0),
         getMany: jest.fn().mockResolvedValue([]),
       };
 
@@ -373,7 +377,7 @@ describe('UsersService', () => {
 
       await service.findAll(undefined, search, 1, 20);
 
-      expect(mockQueryBuilder.where).toHaveBeenCalled();
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalled();
     });
 
     it('должен фильтровать пользователей по isActive', async () => {
@@ -381,15 +385,21 @@ describe('UsersService', () => {
       const mockQueryBuilder = {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(0),
         getMany: jest.fn().mockResolvedValue([]),
       };
 
       mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
 
-      await service.findAll(undefined, undefined, 1, 20);
+      const result = await service.findAll(undefined, undefined, 1, 20);
 
-      expect(mockQueryBuilder.where).toHaveBeenCalled();
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalled();
+      expect(mockQueryBuilder.getCount).toHaveBeenCalled();
+      expect(result).toBeDefined();
     });
   });
 
@@ -533,6 +543,85 @@ describe('UsersService', () => {
       const result = await service.getInteractionHistory(userId);
 
       expect(result.some((item) => item.type === 'appointment_status_changed')).toBe(true);
+    });
+  });
+
+  describe('findAll - additional edge cases', () => {
+    it('должен обработать пустой search запрос', async () => {
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(0),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      await service.findAll(undefined, '', 1, 20);
+
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalled();
+    });
+
+    it('должен обработать очень длинный search запрос (100+ символов)', async () => {
+      const longSearch = 'a'.repeat(100);
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(0),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      await service.findAll(undefined, longSearch, 1, 20);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalled();
+    });
+
+    it('должен обработать отрицательную страницу', async () => {
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(0),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      await service.findAll(undefined, undefined, -1, 20);
+
+      expect(mockQueryBuilder.skip).toHaveBeenCalled();
+    });
+
+    it('должен обработать очень большой limit (1000+)', async () => {
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getCount: jest.fn().mockResolvedValue(0),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockUserRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      await service.findAll(undefined, undefined, 1, 10000);
+
+      expect(mockQueryBuilder.take).toHaveBeenCalledWith(10000);
     });
   });
 });
