@@ -16,6 +16,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { TemplatesModule } from './modules/templates/templates.module';
+import { ContactRequestsModule } from './modules/contact-requests/contact-requests.module';
 import { DatabaseConfig } from './config/database.config';
 import { SchedulerModule } from './tasks/scheduler.module';
 import { HealthModule } from './modules/health/health.module';
@@ -44,6 +45,7 @@ import { HealthModule } from './modules/health/health.module';
     AuditModule,
     ReviewsModule,
     TemplatesModule,
+    ContactRequestsModule,
     SchedulerModule,
     HealthModule,
   ],

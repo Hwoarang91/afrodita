@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Instagram, Send, Mail, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { contactRequestsApi } from "@/lib/api";
+import { formatPhoneNumber, getPhoneDigits } from "@/lib/phoneMask";
 
 // Иконка WhatsApp
 const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -20,13 +22,35 @@ const ContactSection = () => {
     message: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Сообщение отправлено!",
-      description: "Я свяжусь с вами в ближайшее время.",
-    });
-    setFormData({ name: "", phone: "", message: "" });
+    setIsSubmitting(true);
+
+    try {
+      // Отправляем номер телефона в формате +7XXXXXXXXXX
+      const phoneDigits = getPhoneDigits(formData.phone);
+      await contactRequestsApi.create({
+        name: formData.name,
+        phone: phoneDigits.length === 11 ? `+${phoneDigits}` : formData.phone,
+        message: formData.message,
+      });
+
+      toast({
+        title: "Сообщение отправлено!",
+        description: "Я свяжусь с вами в ближайшее время.",
+      });
+      setFormData({ name: "", phone: "", message: "" });
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось отправить сообщение. Попробуйте позже.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const socials = [
@@ -102,11 +126,20 @@ const ContactSection = () => {
               <div>
                 <Input
                   type="tel"
-                  placeholder="Ваш номер телефона"
+                  placeholder="+7 (999) 123-45-67"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e) => {
+                    const formatted = formatPhoneNumber(e.target.value);
+                    setFormData({ ...formData, phone: formatted });
+                  }}
+                  onBlur={(e) => {
+                    // При потере фокуса форматируем еще раз для корректности
+                    const formatted = formatPhoneNumber(e.target.value);
+                    setFormData({ ...formData, phone: formatted });
+                  }}
                   className="h-12 rounded-xl bg-card border-border shadow-soft focus:shadow-medium focus:border-primary/50 transition-all"
                   required
+                  maxLength={18} // +7 (999) 123-45-67 = 18 символов
                 />
               </div>
               <div>
@@ -118,8 +151,8 @@ const ContactSection = () => {
                   required
                 />
               </div>
-              <Button type="submit" variant="hero" size="lg" className="w-full">
-                Отправить сообщение
+              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Отправка..." : "Отправить сообщение"}
               </Button>
             </form>
           </div>

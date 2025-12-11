@@ -9,7 +9,7 @@ const HeroSection = () => {
       <div className="absolute bottom-20 right-10 w-96 h-96 bg-soft-peach rounded-full blur-blob" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-light-pink rounded-full blur-blob opacity-40" />
 
-      <div className="container mx-auto px-6 relative z-10">
+      <div className="container mx-auto px-6 relative z-10 pb-24 lg:pb-10">
         <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
           {/* Text Content */}
           <div className="flex-1 text-center lg:text-left">
@@ -49,9 +49,9 @@ const HeroSection = () => {
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fade-in opacity-0 delay-600">
+        <div className="absolute bottom-4 lg:bottom-10 left-1/2 -translate-x-1/2 animate-fade-in opacity-0 delay-600 z-20">
           <a href="#about" className="flex flex-col items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-            <span className="text-sm">Прокрутить вниз</span>
+            <span className="text-sm hidden sm:block">Прокрутить вниз</span>
             <ArrowDown className="w-5 h-5 animate-bounce" />
           </a>
         </div>

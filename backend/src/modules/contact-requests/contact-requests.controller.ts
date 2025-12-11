@@ -1,0 +1,102 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ContactRequestsService } from './contact-requests.service';
+import { CreateContactRequestDto } from './dto/create-contact-request.dto';
+import { UpdateContactRequestDto } from './dto/update-contact-request.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../../entities/user.entity';
+
+@ApiTags('contact-requests')
+@Controller('contact-requests')
+export class ContactRequestsController {
+  constructor(private readonly contactRequestsService: ContactRequestsService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Создание заявки обратной связи (публичный endpoint)' })
+  async create(@Body() createDto: CreateContactRequestDto) {
+    return await this.contactRequestsService.create(createDto);
+  }
+
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Получение списка заявок' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return await this.contactRequestsService.findAll(pageNum, limitNum);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Получение заявки по ID' })
+  async findOne(@Param('id') id: string) {
+    return await this.contactRequestsService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Обновление заявки' })
+  async update(@Param('id') id: string, @Body() updateDto: UpdateContactRequestDto) {
+    return await this.contactRequestsService.update(id, updateDto);
+  }
+
+  @Patch(':id/read')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Отметить заявку как прочитанную' })
+  async markAsRead(@Param('id') id: string) {
+    return await this.contactRequestsService.markAsRead(id);
+  }
+
+  @Patch(':id/processed')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Отметить заявку как обработанную' })
+  async markAsProcessed(@Param('id') id: string) {
+    return await this.contactRequestsService.markAsProcessed(id);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Удаление заявки' })
+  async remove(@Param('id') id: string) {
+    await this.contactRequestsService.remove(id);
+    return { message: 'Заявка успешно удалена' };
+  }
+
+  @Post('bulk-delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Массовое удаление заявок' })
+  async bulkDelete(@Body() body: { ids: string[] }) {
+    await this.contactRequestsService.bulkDelete(body.ids);
+    return { message: 'Заявки успешно удалены' };
+  }
+}
+
