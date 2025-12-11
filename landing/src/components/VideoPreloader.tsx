@@ -26,9 +26,6 @@ const VideoPreloader = ({ onVideoEnd, videoPath = '/video.mp4' }: VideoPreloader
     const video = videoRef.current;
     if (!video) return;
 
-    // Устанавливаем громкость на 70% (0.7)
-    video.volume = 0.7;
-
     // Обработка окончания видео
     const handleEnded = () => {
       setHasEnded(true);
@@ -44,8 +41,15 @@ const VideoPreloader = ({ onVideoEnd, videoPath = '/video.mp4' }: VideoPreloader
       onVideoEnd();
     };
 
+    // Устанавливаем громкость на 70% (0.7) после загрузки метаданных
+    const handleLoadedMetadata = () => {
+      video.volume = 0.7;
+      video.muted = false; // Размучиваем после установки громкости
+    };
+
     video.addEventListener('ended', handleEnded);
     video.addEventListener('error', handleError);
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
 
     // Автоматически начинаем воспроизведение
     const playPromise = video.play();
@@ -60,6 +64,7 @@ const VideoPreloader = ({ onVideoEnd, videoPath = '/video.mp4' }: VideoPreloader
     return () => {
       video.removeEventListener('ended', handleEnded);
       video.removeEventListener('error', handleError);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
     };
   }, [isMobile, onVideoEnd, videoPath]);
 
@@ -78,9 +83,10 @@ const VideoPreloader = ({ onVideoEnd, videoPath = '/video.mp4' }: VideoPreloader
         ref={videoRef}
         className="w-full h-full object-cover"
         playsInline
-        muted={false}
+        muted
         autoPlay
         preload="auto"
+        loop={false}
       >
         <source src={videoPath} type="video/mp4" />
         Ваш браузер не поддерживает видео.

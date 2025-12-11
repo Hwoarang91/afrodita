@@ -36,16 +36,11 @@ const HeroSection = () => {
           {/* Avatar/Illustration */}
           <div className="flex-1 flex justify-center animate-scale-in opacity-0 delay-500">
             <div className="relative">
-              <div className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-full bg-gradient-to-br from-light-pink via-blush to-soft-peach shadow-medium flex items-center justify-center animate-float">
-                <div 
-                  className="w-[90%] h-[90%] rounded-full shadow-soft relative overflow-hidden"
-                  style={{
-                    backgroundImage: 'url(/hero-photo.jpg)',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat',
-                    zIndex: 0
-                  }}
+              <div className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-full bg-gradient-to-br from-light-pink via-blush to-soft-peach shadow-medium flex items-center justify-center animate-float overflow-hidden">
+                <img
+                  src="/hero-photo.jpg"
+                  alt="Мария"
+                  className="w-[90%] h-[90%] object-cover rounded-full"
                 />
               </div>
               {/* Decorative elements */}
