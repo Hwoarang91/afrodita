@@ -89,6 +89,11 @@ const GallerySection = () => {
                   src={work.image}
                   alt={work.title}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  loading="lazy"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/placeholder.svg';
+                  }}
                 />
               </div>
               
@@ -148,6 +153,10 @@ const GallerySection = () => {
                     src={works[selectedImage].image.replace('w=600&h=400', 'w=1200&h=800')}
                     alt={works[selectedImage].title}
                     className="w-full h-full object-contain"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = '/placeholder.svg';
+                    }}
                   />
                 </div>
 

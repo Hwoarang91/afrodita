@@ -16,7 +16,7 @@ const ContactSection = () => {
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
+    phone: "",
     message: "",
   });
 
@@ -26,7 +26,7 @@ const ContactSection = () => {
       title: "Сообщение отправлено!",
       description: "Я свяжусь с вами в ближайшее время.",
     });
-    setFormData({ name: "", email: "", message: "" });
+    setFormData({ name: "", phone: "", message: "" });
   };
 
   const socials = [
@@ -66,7 +66,7 @@ const ContactSection = () => {
                 <div className="w-10 h-10 rounded-full bg-light-pink flex items-center justify-center">
                   <MapPin className="w-5 h-5 text-primary" />
                 </div>
-                <span className="text-foreground">Москва, Россия</span>
+                <span className="text-foreground">Волгоград, Россия</span>
               </div>
 
               {/* Social Links */}
@@ -101,10 +101,10 @@ const ContactSection = () => {
               </div>
               <div>
                 <Input
-                  type="email"
-                  placeholder="Ваш email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  type="tel"
+                  placeholder="Ваш номер телефона"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="h-12 rounded-xl bg-card border-border shadow-soft focus:shadow-medium focus:border-primary/50 transition-all"
                   required
                 />

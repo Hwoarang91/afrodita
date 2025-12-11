@@ -83,11 +83,11 @@ RUN if [ -d "dist/migrations" ] && [ -n "$(ls -A dist/migrations/*.js 2>/dev/nul
       ls -la dist/migrations/ 2>/dev/null || echo "Директория не существует"; \
     fi
 
-# Копируем bcrypt из builder stage (уже скомпилирован)
-# Это необходимо, так как bcrypt требует компиляции нативных модулей
-# Внутри bcrypt уже есть все необходимые зависимости
-RUN mkdir -p node_modules
-COPY --from=builder /app/node_modules/bcrypt ./node_modules/bcrypt
+# Устанавливаем bcrypt в production stage
+# bcrypt требует компиляции нативных модулей, поэтому устанавливаем его отдельно
+RUN apk add --no-cache python3 make g++ && \
+    npm install bcrypt && \
+    apk del python3 make g++
 
 EXPOSE 3001
 

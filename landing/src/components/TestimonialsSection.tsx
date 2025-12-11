@@ -100,6 +100,11 @@ const TestimonialsSection = () => {
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-peach/30 rounded-full blur-lg transform scale-110"></div>
                     <img
                       src={testimonials[currentIndex].avatar}
+                      loading="lazy"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = '/placeholder.svg';
+                      }}
                       alt={testimonials[currentIndex].name}
                       className="relative w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-4 border-white shadow-lg"
                     />

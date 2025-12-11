@@ -1,35 +1,7 @@
 import { Calendar, Clock, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "./ui/button";
-
-const blogPosts = [
-  {
-    id: 1,
-    title: "Польза антицеллюлитного массажа для красоты тела",
-    excerpt: "Как профессиональный массаж помогает улучшить состояние кожи, убрать целлюлит и обрести уверенность в себе.",
-    image: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=600&h=400&fit=crop",
-    category: "Красота",
-    date: "15 декабря 2024",
-    readTime: "5 мин"
-  },
-  {
-    id: 2,
-    title: "Массаж лица: секреты омоложения и подтяжки",
-    excerpt: "Почему лифтинг-массаж эффективнее дорогих кремов и как правильно ухаживать за кожей лица.",
-    image: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600&h=400&fit=crop",
-    category: "Уход",
-    date: "10 декабря 2024",
-    readTime: "7 мин"
-  },
-  {
-    id: 3,
-    title: "Ароматерапия: сила эфирных масел для релаксации",
-    excerpt: "Как правильно использовать натуральные масла в массаже для глубокого расслабления и восстановления энергии.",
-    image: "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=600&h=400&fit=crop",
-    category: "Релаксация",
-    date: "5 декабря 2024",
-    readTime: "6 мин"
-  }
-];
+import { blogPosts } from "@/data/blogPosts";
 
 const BlogSection = () => {
   return (
@@ -53,34 +25,43 @@ const BlogSection = () => {
             </p>
           </div>
 
-          <Button variant="soft" className="self-start md:self-auto group">
-            Все статьи
-            <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
-          </Button>
+          <Link to="/blog">
+            <Button variant="soft" className="self-start md:self-auto group">
+              Все статьи
+              <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </Button>
+          </Link>
         </div>
 
         {/* Blog Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-          {blogPosts.map((post, index) => (
+          {blogPosts.slice(0, 3).map((post, index) => (
             <article
               key={post.id}
               className="group bg-white/80 backdrop-blur-sm rounded-3xl overflow-hidden shadow-soft hover:shadow-lg transition-all duration-500 border border-primary/5 hover:border-primary/20 animate-fade-in"
               style={{ animationDelay: `${index * 150}ms` }}
             >
               {/* Image */}
-              <div className="relative overflow-hidden aspect-[4/3]">
-                <img
-                  src={post.image}
-                  alt={post.title}
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                
-                {/* Category Badge */}
-                <span className="absolute top-4 left-4 px-3 py-1 bg-white/90 backdrop-blur-sm text-primary text-sm font-medium rounded-full shadow-sm">
-                  {post.category}
-                </span>
-              </div>
+              <Link to={`/blog/${post.id}`}>
+                <div className="relative overflow-hidden aspect-[4/3]">
+                  <img
+                    src={post.image}
+                    alt={post.title}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    loading="lazy"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = '/placeholder.svg';
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  
+                  {/* Category Badge */}
+                  <span className="absolute top-4 left-4 px-3 py-1 bg-white/90 backdrop-blur-sm text-primary text-sm font-medium rounded-full shadow-sm">
+                    {post.category}
+                  </span>
+                </div>
+              </Link>
 
               {/* Content */}
               <div className="p-6 md:p-8">
@@ -97,9 +78,11 @@ const BlogSection = () => {
                 </div>
 
                 {/* Title */}
-                <h3 className="font-display font-semibold text-xl text-foreground mb-3 group-hover:text-primary transition-colors duration-300 line-clamp-2">
-                  {post.title}
-                </h3>
+                <Link to={`/blog/${post.id}`}>
+                  <h3 className="font-display font-semibold text-xl text-foreground mb-3 group-hover:text-primary transition-colors duration-300 line-clamp-2">
+                    {post.title}
+                  </h3>
+                </Link>
 
                 {/* Excerpt */}
                 <p className="text-muted-foreground text-sm leading-relaxed mb-6 line-clamp-3">
@@ -107,10 +90,12 @@ const BlogSection = () => {
                 </p>
 
                 {/* Read More Link */}
-                <button className="inline-flex items-center text-primary font-medium text-sm group/link">
-                  Читать далее
-                  <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover/link:translate-x-1" />
-                </button>
+                <Link to={`/blog/${post.id}`}>
+                  <Button variant="ghost" className="p-0 h-auto text-primary font-medium text-sm group/link hover:bg-transparent">
+                    Читать далее
+                    <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover/link:translate-x-1" />
+                  </Button>
+                </Link>
               </div>
             </article>
           ))}
