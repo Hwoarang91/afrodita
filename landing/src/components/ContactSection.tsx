@@ -42,10 +42,11 @@ const ContactSection = () => {
         description: "Я свяжусь с вами в ближайшее время.",
       });
       setFormData({ name: "", phone: "", message: "" });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Не удалось отправить сообщение. Попробуйте позже.";
       toast({
         title: "Ошибка",
-        description: error.message || "Не удалось отправить сообщение. Попробуйте позже.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
