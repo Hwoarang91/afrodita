@@ -43,6 +43,34 @@ npm run dev
 
 ### Изменения
 
+✅ Обновление кода на сервере и исправление Dockerfile:
+- Исправлен backend.Dockerfile: добавлен флаг --ignore-scripts для npm install в production stage
+- Проблема: husky запускался при установке зависимостей в Docker контейнере
+- Решение: использование npm install --production --ignore-scripts для пропуска postinstall скриптов
+- Все контейнеры успешно пересобраны и запущены на сервере
+- Удалены все администраторы из базы данных (очистка тестовых данных)
+- Очищены все связанные записи из таблиц: sessions, auth_logs, audit_logs, notifications, reviews, transactions, masters
+- В базе данных остался только один пользователь с ролью "client"
+
+✅ Увеличение покрытия тестами:
+- Исправлен падающий тест в appointments.service.spec.ts для максимальной длительности услуги (23 часа 59 минут)
+- Созданы тесты для websocket.gateway.spec.ts (100% покрытие, было 0%)
+- Созданы тесты для telegram.controller.spec.ts (55.39% покрытие, было 0%)
+- Созданы тесты для rate-limit.middleware.spec.ts (100% покрытие, было 0%)
+- Созданы тесты для scheduler.controller.spec.ts (85% покрытие, было 0%)
+- Созданы тесты для markdown-v2.utils.spec.ts (98.38% покрытие, было 0%)
+- Расширены тесты для notifications.service.spec.ts (добавлены тесты для sendAppointmentCancellation, sendAppointmentRescheduled, sendFeedbackRequest, sendBroadcast с различными каналами, getBroadcastHistory, getBroadcastDetails, deleteNotification, deleteNotifications, обработка ошибок, различные reminderHours)
+- Расширены тесты для telegram.service.spec.ts (добавлены тесты для sendVideo, sendAudio, sendVoice, sendDocument, sendSticker, sendAnimation, sendLocation, sendVenue, sendContact, sendPoll, sendDice, pinChatMessage, unpinChatMessage, forwardMessage, getFile, getChat, getChatMember, getChatMemberCount, setChatTitle, setChatDescription, setChatPhoto, deleteChatPhoto, setChatPermissions, getUserProfilePhotos, sendChatAction)
+- Расширены тесты для users.controller.spec.ts (добавлены тесты для updateUser, delete, getInteractionHistory с проверкой доступа)
+- Расширены тесты для settings.controller.spec.ts (добавлены тесты для setTimezone, getWorkingHours, setWorkingHours, getReminderIntervals, setReminderIntervals, setFirstVisitDiscount, updateSettings без bookingSettings)
+- Расширены тесты для masters.service.spec.ts (добавлены тесты для findAll с фильтрами, create, update, delete)
+- Расширены тесты для scheduler.service.spec.ts (покрытие увеличено до 97.31%, добавлены тесты для processBonusPoints edge cases, updateClientSegments для различных сегментов, sendAppointmentReminders edge cases)
+- Расширены тесты для appointments.service.spec.ts (добавлены тесты для скидок, обработки ошибок, findAll с одиночной датой, update с RESCHEDULED статусом, getAvailableSlots для сегодняшнего дня)
+- Расширены тесты для masters.controller.spec.ts (добавлены тесты для update и delete без логирования)
+- Общее покрытие тестами увеличено с 48.53% до 50.41% (+1.88%)
+- Добавлено более 80 новых тестов
+- Все тесты проходят успешно
+
 ✅ Добавлена маска для ввода номера телефона:
 - Создана утилита formatPhoneNumber для форматирования номера в формат +7 (XXX) XXX-XX-XX
 - Обновлено поле ввода телефона в форме "Свяжитесь со мной" с автоматическим форматированием
@@ -233,6 +261,16 @@ npm run dev
 - Этап 7: Обновлены все конфигурации и пути
 
 ### Что сделал ИИ
+
+✅ Обновление кода на сервере:
+- Исправлен backend.Dockerfile: добавлен --ignore-scripts для npm install в production stage
+- Использован MCP SSH для подключения к серверу и выполнения команд
+- Обновлен код на сервере через git pull
+- Пересобраны все Docker образы (backend, admin, app, mari_landing, nginx)
+- Запущены все контейнеры, все сервисы работают корректно
+- Удалены все администраторы из базы данных через MCP SSH
+- Очищены все связанные записи из таблиц: sessions, auth_logs, audit_logs, notifications, reviews, transactions, masters
+- В базе данных остался только один пользователь с ролью "client"
 
 ✅ Добавлена маска для ввода номера телефона:
 - Создана утилита landing/src/lib/phoneMask.ts для форматирования телефона

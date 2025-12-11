@@ -37,9 +37,16 @@ const HeroSection = () => {
           <div className="flex-1 flex justify-center animate-scale-in opacity-0 delay-500">
             <div className="relative">
               <div className="w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-full bg-gradient-to-br from-light-pink via-blush to-soft-peach shadow-medium flex items-center justify-center animate-float">
-                <div className="w-[90%] h-[90%] rounded-full bg-card shadow-soft flex items-center justify-center">
-                  <span className="font-serif text-6xl md:text-7xl lg:text-8xl text-primary">М</span>
-                </div>
+                <div 
+                  className="w-[90%] h-[90%] rounded-full shadow-soft relative overflow-hidden"
+                  style={{
+                    backgroundImage: 'url(/hero-photo.jpg)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat',
+                    zIndex: 0
+                  }}
+                />
               </div>
               {/* Decorative elements */}
               <div className="absolute -top-4 -right-4 w-16 h-16 bg-primary/20 rounded-full animate-float" style={{ animationDelay: '1s' }} />

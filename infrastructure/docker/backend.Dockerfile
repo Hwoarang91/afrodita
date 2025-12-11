@@ -67,7 +67,7 @@ WORKDIR /app
 
 # Копируем package файлы и устанавливаем только production зависимости
 COPY backend/package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --production
 
 # Копируем собранные файлы из builder stage (включая скомпилированные миграции)
 COPY --from=builder /app/dist ./dist
