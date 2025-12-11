@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+// @ts-ignore - tailwindcss-animate is a CommonJS module
 import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
