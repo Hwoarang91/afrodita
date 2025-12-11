@@ -1,39 +1,7 @@
-import { Heart, Sparkles, Scissors, Flower2, Droplets, Hand } from "lucide-react";
+import { Link } from "react-router-dom";
+import { services } from "@/data/services";
 
 const WorkSection = () => {
-  const works = [
-    {
-      icon: Hand,
-      title: "Классический массаж",
-      description: "Расслабляющий и лечебный массаж всего тела для снятия напряжения и улучшения самочувствия",
-    },
-    {
-      icon: Heart,
-      title: "Антицеллюлитный массаж",
-      description: "Профессиональная коррекция фигуры и улучшение состояния кожи с использованием специальных техник",
-    },
-    {
-      icon: Sparkles,
-      title: "Массаж лица",
-      description: "Омолаживающий и лифтинг-массаж для подтяжки кожи и улучшения цвета лица",
-    },
-    {
-      icon: Droplets,
-      title: "Ароматерапия",
-      description: "Массаж с использованием натуральных эфирных масел для глубокой релаксации и восстановления",
-    },
-    {
-      icon: Flower2,
-      title: "Уход за телом",
-      description: "Обертывания, скрабирование и другие процедуры для красоты и здоровья кожи",
-    },
-    {
-      icon: Scissors,
-      title: "Корректирующий массаж",
-      description: "Специализированные техники для работы с проблемными зонами и восстановления тонуса",
-    },
-  ];
-
   return (
     <section id="work" className="py-20 md:py-32 gradient-soft">
       <div className="container mx-auto px-6">
@@ -48,23 +16,35 @@ const WorkSection = () => {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {works.map((work, index) => (
-            <div
-              key={index}
-              className="group p-6 md:p-8 bg-card rounded-2xl shadow-soft hover-lift hover-glow cursor-pointer"
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              <div className="w-14 h-14 rounded-xl bg-light-pink flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
-                <work.icon className="w-7 h-7 text-primary" />
-              </div>
-              <h3 className="font-serif text-xl font-semibold text-foreground mb-3">
-                {work.title}
-              </h3>
-              <p className="text-muted-foreground leading-relaxed">
-                {work.description}
-              </p>
-            </div>
-          ))}
+          {services.map((service, index) => {
+            const ServiceIcon = service.icon;
+            return (
+              <Link
+                key={service.id}
+                to={`/service/${service.id}`}
+                className="group p-6 md:p-8 bg-card rounded-2xl shadow-soft hover-lift hover-glow cursor-pointer block"
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
+                <div className="w-14 h-14 rounded-xl bg-light-pink flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
+                  <ServiceIcon className="w-7 h-7 text-primary" />
+                </div>
+                <h3 className="font-serif text-xl font-semibold text-foreground mb-3 group-hover:text-primary transition-colors">
+                  {service.title}
+                </h3>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  {service.shortDescription}
+                </p>
+                <div className="flex items-center justify-between pt-4 border-t border-primary/10">
+                  <span className="text-primary font-semibold text-lg">
+                    {service.price.toLocaleString('ru-RU')} ₽
+                  </span>
+                  <span className="text-muted-foreground text-sm">
+                    {service.duration} мин
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>
