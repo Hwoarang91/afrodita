@@ -14,10 +14,24 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem('admin-token');
       // Определяем базовый путь из window.location, так как Nginx удаляет префикс /admin
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+      const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
       const basePath = '/admin'; // Всегда используем /admin для админ панели
       // Проверяем, находимся ли мы на странице логина или регистрации (с учетом basePath)
-      const isLoginPage = pathname === '/login' || currentPath === '/admin/login' || currentPath.endsWith('/login');
-      const isRegisterPage = pathname === '/register' || currentPath === '/admin/register' || currentPath.endsWith('/register');
+      // Используем несколько проверок для надежности
+      const isLoginPage = 
+        pathname === '/login' || 
+        currentPath === '/admin/login' || 
+        currentPath === '/login' ||
+        currentUrl.includes('/admin/login') ||
+        currentUrl.includes('/login') ||
+        currentPath.endsWith('/login');
+      const isRegisterPage = 
+        pathname === '/register' || 
+        currentPath === '/admin/register' || 
+        currentPath === '/register' ||
+        currentUrl.includes('/admin/register') ||
+        currentUrl.includes('/register') ||
+        currentPath.endsWith('/register');
 
       // Если мы на странице логина или регистрации - очищаем токен и не делаем проверку авторизации
       // Это предотвращает бесконечный редирект, если токен есть, но пользователя нет в БД
@@ -66,55 +80,46 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             window.location.href = '/admin/login';
             return;
           }
-        } catch (error: any) {
-          // Если ошибка при проверке (например, 401) - очищаем токен
-          // Это означает, что токен невалидный или пользователя нет в БД
-          if (error?.response?.status === 401) {
-            console.log('401 при проверке setup - очищаем токен');
-            // Очищаем токен, так как он невалидный
-            localStorage.removeItem('admin-token');
-            localStorage.removeItem('admin-user');
-            document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
-            
-            // Если нет пользователей - редиректим на регистрацию
-            // Если есть пользователи, но токен невалидный - редиректим на логин
-            // Но только если мы не на странице логина/регистрации
-            if (!isLoginPage && !isRegisterPage) {
-              // Проверяем, есть ли пользователи (без токена)
-              try {
-                const checkResponse = await apiClient.get('/auth/check-setup');
-                if (!checkResponse.data.hasUsers) {
-                  window.location.href = '/admin/register';
-                  return;
-                }
-              } catch (checkError) {
-                // Если не удалось проверить - редиректим на логин
-                window.location.href = '/admin/login';
-                return;
-              }
-              window.location.href = '/admin/login';
-              return;
-            }
-          } else {
-            console.error('Ошибка при проверке настройки системы:', error);
-            // Если ошибка и мы на странице регистрации - редиректим на логин (безопаснее)
-            if (isRegisterPage) {
+        } catch (error: unknown) {
+          // Обрабатываем ошибку проверки setup
+          // /auth/check-setup не требует аутентификации, поэтому 401 здесь не ожидается
+          const axiosError = error as { response?: { status?: number }; message?: string };
+          console.error('Ошибка при проверке настройки системы:', error);
+          
+          // Если это сетевая ошибка (не 401) - просто логируем и продолжаем
+          // Если 401 - это странно, но тоже продолжаем (не должен требовать авторизации)
+          // Если нет администраторов - редиректим на регистрацию
+          // Если есть администраторы и мы на странице регистрации - редиректим на логин
+          if (isRegisterPage) {
+            // На странице регистрации при любой ошибке - пробуем редирект на логин
+            // Но только если у нас нет токена (если есть токен - значит уже авторизованы)
+            if (!token) {
               window.location.href = '/admin/login';
               return;
             }
           }
+          // В других случаях при ошибке проверки setup просто продолжаем
+          // Это не критичная проверка, и если токен есть - пользователь может работать
         }
       }
       
       // Используем window.location.href для редиректа, всегда через /admin
+      // Если нет токена и мы не на странице логина/регистрации - редиректим на логин
       if (!token && !isLoginPage && !isRegisterPage) {
         // Всегда редиректим на /admin/login
         window.location.href = '/admin/login';
-      } else if (token && (isLoginPage || isRegisterPage)) {
-        window.location.href = '/admin/dashboard';
-      } else {
-        setIsChecking(false);
+        return;
       }
+      
+      // Если есть токен и мы на странице логина/регистрации - редиректим на dashboard
+      if (token && (isLoginPage || isRegisterPage)) {
+        // Редиректим на dashboard
+        window.location.href = '/admin/dashboard';
+        return;
+      }
+      
+      // Если дошли сюда - значит все проверки пройдены и мы можем показать контент
+      setIsChecking(false);
     };
 
     checkAuth();

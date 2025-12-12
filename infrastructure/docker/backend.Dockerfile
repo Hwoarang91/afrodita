@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Установка tzdata и build tools для компиляции нативных модулей (bcrypt)
 RUN apk add --no-cache tzdata python3 make g++
@@ -53,7 +53,7 @@ RUN if [ -d "src/migrations" ] && [ -n "$(ls -A src/migrations/*.ts 2>/dev/null)
     fi
 
 # Production stage
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Установка tzdata и wget для health checks
 RUN apk add --no-cache tzdata wget

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { AxiosError, getErrorMessage } from '@/lib/types';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -18,10 +19,19 @@ export default function LoginPage() {
 
   // Очищаем токен при загрузке страницы логина
   // Это предотвращает проблемы с невалидными токенами от предыдущих сессий
+  // НО только если мы действительно зашли на страницу логина (не после успешного логина)
   useEffect(() => {
-    localStorage.removeItem('admin-token');
-    localStorage.removeItem('admin-user');
-    document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+    // Проверяем, не был ли только что успешный логин
+    // Если в sessionStorage есть флаг успешного логина - не очищаем токен
+    const justLoggedIn = sessionStorage.getItem('just-logged-in');
+    if (!justLoggedIn) {
+      localStorage.removeItem('admin-token');
+      localStorage.removeItem('admin-user');
+      document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+    } else {
+      // Удаляем флаг после использования
+      sessionStorage.removeItem('just-logged-in');
+    }
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,15 +52,19 @@ export default function LoginPage() {
         }
         // Сохраняем токен в cookies для Server Components
         document.cookie = `admin-token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        // Устанавливаем флаг успешного логина в sessionStorage
+        // Это предотвратит очистку токена при следующей загрузке страницы
+        sessionStorage.setItem('just-logged-in', 'true');
         // Используем window.location для редиректа с учетом basePath
         window.location.href = '/admin/dashboard';
       } else {
         setError('Неверный email или пароль');
+        setIsLoading(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Обрабатываем ошибку авторизации - показываем сообщение и остаемся на странице
-      const errorMessage = err.response?.data?.message || 'Ошибка при входе. Проверьте данные.';
-      setError(errorMessage);
+      const errorMessage = getErrorMessage(err);
+      setError(errorMessage || 'Ошибка при входе. Проверьте данные.');
       setIsLoading(false);
       // НЕ делаем редирект при ошибке - остаемся на странице логина
       // Ошибка будет обработана interceptor в api.ts, который не должен делать редирект

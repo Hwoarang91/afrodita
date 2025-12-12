@@ -6,7 +6,7 @@
   "root": ".",
   "compilerOptions": {
     "deleteOutDir": true,
-    "webpack": false,
+    "builder": "tsc",
     "tsConfigPath": "tsconfig.json",
     "assets": [],
     "watchAssets": true
