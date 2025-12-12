@@ -55,7 +55,20 @@ apiClient.interceptors.request.use((config) => {
     }
     
     // Добавляем токен авторизации
-    const token = localStorage.getItem('admin-token');
+    // Проверяем сначала localStorage, затем cookies как fallback
+    let token = localStorage.getItem('admin-token');
+    if (!token && typeof document !== 'undefined') {
+      // Fallback: пытаемся получить токен из cookies
+      const cookieToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('admin-token='))
+        ?.split('=')[1];
+      if (cookieToken) {
+        token = cookieToken;
+        // Синхронизируем обратно в localStorage для последующих запросов
+        localStorage.setItem('admin-token', cookieToken);
+      }
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

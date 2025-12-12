@@ -46,16 +46,24 @@ export default function LoginPage() {
       });
 
       if (data.token) {
+        // Сохраняем токен в localStorage
         localStorage.setItem('admin-token', data.token);
         if (data.user) {
           localStorage.setItem('admin-user', JSON.stringify(data.user));
         }
         // Сохраняем токен в cookies для Server Components
-        document.cookie = `admin-token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        // Используем полный путь для cookies, чтобы они были доступны на всех подстраницах
+        document.cookie = `admin-token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure`;
         // Устанавливаем флаг успешного логина в sessionStorage
         // Это предотвратит очистку токена при следующей загрузке страницы
         sessionStorage.setItem('just-logged-in', 'true');
+        
+        // Даем время браузеру сохранить данные перед редиректом
+        // Это важно для синхронизации localStorage и cookies
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Используем window.location для редиректа с учетом basePath
+        // Это гарантирует полную перезагрузку страницы и применение всех cookies
         window.location.href = '/admin/dashboard';
       } else {
         setError('Неверный email или пароль');
