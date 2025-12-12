@@ -7,12 +7,24 @@ import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { Save } from 'lucide-react';
 
+interface VerifiedUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  username?: string;
+  phone?: string;
+  telegramId: string;
+  role: string;
+  createdAt: string;
+}
+
 interface Settings {
   businessName: string;
   businessPhone: string;
   businessEmail: string;
   businessAddress: string;
   timezone?: string;
+  telegramAdminUserId?: string | null;
   workingHours: {
     start: string;
     end: string;
@@ -98,17 +110,19 @@ export default function SettingsPage() {
         const defaultSettings = getDefaultSettings();
         
         // Загружаем настройки с сервера
-        const [settingsData, timezoneData, reminderIntervalsData, firstVisitDiscountData] = await Promise.all([
+        const [settingsData, timezoneData, reminderIntervalsData, firstVisitDiscountData, telegramAdminData] = await Promise.all([
           apiClient.get('/settings').catch(() => ({ data: {} })),
           apiClient.get('/settings/timezone').catch(() => ({ data: { value: 'Europe/Moscow' } })),
           apiClient.get('/settings/reminder-intervals').catch(() => ({ data: { value: defaultSettings.notifications.reminderIntervals } })),
           apiClient.get('/settings/first-visit-discount').catch(() => ({ data: { value: defaultSettings.firstVisitDiscount } })),
+          apiClient.get('/settings/telegram-admin-user').catch(() => ({ data: { value: null } })),
         ]);
         
         // Объединяем настройки из API с дефолтными значениями
         const mergedSettings = {
           ...defaultSettings,
           timezone: timezoneData.data.value || defaultSettings.timezone || 'Europe/Moscow',
+          telegramAdminUserId: telegramAdminData.data.value?.id || null,
           bookingSettings: {
             ...defaultSettings.bookingSettings,
             ...(settingsData.data.bookingSettings || {}),
@@ -130,6 +144,22 @@ export default function SettingsPage() {
     },
     refetchOnWindowFocus: true, // Обновлять при фокусе окна
     staleTime: 0, // Всегда считать данные устаревшими
+  });
+
+  // Загружаем список верифицированных пользователей
+  const { data: verifiedUsersData } = useQuery({
+    queryKey: ['verified-users'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get<{ data: VerifiedUser[] }>('/settings/verified-users');
+        return response.data.data || [];
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[SettingsPage] Ошибка при загрузке верифицированных пользователей:', error);
+        }
+        return [];
+      }
+    },
   });
 
   const [formData, setFormData] = useState<Settings>(getDefaultSettings());
@@ -179,6 +209,13 @@ export default function SettingsPage() {
           });
         }
         
+        // Сохраняем администратора Telegram бота
+        if (data.telegramAdminUserId !== undefined) {
+          await apiClient.put('/settings/telegram-admin-user', {
+            userId: data.telegramAdminUserId || null,
+          });
+        }
+        
         // Также сохраняем в localStorage для совместимости
         localStorage.setItem('admin-settings', JSON.stringify(data));
       } catch (error: any) {
@@ -211,16 +248,20 @@ export default function SettingsPage() {
     });
   };
 
-  if (isLoading) {
-    return <div className="p-8">Загрузка...</div>;
-  }
-
   const tabs = [
-    { id: 'general', label: 'Общие', icon: '🏢' },
-    { id: 'booking', label: 'Записи', icon: '📅' },
-    { id: 'notifications', label: 'Уведомления', icon: '🔔' },
-    { id: 'bonuses', label: 'Бонусы', icon: '🎁' },
+    { id: 'general', label: 'Общие', icon: 'building' },
+    { id: 'booking', label: 'Записи', icon: 'calendar' },
+    { id: 'notifications', label: 'Уведомления', icon: 'bell' },
+    { id: 'bonuses', label: 'Бонусы', icon: 'gift' },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="p-8">
+        Загрузка...
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -337,6 +378,29 @@ export default function SettingsPage() {
                     <option value="Asia/Irkutsk">Иркутск (UTC+8)</option>
                     <option value="Asia/Vladivostok">Владивосток (UTC+10)</option>
                     <option value="Europe/London">Лондон (UTC+0)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Администратор Telegram бота и веб-приложения
+                  </label>
+                  <select
+                    value={formData.telegramAdminUserId || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, telegramAdminUserId: e.target.value || null })
+                    }
+                    className="w-full px-3 py-2 border border-input rounded-lg bg-background"
+                  >
+                    <option value="">Не выбран</option>
+                    {verifiedUsersData?.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.firstName} {user.lastName} {user.username ? `(@${user.username})` : ''} {user.phone ? `- ${user.phone}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Выберите пользователя, прошедшего верификацию через Telegram бота
+                  </p>
                     <option value="Europe/Berlin">Берлин (UTC+1)</option>
                     <option value="America/New_York">Нью-Йорк (UTC-5)</option>
                     <option value="America/Los_Angeles">Лос-Анджелес (UTC-8)</option>
