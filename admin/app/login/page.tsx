@@ -53,14 +53,27 @@ export default function LoginPage() {
         }
         // Сохраняем токен в cookies для Server Components
         // Используем полный путь для cookies, чтобы они были доступны на всех подстраницах
-        document.cookie = `admin-token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure`;
+        // Убираем Secure флаг, так как он может вызывать проблемы в некоторых конфигурациях
+        const cookieExpiry = 7 * 24 * 60 * 60; // 7 дней
+        document.cookie = `admin-token=${data.token}; path=/; max-age=${cookieExpiry}; SameSite=Lax`;
+        
         // Устанавливаем флаг успешного логина в sessionStorage
         // Это предотвратит очистку токена при следующей загрузке страницы
         sessionStorage.setItem('just-logged-in', 'true');
         
         // Даем время браузеру сохранить данные перед редиректом
-        // Это важно для синхронизации localStorage и cookies
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Увеличиваем задержку до 200ms для гарантии сохранения
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Проверяем, что токен действительно сохранился
+        const savedToken = localStorage.getItem('admin-token');
+        if (!savedToken || savedToken !== data.token) {
+          console.error('Токен не сохранился в localStorage, повторная попытка...');
+          localStorage.setItem('admin-token', data.token);
+          // Еще одна попытка с cookie
+          document.cookie = `admin-token=${data.token}; path=/; max-age=${cookieExpiry}; SameSite=Lax`;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
         
         // Используем window.location для редиректа с учетом basePath
         // Это гарантирует полную перезагрузку страницы и применение всех cookies
