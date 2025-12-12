@@ -27,6 +27,7 @@ describe('AuthService', () => {
     findOne: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
+    count: jest.fn(),
   };
 
   const mockSessionRepository = {
@@ -332,6 +333,7 @@ describe('AuthService', () => {
       const result = await service.validateTelegramAuth(telegramData as any);
 
       expect(result.firstName).toBe(telegramData.first_name);
+      expect(result.role).toBe(UserRole.CLIENT); // Роль должна остаться CLIENT
       expect(mockUserRepository.save).toHaveBeenCalled();
       
       // Очищаем spy после теста
@@ -554,14 +556,22 @@ describe('AuthService', () => {
         hash: 'hash',
       };
 
+      const mockUser = {
+        id: '1',
+        telegramId: telegramData.id,
+        firstName: '',
+        role: UserRole.CLIENT,
+      } as User;
+
       mockConfigService.get.mockReturnValue('bot_token');
       jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
       mockUserRepository.findOne.mockResolvedValue(null);
-      mockUserRepository.create.mockReturnValue({} as User);
-      mockUserRepository.save.mockResolvedValue({ id: '1' } as User);
+      mockUserRepository.create.mockReturnValue(mockUser);
+      mockUserRepository.save.mockResolvedValue(mockUser);
 
       const result = await service.validateTelegramAuth(telegramData as any);
       expect(result).toBeDefined();
+      expect(result.role).toBe(UserRole.CLIENT);
     });
 
     it('должен обработать очень длинный first_name (100+ символов)', async () => {
@@ -572,14 +582,98 @@ describe('AuthService', () => {
         hash: 'hash',
       };
 
+      const mockUser = {
+        id: '1',
+        telegramId: telegramData.id,
+        firstName: 'A'.repeat(100),
+        role: UserRole.CLIENT,
+      } as User;
+
       mockConfigService.get.mockReturnValue('bot_token');
       jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
       mockUserRepository.findOne.mockResolvedValue(null);
-      mockUserRepository.create.mockReturnValue({} as User);
-      mockUserRepository.save.mockResolvedValue({ id: '1' } as User);
+      mockUserRepository.create.mockReturnValue(mockUser);
+      mockUserRepository.save.mockResolvedValue(mockUser);
 
       const result = await service.validateTelegramAuth(telegramData as any);
       expect(result).toBeDefined();
+      expect(result.role).toBe(UserRole.CLIENT);
+    });
+
+    it('должен запретить авторизацию через Telegram для существующего админа', async () => {
+      const telegramData = {
+        id: '123456789',
+        first_name: 'Admin',
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: 'hash',
+      };
+
+      const adminUser = {
+        id: 'admin-1',
+        telegramId: telegramData.id,
+        firstName: 'Admin',
+        role: UserRole.ADMIN,
+      } as User;
+
+      mockConfigService.get.mockReturnValue('bot_token');
+      jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
+      mockUserRepository.findOne.mockResolvedValue(adminUser);
+
+      await expect(service.validateTelegramAuth(telegramData as any)).rejects.toThrow(
+        'Telegram authentication is only available for clients',
+      );
+    });
+
+    it('должен запретить авторизацию через Telegram для существующего мастера', async () => {
+      const telegramData = {
+        id: '123456789',
+        first_name: 'Master',
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: 'hash',
+      };
+
+      const masterUser = {
+        id: 'master-1',
+        telegramId: telegramData.id,
+        firstName: 'Master',
+        role: UserRole.MASTER,
+      } as User;
+
+      mockConfigService.get.mockReturnValue('bot_token');
+      jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
+      mockUserRepository.findOne.mockResolvedValue(masterUser);
+
+      await expect(service.validateTelegramAuth(telegramData as any)).rejects.toThrow(
+        'Telegram authentication is only available for clients',
+      );
+    });
+
+    it('должен запретить авторизацию через Telegram для пользователя с ролью ADMIN, найденного по телефону', async () => {
+      const telegramData = {
+        id: '123456789',
+        first_name: 'Admin',
+        phone: '+79991234567',
+        auth_date: Math.floor(Date.now() / 1000),
+        hash: 'hash',
+      };
+
+      const adminUser = {
+        id: 'admin-1',
+        phone: '+79991234567',
+        firstName: 'Admin',
+        role: UserRole.ADMIN,
+      } as User;
+
+      mockConfigService.get.mockReturnValue('bot_token');
+      jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
+      mockUserRepository.findOne
+        .mockResolvedValueOnce(null) // Первый вызов - по telegramId
+        .mockResolvedValueOnce(adminUser); // Второй вызов - по телефону
+      mockUsersService.normalizePhone.mockReturnValue('+79991234567');
+
+      await expect(service.validateTelegramAuth(telegramData as any)).rejects.toThrow(
+        'Telegram authentication is only available for clients',
+      );
     });
   });
 
@@ -610,6 +704,164 @@ describe('AuthService', () => {
 
     it('должен обработать невалидный формат refresh token', async () => {
       await expect(service.refreshToken('invalid.token.format')).rejects.toThrow();
+    });
+  });
+
+  describe('checkHasUsers', () => {
+    it('должен вернуть true если есть администраторы', async () => {
+      mockUserRepository.count = jest.fn().mockResolvedValue(1);
+
+      const result = await service.checkHasUsers();
+
+      expect(result).toBe(true);
+      expect(mockUserRepository.count).toHaveBeenCalledWith({
+        where: { role: UserRole.ADMIN },
+      });
+    });
+
+    it('должен вернуть false если нет администраторов', async () => {
+      mockUserRepository.count = jest.fn().mockResolvedValue(0);
+
+      const result = await service.checkHasUsers();
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('registerFirstAdmin', () => {
+    it('должен создать первого администратора', async () => {
+      const email = 'admin@example.com';
+      const password = 'password123';
+      const firstName = 'Admin';
+      const lastName = 'User';
+
+      mockUserRepository.count = jest.fn().mockResolvedValue(0);
+      mockUserRepository.findOne.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
+      
+      const mockAdmin: User = {
+        id: 'admin-1',
+        email,
+        password: 'hashed-password',
+        firstName,
+        lastName,
+        role: UserRole.ADMIN,
+        isActive: true,
+      } as User;
+
+      mockUserRepository.create.mockReturnValue(mockAdmin);
+      mockUserRepository.save.mockResolvedValue(mockAdmin);
+      mockJwtService.sign.mockReturnValue('token');
+      mockConfigService.get.mockReturnValue('7d');
+      mockSessionRepository.create.mockReturnValue({} as Session);
+      mockSessionRepository.save.mockResolvedValue({} as Session);
+      mockAuthLogRepository.create.mockReturnValue({});
+      mockAuthLogRepository.save.mockResolvedValue({});
+
+      const result = await service.registerFirstAdmin(email, password, firstName, lastName);
+
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result).toHaveProperty('user');
+      expect(mockUserRepository.save).toHaveBeenCalled();
+    });
+
+    it('должен выбросить ошибку если администратор уже существует', async () => {
+      mockUserRepository.count = jest.fn().mockResolvedValue(1);
+
+      await expect(
+        service.registerFirstAdmin('admin@example.com', 'password', 'Admin'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('должен выбросить ошибку если пользователь с таким email уже существует', async () => {
+      const existingUser: User = {
+        id: 'user-1',
+        email: 'admin@example.com',
+      } as User;
+
+      mockUserRepository.count = jest.fn().mockResolvedValue(0);
+      mockUserRepository.findOne.mockResolvedValue(existingUser);
+
+      await expect(
+        service.registerFirstAdmin('admin@example.com', 'password', 'Admin'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('validateTelegramAuth - edge cases', () => {
+    it('должен выбросить ошибку при невалидном hash', async () => {
+      const telegramData = {
+        id: '123456',
+        first_name: 'Test',
+        auth_date: Date.now(),
+        hash: 'invalid-hash',
+      };
+
+      mockConfigService.get.mockReturnValue('test-bot-token');
+      
+      const crypto = require('crypto');
+      const createHashSpy = jest.spyOn(crypto, 'createHash').mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        digest: jest.fn().mockReturnValue(Buffer.from('secret')),
+      } as any);
+      const createHmacSpy = jest.spyOn(crypto, 'createHmac').mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        digest: jest.fn().mockReturnValue('different-hash'),
+      } as any);
+
+      await expect(service.validateTelegramAuth(telegramData as any)).rejects.toThrow(
+        UnauthorizedException,
+      );
+
+      createHashSpy.mockRestore();
+      createHmacSpy.mockRestore();
+    });
+
+    it('должен найти пользователя по телефону если не найден по telegramId', async () => {
+      const telegramData = {
+        id: '123456',
+        first_name: 'Test',
+        phone: '+79991234567',
+        auth_date: Date.now(),
+        hash: 'valid-hash',
+      };
+
+      const existingUser: User = {
+        id: 'user-1',
+        phone: '+79991234567',
+        telegramId: null,
+        role: UserRole.CLIENT, // Важно: пользователь должен быть клиентом
+      } as User;
+
+      mockUserRepository.findOne
+        .mockResolvedValueOnce(null) // не найден по telegramId
+        .mockResolvedValueOnce(existingUser); // найден по телефону
+      mockUsersService.normalizePhone.mockReturnValue('+79991234567');
+      mockUserRepository.save.mockResolvedValue({
+        ...existingUser,
+        telegramId: telegramData.id,
+        role: UserRole.CLIENT, // Роль должна остаться CLIENT
+      } as User);
+      mockConfigService.get.mockReturnValue('test-bot-token');
+      
+      const crypto = require('crypto');
+      const createHashSpy = jest.spyOn(crypto, 'createHash').mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        digest: jest.fn().mockReturnValue(Buffer.from('secret')),
+      } as any);
+      const createHmacSpy = jest.spyOn(crypto, 'createHmac').mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        digest: jest.fn().mockReturnValue('valid-hash'),
+      } as any);
+
+      const result = await service.validateTelegramAuth(telegramData as any);
+
+      expect(result.telegramId).toBe(telegramData.id);
+      expect(mockUserRepository.save).toHaveBeenCalled();
+
+      createHashSpy.mockRestore();
+      createHmacSpy.mockRestore();
     });
   });
 });
