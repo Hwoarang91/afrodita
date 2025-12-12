@@ -23,11 +23,17 @@ describe('AuthService', () => {
   let jwtService: JwtService;
   let usersService: UsersService;
 
+  const mockQueryBuilder = {
+    where: jest.fn().mockReturnThis(),
+    getOne: jest.fn(),
+  };
+
   const mockUserRepository = {
     findOne: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
     count: jest.fn(),
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
   };
 
   const mockSessionRepository = {
@@ -124,7 +130,7 @@ describe('AuthService', () => {
         role: UserRole.CLIENT,
       } as User;
 
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockQueryBuilder.getOne.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       const result = await service.validateEmailPassword(email, password);
@@ -137,7 +143,7 @@ describe('AuthService', () => {
       const email = 'test@example.com';
       const password = 'password123';
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
 
       await expect(
         service.validateEmailPassword(email, password),
@@ -156,7 +162,7 @@ describe('AuthService', () => {
         isActive: true,
       } as User;
 
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockQueryBuilder.getOne.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       await expect(
@@ -176,7 +182,7 @@ describe('AuthService', () => {
         isActive: false,
       } as User;
 
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockQueryBuilder.getOne.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       await expect(
@@ -265,7 +271,7 @@ describe('AuthService', () => {
         role: UserRole.CLIENT,
       } as unknown as User;
 
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
       mockUserRepository.create.mockReturnValue(mockUser);
       mockUserRepository.save.mockResolvedValue(mockUser);
       mockConfigService.get.mockReturnValue('test-bot-token');
@@ -438,7 +444,7 @@ describe('AuthService', () => {
 
     it('должен выбросить ошибку если пользователь не найден', async () => {
       expect(service).toBeDefined();
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
 
       await expect(service.updatePhone('non-existent', '+79991234567')).rejects.toThrow(UnauthorizedException);
     });
@@ -459,7 +465,7 @@ describe('AuthService', () => {
         isActive: true,
       } as User;
 
-      mockUserRepository.findOne.mockResolvedValue(user);
+      mockQueryBuilder.getOne.mockResolvedValue(user);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       await expect(service.validateEmailPassword('test@example.com', '')).rejects.toThrow(
@@ -470,7 +476,7 @@ describe('AuthService', () => {
     it('должен обработать очень длинный email (255+ символов)', async () => {
       const longEmail = 'a'.repeat(250) + '@example.com';
       
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
 
       await expect(service.validateEmailPassword(longEmail, 'password')).rejects.toThrow(
         UnauthorizedException,
@@ -478,7 +484,7 @@ describe('AuthService', () => {
     });
 
     it('должен обработать email с невалидными символами', async () => {
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
 
       await expect(service.validateEmailPassword('test@example@com', 'password')).rejects.toThrow(
         UnauthorizedException,
@@ -488,7 +494,7 @@ describe('AuthService', () => {
     it('должен обработать SQL injection попытку в email', async () => {
       const sqlInjectionEmail = "admin' OR '1'='1";
       
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
 
       await expect(service.validateEmailPassword(sqlInjectionEmail, 'password')).rejects.toThrow(
         UnauthorizedException,
@@ -504,7 +510,7 @@ describe('AuthService', () => {
         isActive: true,
       } as User;
 
-      mockUserRepository.findOne.mockResolvedValue(user);
+      mockQueryBuilder.getOne.mockResolvedValue(user);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       await expect(service.validateEmailPassword('test@example.com', longPassword)).rejects.toThrow(
@@ -520,7 +526,7 @@ describe('AuthService', () => {
         isActive: true,
       } as User;
 
-      mockUserRepository.findOne.mockResolvedValue(user);
+      mockQueryBuilder.getOne.mockResolvedValue(user);
 
       await expect(service.validateEmailPassword('test@example.com', 'password')).rejects.toThrow(
         UnauthorizedException,
@@ -565,7 +571,7 @@ describe('AuthService', () => {
 
       mockConfigService.get.mockReturnValue('bot_token');
       jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
       mockUserRepository.create.mockReturnValue(mockUser);
       mockUserRepository.save.mockResolvedValue(mockUser);
 
@@ -591,7 +597,7 @@ describe('AuthService', () => {
 
       mockConfigService.get.mockReturnValue('bot_token');
       jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
       mockUserRepository.create.mockReturnValue(mockUser);
       mockUserRepository.save.mockResolvedValue(mockUser);
 
@@ -779,7 +785,7 @@ describe('AuthService', () => {
       const lastName = 'User';
 
       mockUserRepository.count = jest.fn().mockResolvedValue(0);
-      mockUserRepository.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
       
       const mockAdmin: User = {

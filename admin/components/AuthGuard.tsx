@@ -33,19 +33,30 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         currentUrl.includes('/register') ||
         currentPath.endsWith('/register');
 
-      // Если мы на странице логина или регистрации - очищаем токен и не делаем проверку авторизации
-      // Это предотвращает бесконечный редирект, если токен есть, но пользователя нет в БД
+      // Проверяем, был ли только что успешный логин
+      const justLoggedIn = typeof window !== 'undefined' ? sessionStorage.getItem('just-logged-in') : null;
+      
+      // Если мы на странице логина или регистрации
       if (isLoginPage || isRegisterPage) {
-        // Очищаем токен на страницах логина/регистрации, чтобы избежать проблем
-        // с невалидными токенами от предыдущих сессий
-        if (token) {
-          console.log('Очистка токена на странице логина/регистрации');
-          localStorage.removeItem('admin-token');
-          localStorage.removeItem('admin-user');
-          document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+        // Если только что залогинились - не очищаем токен, редирект произойдет дальше
+        if (justLoggedIn) {
+          // Удаляем флаг сразу после проверки
+          if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('just-logged-in');
+          }
+          // Продолжаем проверку - редирект на dashboard произойдет дальше
+        } else {
+          // Очищаем токен на страницах логина/регистрации, чтобы избежать проблем
+          // с невалидными токенами от предыдущих сессий
+          if (token) {
+            console.log('AuthGuard: Очистка токена на странице логина/регистрации');
+            localStorage.removeItem('admin-token');
+            localStorage.removeItem('admin-user');
+            document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+          }
+          setIsChecking(false);
+          return;
         }
-        setIsChecking(false);
-        return;
       }
 
       // Синхронизируем токен с cookies для Server Components

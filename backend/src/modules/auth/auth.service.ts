@@ -45,9 +45,13 @@ export class AuthService {
 
   async validateEmailPassword(email: string, password: string): Promise<User> {
     this.logger.debug(`Попытка входа: email=${email}`);
-    const user = await this.userRepository.findOne({
-      where: { email },
-    });
+    // Поиск пользователя без учета регистра email (email обычно не чувствителен к регистру)
+    // Используем createQueryBuilder для case-insensitive поиска
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .where('LOWER(TRIM(user.email)) = :normalizedEmail', { normalizedEmail })
+      .getOne();
 
     if (!user) {
       this.logger.warn(`Пользователь не найден: ${email}`);
