@@ -444,7 +444,7 @@ describe('AuthService', () => {
 
     it('должен выбросить ошибку если пользователь не найден', async () => {
       expect(service).toBeDefined();
-      mockQueryBuilder.getOne.mockResolvedValue(null);
+      mockUserRepository.findOne.mockResolvedValue(null);
 
       await expect(service.updatePhone('non-existent', '+79991234567')).rejects.toThrow(UnauthorizedException);
     });
@@ -597,7 +597,7 @@ describe('AuthService', () => {
 
       mockConfigService.get.mockReturnValue('bot_token');
       jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
-      mockQueryBuilder.getOne.mockResolvedValue(null);
+      mockUserRepository.findOne.mockResolvedValue(null); // validateTelegramAuth использует findOne для поиска по telegramId
       mockUserRepository.create.mockReturnValue(mockUser);
       mockUserRepository.save.mockResolvedValue(mockUser);
 
@@ -830,7 +830,7 @@ describe('AuthService', () => {
       } as User;
 
       mockUserRepository.count = jest.fn().mockResolvedValue(0);
-      mockUserRepository.findOne.mockResolvedValue(existingUser);
+      mockQueryBuilder.getOne.mockResolvedValue(existingUser); // Используем mockQueryBuilder для registerFirstAdmin
 
       await expect(
         service.registerFirstAdmin('admin@example.com', 'password', 'Admin'),

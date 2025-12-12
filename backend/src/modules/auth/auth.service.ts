@@ -289,10 +289,12 @@ export class AuthService {
       throw new UnauthorizedException('Регистрация недоступна. Администратор уже существует.');
     }
 
-    // Проверяем, не существует ли уже пользователь с таким email
-    const existingUser = await this.userRepository.findOne({
-      where: { email },
-    });
+    // Проверяем, не существует ли уже пользователь с таким email (case-insensitive)
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingUser = await this.userRepository
+      .createQueryBuilder('user')
+      .where('LOWER(TRIM(user.email)) = :normalizedEmail', { normalizedEmail })
+      .getOne();
     if (existingUser) {
       throw new UnauthorizedException('Пользователь с таким email уже существует');
     }
