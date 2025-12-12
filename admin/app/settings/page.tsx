@@ -2,10 +2,14 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
-import { Save } from 'lucide-react';
+import { Save, User, Bot, CheckCircle2, AlertCircle, Search, X } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 
 interface VerifiedUser {
   id: string;
@@ -59,6 +63,13 @@ export default function SettingsPage() {
     'general',
   );
   const [isSaving, setIsSaving] = useState(false);
+  
+  const tabs = [
+    { id: 'general', label: 'Общие' },
+    { id: 'booking', label: 'Записи' },
+    { id: 'notifications', label: 'Уведомления' },
+    { id: 'bonuses', label: 'Бонусы' },
+  ];
 
   const getDefaultSettings = (): Settings => {
     const saved = localStorage.getItem('admin-settings');
@@ -248,19 +259,8 @@ export default function SettingsPage() {
     });
   };
 
-  const tabs = [
-    { id: 'general', label: 'Общие', icon: 'building' },
-    { id: 'booking', label: 'Записи', icon: 'calendar' },
-    { id: 'notifications', label: 'Уведомления', icon: 'bell' },
-    { id: 'bonuses', label: 'Бонусы', icon: 'gift' },
-  ];
-
   if (isLoading) {
-    return (
-      <div className="p-8">
-        Загрузка...
-      </div>
-    );
+    return <div className="p-8">Загрузка...</div>;
   }
 
   return (
@@ -291,7 +291,6 @@ export default function SettingsPage() {
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
                 {tab.label}
               </button>
             ))}
@@ -380,35 +379,14 @@ export default function SettingsPage() {
                     <option value="Europe/London">Лондон (UTC+0)</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Администратор Telegram бота и веб-приложения
-                  </label>
-                  <select
-                    value={formData.telegramAdminUserId || ''}
-                    onChange={(e) =>
-                      setFormData({ ...formData, telegramAdminUserId: e.target.value || null })
+                <div className="col-span-2">
+                  <TelegramAdminSelector
+                    value={formData.telegramAdminUserId || null}
+                    onChange={(userId) =>
+                      setFormData({ ...formData, telegramAdminUserId: userId })
                     }
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-background"
-                  >
-                    <option value="">Не выбран</option>
-                    {verifiedUsersData?.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.firstName} {user.lastName} {user.username ? `(@${user.username})` : ''} {user.phone ? `- ${user.phone}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Выберите пользователя, прошедшего верификацию через Telegram бота
-                  </p>
-                    <option value="Europe/Berlin">Берлин (UTC+1)</option>
-                    <option value="America/New_York">Нью-Йорк (UTC-5)</option>
-                    <option value="America/Los_Angeles">Лос-Анджелес (UTC-8)</option>
-                  </select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Часовой пояс используется для определения доступного времени записи. 
-                    Если сейчас 18:00, то доступны записи только с 19:00 и до окончания рабочего дня.
-                  </p>
+                    verifiedUsers={verifiedUsersData || []}
+                  />
                 </div>
               </div>
               <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -826,6 +804,324 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TelegramAdminSelector({
+  value,
+  onChange,
+  verifiedUsers,
+}: {
+  value: string | null;
+  onChange: (userId: string | null) => void;
+  verifiedUsers: VerifiedUser[];
+}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+
+  const selectedUser = useMemo(
+    () => verifiedUsers.find((u) => u.id === value) || null,
+    [verifiedUsers, value]
+  );
+
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return verifiedUsers;
+    const query = searchQuery.toLowerCase();
+    return verifiedUsers.filter(
+      (user) =>
+        user.firstName?.toLowerCase().includes(query) ||
+        user.lastName?.toLowerCase().includes(query) ||
+        user.username?.toLowerCase().includes(query) ||
+        user.phone?.toLowerCase().includes(query)
+    );
+  }, [verifiedUsers, searchQuery]);
+
+  const handleSelect = (userId: string | null) => {
+    onChange(userId);
+    setIsOpen(false);
+    setSearchQuery('');
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label className="flex items-center gap-2 mb-2">
+          <Bot className="h-4 w-4" />
+          Администратор Telegram бота и веб-приложения
+        </Label>
+        
+        {selectedUser ? (
+          <Card className="border-primary/50 bg-primary/5">
+            <CardContent className="pt-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3 flex-1">
+                  <div className="rounded-full bg-primary/10 p-2">
+                    <User className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-semibold text-foreground">
+                        {selectedUser.firstName} {selectedUser.lastName}
+                      </h4>
+                      <Badge variant="secondary" className="text-xs">
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Выбран
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-muted-foreground space-y-0.5">
+                      {selectedUser.username && (
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">@</span>
+                          <span>{selectedUser.username}</span>
+                        </div>
+                      )}
+                      {selectedUser.phone && (
+                        <div className="flex items-center gap-1">
+                          <span>📱</span>
+                          <span>{selectedUser.phone}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <Bot className="h-3 w-3" />
+                        <span>Telegram ID: {selectedUser.telegramId}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span>Роль: {selectedUser.role === 'admin' ? 'Администратор' : selectedUser.role === 'master' ? 'Мастер' : 'Клиент'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSelect(null)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-dashed">
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm">Администратор не выбран</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <div className="relative">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Поиск пользователя по имени, username или телефону..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setIsOpen(true);
+            }}
+            onFocus={() => setIsOpen(true)}
+            className="pl-9"
+          />
+        </div>
+
+        {isOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => {
+                setIsOpen(false);
+                setSearchQuery('');
+              }}
+            />
+            <Card className="absolute z-20 w-full mt-2 max-h-80 overflow-auto border shadow-lg bg-background">
+              <CardContent className="p-0">
+                {filteredUsers.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    {searchQuery ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <AlertCircle className="h-5 w-5" />
+                        <span>Пользователи не найдены</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <User className="h-5 w-5" />
+                        <span>Нет верифицированных пользователей</span>
+                        <span className="text-xs">Пользователи должны сначала пройти верификацию через Telegram бота</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {filteredUsers.map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => handleSelect(user.id)}
+                        className={`w-full text-left p-3 hover:bg-accent transition-colors ${
+                          value === user.id ? 'bg-primary/10 border-l-2 border-l-primary' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className={`rounded-full p-2 flex-shrink-0 ${
+                              value === user.id ? 'bg-primary/20' : 'bg-muted'
+                            }`}>
+                              <User className={`h-4 w-4 ${
+                                value === user.id ? 'text-primary' : ''
+                              }`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground truncate">
+                                {user.firstName} {user.lastName}
+                              </div>
+                              <div className="text-xs text-muted-foreground space-y-0.5 mt-0.5">
+                                {user.username && (
+                                  <div className="truncate">@{user.username}</div>
+                                )}
+                                {user.phone && <div>{user.phone}</div>}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px]">Роль: {user.role === 'admin' ? 'Администратор' : user.role === 'master' ? 'Мастер' : 'Клиент'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          {value === user.id && (
+                            <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0 ml-2" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-blue-900 dark:text-blue-100 space-y-1">
+              <p className="font-medium">О настройке администратора Telegram</p>
+              <ul className="list-disc list-inside space-y-0.5 text-xs">
+                <li>Выбранный администратор будет получать уведомления о новых записях, отменах и изменениях</li>
+                <li>Только этот пользователь будет иметь доступ к админ-функциям в Telegram боте и веб-приложении</li>
+                <li>Для выбора пользователь должен пройти верификацию через Telegram бота</li>
+                <li>Всего верифицированных пользователей: {verifiedUsers.length}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-3">
+          <Card className="border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Bot className="h-4 w-4 text-primary" />
+                Права администратора
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="space-y-1.5">
+                <p className="font-semibold text-foreground mb-2">В Telegram боте:</p>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Просмотр всех записей и статистики</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Подтверждение и отмена записей</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Просмотр списка клиентов</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Массовая рассылка сообщений</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Получение уведомлений о всех записях</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="space-y-1.5 pt-2 border-t">
+                <p className="font-semibold text-foreground mb-2">В веб-приложении:</p>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Доступ к админ-панели со статистикой</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Управление записями и клиентами</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Просмотр всех данных системы</span>
+                  </li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-orange-200 dark:border-orange-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <User className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                Права мастера
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="space-y-1.5">
+                <p className="font-semibold text-foreground mb-2">В Telegram боте:</p>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Просмотр своих записей</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Получение уведомлений о новых записях к нему</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Просмотр расписания работы</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="space-y-1.5 pt-2 border-t">
+                <p className="font-semibold text-foreground mb-2">В веб-приложении:</p>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Просмотр своих записей и расписания</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>Информация о клиентах с записями к нему</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="mt-2 p-2 bg-orange-50 dark:bg-orange-900/20 rounded text-xs text-orange-900 dark:text-orange-100">
+                <p className="font-medium mb-1">Примечание:</p>
+                <p>Мастера автоматически получают уведомления о новых записях. Настройка администратора не влияет на права мастера.</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
