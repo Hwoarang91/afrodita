@@ -46,38 +46,44 @@ export default function LoginPage() {
       });
 
       if (data.token) {
+        // Сохраняем токен в sessionStorage (более надежно при навигации)
+        sessionStorage.setItem('admin-token', data.token);
+        sessionStorage.setItem('just-logged-in', 'true');
+        
         // Сохраняем токен в localStorage
         localStorage.setItem('admin-token', data.token);
         if (data.user) {
           localStorage.setItem('admin-user', JSON.stringify(data.user));
         }
+        
         // Сохраняем токен в cookies для Server Components
-        // Используем полный путь для cookies, чтобы они были доступны на всех подстраницах
-        // Убираем Secure флаг, так как он может вызывать проблемы в некоторых конфигурациях
         const cookieExpiry = 7 * 24 * 60 * 60; // 7 дней
         document.cookie = `admin-token=${data.token}; path=/; max-age=${cookieExpiry}; SameSite=Lax`;
         
-        // Устанавливаем флаг успешного логина в sessionStorage
-        // Это предотвратит очистку токена при следующей загрузке страницы
-        sessionStorage.setItem('just-logged-in', 'true');
-        
         // Даем время браузеру сохранить данные перед редиректом
-        // Увеличиваем задержку до 200ms для гарантии сохранения
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Проверяем, что токен действительно сохранился
-        const savedToken = localStorage.getItem('admin-token');
-        if (!savedToken || savedToken !== data.token) {
-          console.error('Токен не сохранился в localStorage, повторная попытка...');
+        // Проверяем, что токен действительно сохранился во всех местах
+        const savedTokenLS = localStorage.getItem('admin-token');
+        const savedTokenSS = sessionStorage.getItem('admin-token');
+        
+        if (!savedTokenLS || savedTokenLS !== data.token) {
+          console.warn('Токен не сохранился в localStorage, повторная попытка...');
           localStorage.setItem('admin-token', data.token);
-          // Еще одна попытка с cookie
-          document.cookie = `admin-token=${data.token}; path=/; max-age=${cookieExpiry}; SameSite=Lax`;
-          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        if (!savedTokenSS || savedTokenSS !== data.token) {
+          console.warn('Токен не сохранился в sessionStorage, повторная попытка...');
+          sessionStorage.setItem('admin-token', data.token);
+          sessionStorage.setItem('just-logged-in', 'true');
         }
         
-        // Используем window.location для редиректа с учетом basePath
-        // Это гарантирует полную перезагрузку страницы и применение всех cookies
-        window.location.href = '/admin/dashboard';
+        // Повторно устанавливаем cookie для гарантии
+        document.cookie = `admin-token=${data.token}; path=/; max-age=${cookieExpiry}; SameSite=Lax`;
+        
+        // Используем router.push для навигации без полной перезагрузки
+        // Это сохраняет состояние localStorage и sessionStorage
+        // После навигации токен будет доступен для API запросов
+        router.push('/admin/dashboard');
       } else {
         setError('Неверный email или пароль');
         setIsLoading(false);

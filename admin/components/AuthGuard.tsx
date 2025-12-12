@@ -11,7 +11,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('admin-token');
+      // Проверяем токен сначала в sessionStorage, затем в localStorage
+      let token = typeof window !== 'undefined' ? sessionStorage.getItem('admin-token') : null;
+      if (!token) {
+        token = localStorage.getItem('admin-token');
+      }
       // Определяем базовый путь из window.location, так как Nginx удаляет префикс /admin
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
       const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
@@ -51,6 +55,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           if (token) {
             console.log('AuthGuard: Очистка токена на странице логина/регистрации');
             localStorage.removeItem('admin-token');
+            sessionStorage.removeItem('admin-token');
             localStorage.removeItem('admin-user');
             document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
           }
@@ -59,15 +64,35 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Синхронизируем токен с cookies для Server Components
+      // Синхронизируем токен между localStorage, sessionStorage и cookies
       if (token) {
+        // Синхронизируем токен во все хранилища
+        if (typeof window !== 'undefined') {
+          const tokenLS = localStorage.getItem('admin-token');
+          const tokenSS = sessionStorage.getItem('admin-token');
+          
+          // Если токен есть в одном, но не в другом - синхронизируем
+          if (tokenLS && tokenLS !== token) {
+            localStorage.setItem('admin-token', token);
+          }
+          if (tokenSS && tokenSS !== token) {
+            sessionStorage.setItem('admin-token', token);
+          }
+          if (!tokenLS) {
+            localStorage.setItem('admin-token', token);
+          }
+          if (!tokenSS) {
+            sessionStorage.setItem('admin-token', token);
+          }
+        }
+        
         // Проверяем, есть ли уже cookie
         const cookieToken = document.cookie
           .split('; ')
           .find(row => row.startsWith('admin-token='))
           ?.split('=')[1];
         
-        // Если токен в localStorage, но нет в cookies - добавляем в cookies
+        // Если токен есть, но нет в cookies - добавляем в cookies
         if (token && !cookieToken) {
           document.cookie = `admin-token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
         }
@@ -82,13 +107,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
           // Если нет администраторов и мы не на странице регистрации - редиректим на регистрацию
           if (!hasUsers && !isRegisterPage) {
-            window.location.href = '/admin/register';
+            router.push('/admin/register');
             return;
           }
 
           // Если есть администраторы и мы на странице регистрации - редиректим на логин
           if (hasUsers && isRegisterPage) {
-            window.location.href = '/admin/login';
+            router.push('/admin/login');
             return;
           }
         } catch (error: unknown) {
@@ -105,7 +130,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             // На странице регистрации при любой ошибке - пробуем редирект на логин
             // Но только если у нас нет токена (если есть токен - значит уже авторизованы)
             if (!token) {
-              window.location.href = '/admin/login';
+              router.push('/admin/login');
               return;
             }
           }
