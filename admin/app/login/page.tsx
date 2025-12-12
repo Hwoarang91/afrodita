@@ -80,10 +80,13 @@ export default function LoginPage() {
         // Повторно устанавливаем cookie для гарантии
         document.cookie = `admin-token=${data.token}; path=/; max-age=${cookieExpiry}; SameSite=Lax`;
         
-        // Используем router.push для навигации без полной перезагрузки
-        // Это сохраняет состояние localStorage и sessionStorage
-        // После навигации токен будет доступен для API запросов
-        router.push('/admin/dashboard');
+        // Даем дополнительное время для гарантии сохранения cookie
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Используем window.location.href для полной перезагрузки страницы
+        // Это необходимо для синхронизации cookies с сервером для Server Components
+        // Server Component Dashboard пытается загрузить данные на сервере через cookies
+        window.location.href = '/admin/dashboard';
       } else {
         setError('Неверный email или пароль');
         setIsLoading(false);
