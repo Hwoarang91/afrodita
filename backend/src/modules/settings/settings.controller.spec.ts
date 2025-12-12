@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SettingsController } from './settings.controller';
 import { SettingsService } from './settings.service';
 import { AuditService } from '../audit/audit.service';
+import { UsersService } from '../users/users.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { AuditAction } from '../../entities/audit-log.entity';
@@ -10,6 +11,7 @@ describe('SettingsController', () => {
   let controller: SettingsController;
   let settingsService: SettingsService;
   let auditService: AuditService;
+  let usersService: UsersService;
 
   const mockSettingsService = {
     get: jest.fn(),
@@ -18,10 +20,20 @@ describe('SettingsController', () => {
     setBookingSettings: jest.fn(),
     getFirstVisitDiscountSettings: jest.fn(),
     setFirstVisitDiscountSettings: jest.fn(),
+    getTelegramAdminUserId: jest.fn(),
+    setTelegramAdminUserId: jest.fn(),
+    getTimezone: jest.fn(),
+    setTimezone: jest.fn(),
+    getReminderIntervals: jest.fn(),
+    setReminderIntervals: jest.fn(),
   };
 
   const mockAuditService = {
     log: jest.fn(),
+  };
+
+  const mockUsersService = {
+    findById: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -36,6 +48,10 @@ describe('SettingsController', () => {
           provide: AuditService,
           useValue: mockAuditService,
         },
+        {
+          provide: UsersService,
+          useValue: mockUsersService,
+        },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -47,6 +63,7 @@ describe('SettingsController', () => {
     controller = module.get<SettingsController>(SettingsController);
     settingsService = module.get<SettingsService>(SettingsService);
     auditService = module.get<AuditService>(AuditService);
+    usersService = module.get<UsersService>(UsersService);
   });
 
   afterEach(() => {

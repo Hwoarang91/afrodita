@@ -20,12 +20,18 @@ import { ContactRequestsModule } from './modules/contact-requests/contact-reques
 import { DatabaseConfig } from './config/database.config';
 import { SchedulerModule } from './tasks/scheduler.module';
 import { HealthModule } from './modules/health/health.module';
+import { validate } from './config/env.validation';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../.env'], // Ищем .env в корне проекта
+      validate,
+      validationOptions: {
+        allowUnknown: true,
+        abortEarly: false,
+      },
     }),
     TypeOrmModule.forRootAsync({
       useClass: DatabaseConfig,

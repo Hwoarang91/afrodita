@@ -15,6 +15,9 @@ describe('AuthController', () => {
     login: jest.fn(),
     refreshToken: jest.fn(),
     logout: jest.fn(),
+    updatePhone: jest.fn(),
+    checkHasUsers: jest.fn(),
+    registerFirstAdmin: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -149,6 +152,138 @@ describe('AuthController', () => {
       await controller.logout('refresh-token', req);
 
       expect(mockAuthService.logout).toHaveBeenCalledWith('refresh-token', req.ip, req.get('user-agent'));
+    });
+  });
+
+  describe('updatePhone', () => {
+    it('должен обновить номер телефона', async () => {
+      const req = {
+        user: { sub: 'user-1' },
+      };
+      const dto = { phone: '+79991234567' };
+      const mockUser: User = {
+        id: 'user-1',
+        phone: dto.phone,
+      } as User;
+
+      mockAuthService.updatePhone.mockResolvedValue(mockUser);
+
+      const result = await controller.updatePhone(req, dto);
+
+      expect(result).toEqual(mockUser);
+      expect(mockAuthService.updatePhone).toHaveBeenCalledWith(req.user.sub, dto.phone);
+    });
+  });
+
+  describe('getMe', () => {
+    it('должен вернуть текущего пользователя', async () => {
+      const req = {
+        user: {
+          sub: 'user-1',
+          role: UserRole.CLIENT,
+          email: 'test@example.com',
+        },
+      };
+
+      const result = await controller.getMe(req);
+
+      expect(result).toEqual(req.user);
+    });
+  });
+
+  describe('checkSetup', () => {
+    it('должен вернуть true если есть администраторы', async () => {
+      mockAuthService.checkHasUsers.mockResolvedValue(true);
+
+      const result = await controller.checkSetup();
+
+      expect(result).toEqual({ hasUsers: true, needsSetup: false });
+      expect(mockAuthService.checkHasUsers).toHaveBeenCalled();
+    });
+
+    it('должен вернуть false если нет администраторов', async () => {
+      mockAuthService.checkHasUsers.mockResolvedValue(false);
+
+      const result = await controller.checkSetup();
+
+      expect(result).toEqual({ hasUsers: false, needsSetup: true });
+    });
+  });
+
+  describe('register', () => {
+    it('должен зарегистрировать первого администратора', async () => {
+      const registerDto = {
+        email: 'admin@example.com',
+        password: 'password123',
+        firstName: 'Admin',
+        lastName: 'User',
+      };
+      const req = {
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const mockResult = {
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        user: {
+          id: 'admin-1',
+          email: registerDto.email,
+          role: UserRole.ADMIN,
+        },
+      };
+
+      mockAuthService.registerFirstAdmin.mockResolvedValue(mockResult);
+
+      const result = await controller.register(registerDto, req);
+
+      expect(result).toEqual(mockResult);
+      expect(mockAuthService.registerFirstAdmin).toHaveBeenCalledWith(
+        registerDto.email,
+        registerDto.password,
+        registerDto.firstName,
+        registerDto.lastName,
+        req.ip,
+        req.get('user-agent'),
+      );
+    });
+
+    it('должен обработать ошибку при регистрации', async () => {
+      const registerDto = {
+        email: 'admin@example.com',
+        password: 'password123',
+        firstName: 'Admin',
+      };
+      const req = {
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const error = new Error('Администратор уже существует');
+
+      mockAuthService.registerFirstAdmin.mockRejectedValue(error);
+
+      await expect(controller.register(registerDto, req)).rejects.toThrow(error);
+    });
+  });
+
+  describe('login - error handling', () => {
+    it('должен обработать ошибку при входе', async () => {
+      const loginDto: LoginDto = {
+        email: 'test@example.com',
+        password: 'wrongpassword',
+      };
+      const req = {
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const error = new Error('Invalid email or password');
+
+      mockAuthService.validateEmailPassword.mockRejectedValue(error);
+
+      await expect(controller.login(loginDto, req)).rejects.toThrow(error);
+      expect(mockAuthService.validateEmailPassword).toHaveBeenCalledWith(
+        loginDto.email,
+        loginDto.password,
+      );
     });
   });
 });

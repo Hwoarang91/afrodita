@@ -3,7 +3,7 @@ import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { RolesGuard } from './roles.guard';
 import { Roles } from '../decorators/roles.decorator';
-import { UserRole } from '@shared/types';
+import { UserRole } from '../../entities/user.entity';
 
 describe('RolesGuard', () => {
   let guard: RolesGuard;

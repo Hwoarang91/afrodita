@@ -98,5 +98,14 @@ export class SettingsService {
   }): Promise<Settings> {
     return await this.set('firstVisitDiscount', settings);
   }
+
+  async getTelegramAdminUserId(): Promise<string | null> {
+    const userId = await this.get('telegramAdminUserId', null);
+    return userId;
+  }
+
+  async setTelegramAdminUserId(userId: string | null): Promise<Settings> {
+    return await this.set('telegramAdminUserId', userId);
+  }
 }
 

@@ -94,6 +94,7 @@ describe('TelegramBotService', () => {
     getBookingSettings: jest.fn(),
     getFirstVisitDiscountSettings: jest.fn(),
     get: jest.fn(),
+    getTelegramAdminUserId: jest.fn().mockResolvedValue('admin-1'),
   };
 
   const mockNotificationsService = {
@@ -304,11 +305,9 @@ describe('TelegramBotService', () => {
 
     it('должен отправить уведомления админам о новой записи', async () => {
       (service as any).bot = mockBot;
-      const admins = [
-        { id: 'admin-1', telegramId: '123456' },
-        { id: 'admin-2', telegramId: '789012' },
-      ];
-      mockUserRepository.find.mockResolvedValue(admins);
+      const admin = { id: 'admin-1', telegramId: '123456' };
+      mockSettingsService.getTelegramAdminUserId.mockResolvedValue('admin-1');
+      mockUserRepository.findOne.mockResolvedValue(admin);
       mockAppointmentRepository.findOne.mockResolvedValue({
         id: 'appointment-1',
         client: { firstName: 'John', lastName: 'Doe', phone: '+79991234567' },
@@ -324,9 +323,12 @@ describe('TelegramBotService', () => {
 
       await service.notifyAdminsAboutNewAppointment(appointment);
 
-      expect(mockUserRepository.find).toHaveBeenCalled();
+      expect(mockSettingsService.getTelegramAdminUserId).toHaveBeenCalled();
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'admin-1' },
+      });
       expect(mockAppointmentRepository.findOne).toHaveBeenCalled();
-      expect(mockBot.telegram.sendMessage).toHaveBeenCalledTimes(2);
+      expect(mockBot.telegram.sendMessage).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -338,15 +340,14 @@ describe('TelegramBotService', () => {
 
       await service.notifyAdminsAboutCancelledAppointment(appointment);
 
-      expect(mockUserRepository.find).not.toHaveBeenCalled();
+      expect(mockSettingsService.getTelegramAdminUserId).not.toHaveBeenCalled();
     });
 
     it('должен отправить уведомления админам об отмене записи', async () => {
       (service as any).bot = mockBot;
-      const admins = [
-        { id: 'admin-1', telegramId: '123456' },
-      ];
-      mockUserRepository.find.mockResolvedValue(admins);
+      const admin = { id: 'admin-1', telegramId: '123456' };
+      mockSettingsService.getTelegramAdminUserId.mockResolvedValue('admin-1');
+      mockUserRepository.findOne.mockResolvedValue(admin);
       mockAppointmentRepository.findOne.mockResolvedValue({
         id: 'appointment-1',
         client: { firstName: 'John', lastName: 'Doe', phone: '+79991234567' },
@@ -362,7 +363,10 @@ describe('TelegramBotService', () => {
 
       await service.notifyAdminsAboutCancelledAppointment(appointment, 'Client request');
 
-      expect(mockUserRepository.find).toHaveBeenCalled();
+      expect(mockSettingsService.getTelegramAdminUserId).toHaveBeenCalled();
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'admin-1' },
+      });
       expect(mockAppointmentRepository.findOne).toHaveBeenCalled();
       expect(mockBot.telegram.sendMessage).toHaveBeenCalled();
     });

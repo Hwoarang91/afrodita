@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './jwt.strategy';
 import { AuthService, JwtPayload } from '../auth.service';
-import { UserRole } from '@shared/types';
+import { UserRole } from '../../../entities/user.entity';
 
 describe('JwtStrategy', () => {
   let strategy: JwtStrategy;

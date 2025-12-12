@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { AxiosError, getErrorMessage } from '@/lib/types';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -71,10 +72,9 @@ export default function RegisterPage() {
       } else {
         setError('Ошибка при регистрации');
       }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.message || 'Ошибка при регистрации. Проверьте данные.',
-      );
+    } catch (err: unknown) {
+      const errorMessage = getErrorMessage(err);
+      setError(errorMessage || 'Ошибка при регистрации. Проверьте данные.');
     } finally {
       setIsLoading(false);
     }

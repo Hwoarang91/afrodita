@@ -5,6 +5,7 @@ import { User, UserRole } from '../../entities/user.entity';
 import { Appointment } from '../../entities/appointment.entity';
 import { Transaction } from '../../entities/transaction.entity';
 import { Notification } from '../../entities/notification.entity';
+import { BodyMeasurement } from '../../entities/body-measurement.entity';
 
 @Injectable()
 export class UsersService {
@@ -17,6 +18,8 @@ export class UsersService {
     private transactionRepository: Repository<Transaction>,
     @InjectRepository(Notification)
     private notificationRepository: Repository<Notification>,
+    @InjectRepository(BodyMeasurement)
+    private bodyMeasurementRepository: Repository<BodyMeasurement>,
   ) {}
 
   async findAll(role?: UserRole, search?: string, page: number = 1, limit: number = 20): Promise<{ data: User[]; total: number; page: number; limit: number; totalPages: number }> {
@@ -311,6 +314,92 @@ export class UsersService {
     history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return history;
+  }
+
+  /**
+   * Вычисляет возраст на основе даты рождения
+   */
+  calculateAge(dateOfBirth: Date | null | undefined): number | null {
+    if (!dateOfBirth) return null;
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  }
+
+  /**
+   * Получить все замеры объемов тела для пользователя
+   */
+  async getBodyMeasurements(userId: string): Promise<BodyMeasurement[]> {
+    await this.findById(userId); // Проверяем существование пользователя
+    return await this.bodyMeasurementRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Получить последний замер объемов тела
+   */
+  async getLatestBodyMeasurement(userId: string): Promise<BodyMeasurement | null> {
+    await this.findById(userId);
+    return await this.bodyMeasurementRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Создать новый замер объемов тела
+   */
+  async createBodyMeasurement(userId: string, data: Partial<BodyMeasurement>): Promise<BodyMeasurement> {
+    await this.findById(userId);
+    
+    const measurement = this.bodyMeasurementRepository.create({
+      userId,
+      ...data,
+    });
+
+    return await this.bodyMeasurementRepository.save(measurement);
+  }
+
+  /**
+   * Обновить замер объемов тела
+   */
+  async updateBodyMeasurement(id: string, userId: string, data: Partial<BodyMeasurement>): Promise<BodyMeasurement> {
+    await this.findById(userId);
+    
+    const measurement = await this.bodyMeasurementRepository.findOne({
+      where: { id, userId },
+    });
+
+    if (!measurement) {
+      throw new NotFoundException('Замер не найден');
+    }
+
+    Object.assign(measurement, data);
+    return await this.bodyMeasurementRepository.save(measurement);
+  }
+
+  /**
+   * Удалить замер объемов тела
+   */
+  async deleteBodyMeasurement(id: string, userId: string): Promise<void> {
+    await this.findById(userId);
+    
+    const measurement = await this.bodyMeasurementRepository.findOne({
+      where: { id, userId },
+    });
+
+    if (!measurement) {
+      throw new NotFoundException('Замер не найден');
+    }
+
+    await this.bodyMeasurementRepository.remove(measurement);
   }
 }
 

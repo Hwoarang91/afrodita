@@ -26,6 +26,7 @@ interface Client {
   phone?: string;
   email?: string;
   bonusPoints: number;
+  photoUrl?: string;
   telegramId?: string;
   createdAt: string;
 }
@@ -224,12 +225,20 @@ export default function ClientsPage() {
             <h3 className="text-lg font-semibold">
               {client.firstName} {client.lastName}
             </h3>
+            {client.photoUrl ? (
+              <img
+                src={client.photoUrl}
+                alt={`${client.firstName} ${client.lastName}`}
+                className="w-12 h-12 rounded-full object-cover border-2 border-border"
+              />
+            ) : (
             <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
               <span className="text-primary font-semibold">
                 {client.firstName[0]}
                 {client.lastName?.[0]}
               </span>
             </div>
+            )}
           </div>
           <div className="space-y-2 text-sm text-muted-foreground">
             {client.phone && (

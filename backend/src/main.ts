@@ -5,8 +5,11 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import * as compression from 'compression';
-import { authLimiter, appointmentLimiter } from './common/middleware/rate-limit.middleware';
 import { AppDataSource } from './config/data-source';
+import * as fs from 'fs';
+import * as path from 'path';
+import express from 'express';
+import { DataSource } from 'typeorm';
 
 async function bootstrap() {
   // Настройка кодировки для правильного отображения русского языка
@@ -24,8 +27,6 @@ async function bootstrap() {
         logger.log('Проверка и выполнение миграций базы данных...');
         
         // Проверяем наличие миграций
-        const fs = require('fs');
-        const path = require('path');
         const migrationsPath = path.join(__dirname, 'migrations');
         if (fs.existsSync(migrationsPath)) {
           const migrations = fs.readdirSync(migrationsPath).filter((f: string) => f.endsWith('.js'));
@@ -51,7 +52,7 @@ async function bootstrap() {
         if (tables.length === 0) {
           logger.warn('⚠️ Таблицы не найдены в базе данных. Включаю синхронизацию для создания таблиц...');
           // Временно включаем синхронизацию для создания таблиц
-          const tempDataSource = new (require('typeorm').DataSource)({
+          const tempDataSource = new DataSource({
             ...AppDataSource.options,
             synchronize: true,
           });
@@ -66,15 +67,16 @@ async function bootstrap() {
         const executedMigrations = await AppDataSource.runMigrations();
         if (executedMigrations && executedMigrations.length > 0) {
           logger.log(`✅ Применено ${executedMigrations.length} миграций:`);
-          executedMigrations.forEach((migration: any) => {
+          executedMigrations.forEach((migration) => {
             logger.log(`  - ${migration.name}`);
           });
         } else {
           logger.log('✅ Все миграции уже применены');
         }
-      } catch (migrationError: any) {
-        logger.error('⚠️ Ошибка при выполнении миграций:', migrationError.message);
-        logger.error('Stack:', migrationError.stack);
+      } catch (migrationError: unknown) {
+        const error = migrationError instanceof Error ? migrationError : new Error(String(migrationError));
+        logger.error('⚠️ Ошибка при выполнении миграций:', error.message);
+        logger.error('Stack:', error.stack);
         logger.warn('Приложение продолжит запуск. Выполните миграции вручную: npm run migration:run');
         // Не прерываем запуск приложения, но логируем ошибку
       } finally {
@@ -96,21 +98,21 @@ async function bootstrap() {
     logger.log('NestFactory создан');
     
     // Увеличиваем лимит для JSON body parser (по умолчанию 100kb, увеличиваем до 10MB)
-    app.use(require('express').json({ limit: '10mb' }));
-    app.use(require('express').urlencoded({ limit: '10mb', extended: true }));
+    // В NestJS body parser настраивается через настройки при создании NestFactory
+    // Лимит уже настроен выше при создании app
     logger.log('Приложение создано');
     
     // Проверяем подключение TypeORM перед запуском сервера
     try {
-      const { DataSource } = require('typeorm');
       const dataSource = app.get(DataSource);
       if (dataSource && dataSource.isInitialized) {
         logger.log('TypeORM DataSource инициализирован');
       } else {
         logger.warn('TypeORM DataSource не инициализирован, но продолжаем запуск');
       }
-    } catch (error: any) {
-      logger.warn(`Не удалось проверить TypeORM DataSource: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.warn(`Не удалось проверить TypeORM DataSource: ${err.message}`);
     }
 
     // Security
@@ -136,13 +138,13 @@ async function bootstrap() {
   // app.use('/api/v1/appointments', appointmentLimiter);
 
   // CORS
-  const allowedOrigins = process.env.CORS_ORIGIN
+  const allowedOrigins: (string | RegExp)[] = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
     : process.env.NODE_ENV === 'production'
     ? [
         process.env.FRONTEND_URL,
         process.env.ADMIN_URL,
-      ].filter(Boolean)
+      ].filter((origin): origin is string => Boolean(origin))
     : [
         process.env.FRONTEND_URL || 'http://localhost:3000',
         process.env.ADMIN_URL || 'http://localhost:3002',
@@ -222,16 +224,21 @@ async function bootstrap() {
       logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
       logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
     }
-  } catch (listenError: any) {
-    logger.error(`❌ Ошибка при запуске сервера на порту ${port}:`, listenError.message);
-    logger.error(`Stack trace:`, listenError.stack);
-    throw listenError;
+  } catch (listenError: unknown) {
+    const error = listenError instanceof Error ? listenError : new Error(String(listenError));
+    logger.error(`❌ Ошибка при запуске сервера на порту ${port}:`, error.message);
+    logger.error(`Stack trace:`, error.stack);
+    throw error;
   }
-  } catch (error) {
-    logger.error('Ошибка при запуске приложения:', error);
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('Ошибка при запуске приложения:', err.message);
+    logger.error('Stack:', err.stack);
     // Закрываем соединение с DataSource при ошибке
     if (AppDataSource.isInitialized) {
-      await AppDataSource.destroy().catch(() => {});
+      await AppDataSource.destroy().catch(() => {
+        // Игнорируем ошибки при закрытии
+      });
     }
     process.exit(1);
   }

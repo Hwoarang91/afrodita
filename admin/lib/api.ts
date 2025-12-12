@@ -5,25 +5,30 @@ import axios from 'axios';
 // В браузере всегда используем относительный путь для работы через Nginx
 // На сервере (SSR) используем полный URL или переменную окружения
 const getApiUrl = (): string => {
-  // В браузере ВСЕГДА используем относительный путь
-  // Это предотвращает проблемы с SSL сертификатами и обеспечивает работу через Nginx
+  // Проверяем переменную окружения (доступна в браузере с префиксом NEXT_PUBLIC_)
+  if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    // Если это полный URL (начинается с http), используем его
+    if (apiUrl.startsWith('http')) {
+      return apiUrl;
+    }
+    // Иначе это относительный путь
+    return apiUrl;
+  }
+  
+  // В браузере: если это localhost, используем полный URL к backend
   if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // Если запущено на localhost, используем полный URL к backend
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:3001/api/v1';
+    }
+    // В production используем относительный путь (для работы через Nginx)
     return '/api/v1';
   }
   
-  // На сервере (SSR) используем переменные окружения или localhost
-  if (typeof process !== 'undefined') {
-    // Для SSR можно использовать переменные окружения, но в браузере всегда относительный путь
-    if (process.env?.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.startsWith('http')) {
-      return process.env.NEXT_PUBLIC_API_URL;
-    }
-    if (process.env?.API_URL && !process.env.API_URL.startsWith('http')) {
-      return process.env.API_URL;
-    }
-  }
-  
-  // На сервере (SSR) используем localhost
-  return 'http://localhost:3001/api/v1';
+  // На сервере (SSR) используем localhost или переменную окружения
+  return process.env?.API_URL || 'http://localhost:3001/api/v1';
 };
 
 // Используем функцию для получения baseURL, чтобы она вызывалась динамически
@@ -34,13 +39,20 @@ export const apiClient = axios.create({
   },
 });
 
-// Переопределяем baseURL в interceptor для гарантии правильного URL в браузере
+// Переопределяем baseURL в interceptor для гарантии правильного URL
 apiClient.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    // В браузере ВСЕГДА используем относительный путь, независимо от переменных окружения
-    // Это предотвращает проблемы с SSL сертификатами (ERR_CERT_AUTHORITY_INVALID)
-    // и обеспечивает работу через Nginx proxy
-    config.baseURL = '/api/v1';
+  // Проверяем переменную окружения
+  if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) {
+    config.baseURL = process.env.NEXT_PUBLIC_API_URL;
+  } else if (typeof window !== 'undefined') {
+    // В браузере: если это localhost, используем полный URL к backend
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      config.baseURL = 'http://localhost:3001/api/v1';
+    } else {
+      // В production используем относительный путь (для работы через Nginx)
+      config.baseURL = '/api/v1';
+    }
     
     // Добавляем токен авторизации
     const token = localStorage.getItem('admin-token');
@@ -49,7 +61,7 @@ apiClient.interceptors.request.use((config) => {
     }
     
     // Логирование только в development режиме
-    if (process.env.NODE_ENV === 'development') {
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
       console.log('API Request:', {
         method: config.method?.toUpperCase(),
         url: config.url,
@@ -178,7 +190,7 @@ apiClient.interceptors.response.use(
       }
       
       // Показываем toast для других ошибок (кроме 401, который уже обработан)
-      if (status !== 401 && (window as any).showErrorToast) {
+      if (status !== 401 && typeof window !== 'undefined' && window.showErrorToast) {
         let toastType: 'error' | 'warning' | 'info' = 'error';
         let message = errorMessage;
         
@@ -194,7 +206,7 @@ apiClient.interceptors.response.use(
           message = 'Ошибка сети. Проверьте подключение к интернету';
         }
         
-        (window as any).showErrorToast(message, toastType);
+        window.showErrorToast(message, toastType);
       }
     }
     

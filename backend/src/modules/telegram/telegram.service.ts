@@ -62,7 +62,6 @@ export interface SendPollOptions {
 @Injectable()
 export class TelegramService {
   constructor(
-    private configService: ConfigService,
     private botService: TelegramBotService,
   ) {}
 

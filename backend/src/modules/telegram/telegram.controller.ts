@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, UseGuards, Request, Query, Delete, Logger } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, UseGuards, Query, Delete, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { TelegramService } from './telegram.service';
 import { TelegramBotService } from './telegram-bot.service';
@@ -68,7 +68,7 @@ export class TelegramController {
       
       // Заменяем переменные
       message = this.telegramBotService.replaceMessageVariables(message, userInfo, chatInfo);
-    } catch (error) {
+    } catch (error: any) {
       // Если не удалось получить информацию о чате, отправляем сообщение без замены переменных
       this.logger.warn(`Не удалось получить информацию о чате для замены переменных: ${error.message}`);
     }
@@ -163,7 +163,7 @@ export class TelegramController {
           }
         }
         caption = this.telegramBotService.replaceMessageVariables(caption, userInfo, chatInfo);
-      } catch (error) {
+      } catch (error: any) {
         this.logger.warn(`Не удалось получить информацию о чате для замены переменных в caption: ${error.message}`);
       }
     }
@@ -545,7 +545,7 @@ export class TelegramController {
     };
 
     // Создаем Set для быстрого поиска чатов по chatId
-    const existingChatIds = new Set(allChats.map(chat => chat.chatId));
+    // const existingChatIds = new Set(allChats.map(chat => chat.chatId)); // Не используется
     const processedChatIds = new Set<string>();
 
     // Проверяем существующие чаты

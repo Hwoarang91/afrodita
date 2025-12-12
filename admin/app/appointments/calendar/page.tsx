@@ -116,7 +116,7 @@ export default function CalendarPage() {
           },
         });
         return data || [];
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (process.env.NODE_ENV === 'development') {
           console.error('[Calendar] Ошибка при загрузке записей:', error);
         }
@@ -135,7 +135,7 @@ export default function CalendarPage() {
       const previousAppointments = queryClient.getQueryData(queryKey);
       
       // Обновляем время сразу в UI
-      queryClient.setQueryData(queryKey, (old: any) => {
+      queryClient.setQueryData(queryKey, (old: Appointment[] | undefined) => {
         if (!old) return old;
         return old.map((apt: Appointment) =>
           apt.id === id ? { ...apt, startTime: new Date(startTime) } : apt
@@ -144,11 +144,12 @@ export default function CalendarPage() {
       
       return { previousAppointments, queryKey };
     },
-    onError: (error: any, variables, context) => {
+    onError: (error: unknown, variables, context) => {
       if (context?.previousAppointments && context?.queryKey) {
         queryClient.setQueryData(context.queryKey, context.previousAppointments);
       }
-      toast.error(`Ошибка: ${error.response?.data?.message || error.message}`);
+      const axiosError = error as { response?: { data?: { message?: string } }; message?: string };
+      toast.error(`Ошибка: ${axiosError.response?.data?.message || axiosError.message || 'Неизвестная ошибка'}`);
     },
     onSuccess: () => {
       toast.success('Запись перенесена. Клиенту отправлено уведомление.');
@@ -168,7 +169,7 @@ export default function CalendarPage() {
       await queryClient.cancelQueries({ queryKey });
       const previousAppointments = queryClient.getQueryData(queryKey);
       
-      queryClient.setQueryData(queryKey, (old: any) => {
+      queryClient.setQueryData(queryKey, (old: Appointment[] | undefined) => {
         if (!old) return old;
         return old.map((apt: Appointment) =>
           apt.id === id ? { ...apt, status: 'confirmed' } : apt
@@ -202,7 +203,7 @@ export default function CalendarPage() {
       await queryClient.cancelQueries({ queryKey });
       const previousAppointments = queryClient.getQueryData(queryKey);
       
-      queryClient.setQueryData(queryKey, (old: any) => {
+      queryClient.setQueryData(queryKey, (old: Appointment[] | undefined) => {
         if (!old) return old;
         return old.map((apt: Appointment) =>
           apt.id === id ? { ...apt, status: 'cancelled' } : apt
@@ -211,11 +212,12 @@ export default function CalendarPage() {
       
       return { previousAppointments, queryKey };
     },
-    onError: (error: any, variables, context) => {
+    onError: (error: unknown, variables, context) => {
       if (context?.previousAppointments && context?.queryKey) {
         queryClient.setQueryData(context.queryKey, context.previousAppointments);
       }
-      toast.error(`Ошибка: ${error.response?.data?.message || error.message}`);
+      const axiosError = error as { response?: { data?: { message?: string } }; message?: string };
+      toast.error(`Ошибка: ${axiosError.response?.data?.message || axiosError.message || 'Неизвестная ошибка'}`);
     },
     onSuccess: () => {
       setSelectedAppointment(null);
@@ -237,7 +239,7 @@ export default function CalendarPage() {
       const previousAppointments = queryClient.getQueryData(queryKey);
       
       // Удаляем из списка сразу
-      queryClient.setQueryData(queryKey, (old: any) => {
+      queryClient.setQueryData(queryKey, (old: Appointment[] | undefined) => {
         if (!old) return old;
         return old.filter((apt: Appointment) => apt.id !== id);
       });

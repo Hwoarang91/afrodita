@@ -43,7 +43,7 @@ export class UsersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Получение пользователя по ID (только для админов)' })
-  async findById(@Request() req, @Param('id') id: string) {
+  async findById(@Request() req: any, @Param('id') id: string) {
     // Только админы могут видеть других пользователей
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
@@ -53,19 +53,19 @@ export class UsersController {
 
   @Get('me')
   @ApiOperation({ summary: 'Получение профиля текущего пользователя' })
-  async getProfile(@Request() req) {
+  async getProfile(@Request() req: any) {
     return await this.usersService.findById(req.user.sub);
   }
 
   @Put('me')
   @ApiOperation({ summary: 'Обновление профиля' })
-  async updateProfile(@Request() req, @Body() data: any) {
+  async updateProfile(@Request() req: any, @Body() data: any) {
     return await this.usersService.update(req.user.sub, data);
   }
 
   @Post()
   @ApiOperation({ summary: 'Создание пользователя (только для админов)' })
-  async create(@Request() req, @Body() data: any) {
+  async create(@Request() req: any, @Body() data: any) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
@@ -85,7 +85,7 @@ export class UsersController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Обновление пользователя (только для админов)' })
-  async updateUser(@Request() req, @Param('id') id: string, @Body() data: any) {
+  async updateUser(@Request() req: any, @Param('id') id: string, @Body() data: any) {
     // Только админы могут обновлять других пользователей
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
@@ -98,8 +98,8 @@ export class UsersController {
     // Определяем изменения
     const changes: Record<string, any> = {};
     Object.keys(data).forEach((key) => {
-      if (oldUser[key] !== data[key]) {
-        changes[key] = { old: oldUser[key], new: data[key] };
+      if ((oldUser as any)[key] !== (data as any)[key]) {
+        changes[key] = { old: (oldUser as any)[key], new: (data as any)[key] };
       }
     });
     
@@ -118,7 +118,7 @@ export class UsersController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Удаление пользователя (только для админов)' })
-  async delete(@Request() req, @Param('id') id: string) {
+  async delete(@Request() req: any, @Param('id') id: string) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
@@ -144,11 +144,97 @@ export class UsersController {
 
   @Get(':id/interaction-history')
   @ApiOperation({ summary: 'Получение истории взаимодействий с клиентом (только для админов)' })
-  async getInteractionHistory(@Request() req, @Param('id') id: string) {
+  async getInteractionHistory(@Request() req: any, @Param('id') id: string) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
     return await this.usersService.getInteractionHistory(id);
+  }
+
+  @Get(':id/body-measurements')
+  @ApiOperation({ summary: 'Получение всех замеров объемов тела клиента (только для админов)' })
+  async getBodyMeasurements(@Request() req: any, @Param('id') id: string) {
+    if (req?.user?.role !== 'admin') {
+      throw new Error('Access denied');
+    }
+    return await this.usersService.getBodyMeasurements(id);
+  }
+
+  @Get(':id/body-measurements/latest')
+  @ApiOperation({ summary: 'Получение последнего замера объемов тела клиента (только для админов)' })
+  async getLatestBodyMeasurement(@Request() req: any, @Param('id') id: string) {
+    if (req?.user?.role !== 'admin') {
+      throw new Error('Access denied');
+    }
+    return await this.usersService.getLatestBodyMeasurement(id);
+  }
+
+  @Post(':id/body-measurements')
+  @ApiOperation({ summary: 'Создание нового замера объемов тела (только для админов)' })
+  async createBodyMeasurement(@Request() req: any, @Param('id') id: string, @Body() data: any) {
+    if (req?.user?.role !== 'admin') {
+      throw new Error('Access denied');
+    }
+    const measurement = await this.usersService.createBodyMeasurement(id, data);
+    
+    await this.auditService.log(req.user.sub, AuditAction.USER_UPDATED, {
+      entityType: 'body_measurement',
+      entityId: measurement.id,
+      description: `Создан новый замер объемов тела для клиента`,
+      changes: data,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+    
+    return measurement;
+  }
+
+  @Put(':id/body-measurements/:measurementId')
+  @ApiOperation({ summary: 'Обновление замера объемов тела (только для админов)' })
+  async updateBodyMeasurement(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Param('measurementId') measurementId: string,
+    @Body() data: any,
+  ) {
+    if (req?.user?.role !== 'admin') {
+      throw new Error('Access denied');
+    }
+    const measurement = await this.usersService.updateBodyMeasurement(measurementId, id, data);
+    
+    await this.auditService.log(req.user.sub, AuditAction.USER_UPDATED, {
+      entityType: 'body_measurement',
+      entityId: measurementId,
+      description: `Обновлен замер объемов тела для клиента`,
+      changes: data,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+    
+    return measurement;
+  }
+
+  @Delete(':id/body-measurements/:measurementId')
+  @ApiOperation({ summary: 'Удаление замера объемов тела (только для админов)' })
+  async deleteBodyMeasurement(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Param('measurementId') measurementId: string,
+  ) {
+    if (req?.user?.role !== 'admin') {
+      throw new Error('Access denied');
+    }
+    await this.usersService.deleteBodyMeasurement(measurementId, id);
+    
+    await this.auditService.log(req.user.sub, AuditAction.USER_DELETED, {
+      entityType: 'body_measurement',
+      entityId: measurementId,
+      description: `Удален замер объемов тела для клиента`,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+    
+    return { success: true };
   }
 }
 

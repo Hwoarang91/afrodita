@@ -21,6 +21,7 @@ const Profile = lazy(() => import('./features/profile/page'));
 const History = lazy(() => import('./features/appointments/History'));
 const Notifications = lazy(() => import('./features/profile/Notifications'));
 const Reschedule = lazy(() => import('./features/appointments/Reschedule'));
+const AdminPage = lazy(() => import('./features/admin/page'));
 const NotFound = lazy(() => import('./shared/NotFound'));
 
 // Настройка QueryClient с retry механизмом и обработкой ошибок
@@ -72,6 +73,8 @@ function App() {
                 <Route path="/history" element={<History />} />
                 <Route path="/notifications" element={<Notifications />} />
                 <Route path="/reschedule/:id" element={<Reschedule />} />
+                {/* Админ-панель */}
+                <Route path="/admin" element={<AdminPage />} />
                 {/* Редирект админ-панели на правильный путь */}
                 <Route path="/login" element={<AdminRedirect />} />
                 <Route path="/register" element={<AdminRedirect />} />

@@ -78,13 +78,13 @@ export function validateMarkdownV2(text: string): {
   }
 
   // Проверка на незакрытые теги
-  const boldMatches = text.match(/\*[^*]+\*/g) || [];
+  // const boldMatches = text.match(/\*[^*]+\*/g) || []; // Не используется
   const boldOpen = (text.match(/\*/g) || []).length;
   if (boldOpen % 2 !== 0) {
     errors.push('Незакрытые теги жирного текста (*)');
   }
 
-  const italicMatches = text.match(/_[^_]+_/g) || [];
+  // const italicMatches = text.match(/_[^_]+_/g) || []; // Не используется
   const italicOpen = (text.match(/_/g) || []).length;
   if (italicOpen % 2 !== 0) {
     errors.push('Незакрытые теги курсива (_)');

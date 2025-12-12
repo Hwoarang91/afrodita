@@ -48,7 +48,7 @@ export class FixReviewsStatusData1701234567894 implements MigrationInterface {
     `);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(_queryRunner: QueryRunner): Promise<void> {
     // Откат не требуется, так как это исправление данных
   }
 }

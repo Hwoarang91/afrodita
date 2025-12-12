@@ -7,6 +7,7 @@ import { User, UserRole } from '../../entities/user.entity';
 import { Appointment } from '../../entities/appointment.entity';
 import { Transaction } from '../../entities/transaction.entity';
 import { Notification } from '../../entities/notification.entity';
+import { BodyMeasurement } from '../../entities/body-measurement.entity';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -37,6 +38,15 @@ describe('UsersService', () => {
   const mockNotificationRepository = {
     count: jest.fn(),
     find: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  const mockBodyMeasurementRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+    delete: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -58,6 +68,10 @@ describe('UsersService', () => {
         {
           provide: getRepositoryToken(Notification),
           useValue: mockNotificationRepository,
+        },
+        {
+          provide: getRepositoryToken(BodyMeasurement),
+          useValue: mockBodyMeasurementRepository,
         },
       ],
     }).compile();
@@ -356,6 +370,87 @@ describe('UsersService', () => {
       mockAppointmentRepository.count.mockResolvedValue(5);
 
       await expect(service.delete(userId)).rejects.toThrow(BadRequestException);
+    });
+
+    it('должен выбросить ошибку если есть транзакции', async () => {
+      const userId = 'user-1';
+      const mockUser: User = {
+        id: userId,
+      } as User;
+
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockTransactionRepository.count.mockResolvedValue(3);
+
+      await expect(service.delete(userId)).rejects.toThrow(BadRequestException);
+    });
+
+    it('должен удалить уведомления перед удалением пользователя', async () => {
+      const userId = 'user-1';
+      const mockUser: User = {
+        id: userId,
+      } as User;
+
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockTransactionRepository.count.mockResolvedValue(0);
+      mockNotificationRepository.count.mockResolvedValue(5);
+      mockNotificationRepository.delete.mockResolvedValue({ affected: 5 });
+      mockUserRepository.remove.mockResolvedValue(mockUser);
+
+      await service.delete(userId);
+
+      expect(mockNotificationRepository.delete).toHaveBeenCalledWith({ userId });
+      expect(mockUserRepository.remove).toHaveBeenCalledWith(mockUser);
+    });
+
+    it('должен обработать ошибку foreign key constraint', async () => {
+      const userId = 'user-1';
+      const mockUser: User = {
+        id: userId,
+      } as User;
+
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockTransactionRepository.count.mockResolvedValue(0);
+      mockNotificationRepository.count.mockResolvedValue(0);
+      const foreignKeyError: any = new Error('foreign key constraint');
+      foreignKeyError.code = '23503';
+      mockUserRepository.remove.mockRejectedValue(foreignKeyError);
+
+      await expect(service.delete(userId)).rejects.toThrow(BadRequestException);
+    });
+
+    it('должен обработать ошибку с сообщением о foreign key', async () => {
+      const userId = 'user-1';
+      const mockUser: User = {
+        id: userId,
+      } as User;
+
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockTransactionRepository.count.mockResolvedValue(0);
+      mockNotificationRepository.count.mockResolvedValue(0);
+      const foreignKeyError = new Error('foreign key constraint violation');
+      mockUserRepository.remove.mockRejectedValue(foreignKeyError);
+
+      await expect(service.delete(userId)).rejects.toThrow(BadRequestException);
+    });
+
+    it('должен пробросить другие ошибки', async () => {
+      const userId = 'user-1';
+      const mockUser: User = {
+        id: userId,
+      } as User;
+
+      mockUserRepository.findOne.mockResolvedValue(mockUser);
+      mockAppointmentRepository.count.mockResolvedValue(0);
+      mockTransactionRepository.count.mockResolvedValue(0);
+      mockNotificationRepository.count.mockResolvedValue(0);
+      const otherError = new Error('Database connection error');
+      mockUserRepository.remove.mockRejectedValue(otherError);
+
+      await expect(service.delete(userId)).rejects.toThrow('Database connection error');
     });
   });
 

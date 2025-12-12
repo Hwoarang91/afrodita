@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -6,11 +6,15 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci
 
-# Копирование исходного кода backend
-COPY backend/ ./
-
-# Копирование shared (для TypeScript компиляции)
+# Копирование shared (для TypeScript компиляции) - должна быть перед копированием backend
 COPY shared/ /shared/
+
+# Копирование исходного кода backend (исключаем shared симлинк)
+COPY backend/src ./src
+COPY backend/tsconfig.json ./
+COPY backend/nest-cli.json ./
+COPY backend/jest*.config.js ./
+COPY backend/test ./test
 
 # Копируем entrypoint скрипт
 COPY backend/docker-entrypoint.sh /usr/local/bin/

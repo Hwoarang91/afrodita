@@ -29,7 +29,7 @@ export class SchedulerController {
 
   @Post('reminders/trigger')
   @ApiOperation({ summary: 'Ручной запуск проверки напоминаний (только для админов)' })
-  async triggerReminders(@Request() req) {
+  async triggerReminders(@Request() _req: any) {
     await this.schedulerService.sendAppointmentReminders();
     return { success: true, message: 'Проверка напоминаний запущена' };
   }

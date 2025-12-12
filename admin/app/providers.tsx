@@ -2,6 +2,14 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { AxiosError, getErrorMessage } from '@/lib/types';
+
+// Расширяем Window для showErrorToast
+declare global {
+  interface Window {
+    showErrorToast?: (message: string, type: string) => void;
+  }
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -9,9 +17,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            retry: (failureCount, error: any) => {
+            retry: (failureCount, error: unknown) => {
+              const axiosError = error as AxiosError;
               // Не повторяем запросы при 401, 403, 404
-              if (error?.response?.status === 401 || error?.response?.status === 403 || error?.response?.status === 404) {
+              if (axiosError?.response?.status === 401 || axiosError?.response?.status === 403 || axiosError?.response?.status === 404) {
                 return false;
               }
               // Повторяем максимум 2 раза для других ошибок
@@ -22,11 +31,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
           mutations: {
             retry: false,
-            onError: (error: any) => {
+            onError: (error: unknown) => {
               // Глобальная обработка ошибок мутаций
-              const message = error?.response?.data?.message || error?.message || 'Произошла ошибка';
-              if (typeof window !== 'undefined' && (window as any).showErrorToast) {
-                (window as any).showErrorToast(message, 'error');
+              const message = getErrorMessage(error);
+              if (typeof window !== 'undefined' && window.showErrorToast) {
+                window.showErrorToast(message, 'error');
               } else if (process.env.NODE_ENV === 'development') {
                 console.error('Mutation error:', error);
               }

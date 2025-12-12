@@ -29,7 +29,7 @@ export class FixAuditLogsEntityId1701234567890 implements MigrationInterface {
         WHERE "entityId" IS NOT NULL 
         AND "entityId"::text !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
       `);
-    } catch (error) {
+    } catch (error: any) {
       console.log('Ошибка при удалении данных из audit_logs (возможно, таблица пустая):', error.message);
     }
     
@@ -66,7 +66,7 @@ export class FixAuditLogsEntityId1701234567890 implements MigrationInterface {
         WHERE "entityId" IS NOT NULL 
         AND "entityId"::text !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
       `);
-    } catch (error) {
+    } catch (error: any) {
       console.log('Ошибка при удалении данных из audit_logs (возможно, таблица пустая):', error.message);
     }
     

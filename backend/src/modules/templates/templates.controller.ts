@@ -14,7 +14,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../entities/user.entity';
-import { NotificationType, NotificationChannel } from '../../entities/notification.entity';
+import { NotificationType } from '../../entities/notification.entity';
 import { CreateTemplateDto, UpdateTemplateDto, PreviewTemplateDto } from './dto/template.dto';
 
 @ApiTags('templates')

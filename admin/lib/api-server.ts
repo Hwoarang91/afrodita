@@ -42,7 +42,7 @@ export async function fetchFromAPI<T>(
 
     const data = await response.json();
     return data.data || data; // Возвращаем data если есть, иначе весь объект
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Если ошибка сети или другие - пробрасываем дальше
     throw error;
   }

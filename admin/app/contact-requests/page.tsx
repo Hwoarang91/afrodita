@@ -71,7 +71,7 @@ export default function ContactRequestsPage() {
       setRequests(response.data.data);
       setTotal(response.data.total);
       setSelectedIds(new Set()); // Сбрасываем выделение при загрузке новой страницы
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка при загрузке заявок:', error);
     } finally {
       setLoading(false);
@@ -111,7 +111,7 @@ export default function ContactRequestsPage() {
         ids: Array.from(selectedIds),
       });
       await loadRequests();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка при удалении заявок:', error);
       alert('Ошибка при удалении заявок');
     }
@@ -123,7 +123,7 @@ export default function ContactRequestsPage() {
         [field]: value,
       });
       await loadRequests();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка при обновлении заявки:', error);
     }
   };
@@ -138,7 +138,7 @@ export default function ContactRequestsPage() {
       });
       await loadRequests();
       setIsDialogOpen(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка при сохранении комментария:', error);
       alert('Ошибка при сохранении комментария');
     } finally {
@@ -153,7 +153,7 @@ export default function ContactRequestsPage() {
     try {
       await apiClient.delete(`/contact-requests/${id}`);
       await loadRequests();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Ошибка при удалении заявки:', error);
     }
   };

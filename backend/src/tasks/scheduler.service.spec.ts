@@ -13,9 +13,6 @@ import { SettingsService } from '../modules/settings/settings.service';
 
 describe('SchedulerService', () => {
   let service: SchedulerService;
-  let appointmentRepository: Repository<Appointment>;
-  let notificationsService: NotificationsService;
-  let settingsService: SettingsService;
 
   const mockAppointmentRepository = {
     find: jest.fn(),
@@ -102,11 +99,6 @@ describe('SchedulerService', () => {
     }).compile();
 
     service = module.get<SchedulerService>(SchedulerService);
-    appointmentRepository = module.get<Repository<Appointment>>(
-      getRepositoryToken(Appointment),
-    );
-    notificationsService = module.get<NotificationsService>(NotificationsService);
-    settingsService = module.get<SettingsService>(SettingsService);
   });
 
   afterEach(() => {
@@ -310,12 +302,25 @@ describe('SchedulerService', () => {
       const now = new Date();
       const futureTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-      const mockAppointment: Appointment = {
+      const mockAppointment = {
         id: 'appointment-1',
         startTime: futureTime,
         status: AppointmentStatus.CONFIRMED,
+        clientId: 'user-1',
+        masterId: 'master-1',
+        serviceId: 'service-1',
+        endTime: futureTime,
+        price: 1000,
+        bonusPointsUsed: 0,
+        bonusPointsEarned: 0,
+        notes: null,
+        cancellationReason: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         client: null,
-      } as Appointment;
+        master: null,
+        service: null,
+      } as unknown as Appointment;
 
       mockAppointmentRepository.find.mockResolvedValue([mockAppointment]);
       mockSettingsService.get.mockResolvedValue([24, 2]);
@@ -431,13 +436,32 @@ describe('SchedulerService', () => {
   describe('sendBirthdayReminders', () => {
     it('должен отправить напоминания о днях рождения', async () => {
       const today = new Date();
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         dateOfBirth: new Date(today.getFullYear() - 30, today.getMonth(), today.getDate()),
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
+        segment: null,
         telegramId: '123456789',
         notificationSettings: { birthdayRemindersEnabled: true },
-      } as User;
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        appointments: [],
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       const mockQueryBuilder = {
         where: jest.fn().mockReturnThis(),
@@ -456,12 +480,32 @@ describe('SchedulerService', () => {
 
     it('должен пропустить пользователей с отключенными напоминаниями о днях рождения', async () => {
       const today = new Date();
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         dateOfBirth: new Date(today.getFullYear() - 30, today.getMonth(), today.getDate()),
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
+        segment: null,
+        telegramId: null,
         notificationSettings: { birthdayRemindersEnabled: false },
-      } as User;
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        appointments: [],
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       const mockQueryBuilder = {
         where: jest.fn().mockReturnThis(),
@@ -478,13 +522,32 @@ describe('SchedulerService', () => {
 
     it('должен пропустить пользователей без telegramId', async () => {
       const today = new Date();
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         dateOfBirth: new Date(today.getFullYear() - 30, today.getMonth(), today.getDate()),
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
+        segment: null,
         telegramId: null,
         notificationSettings: { birthdayRemindersEnabled: true },
-      } as User;
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        appointments: [],
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       const mockQueryBuilder = {
         where: jest.fn().mockReturnThis(),
@@ -502,13 +565,32 @@ describe('SchedulerService', () => {
 
     it('должен пропустить если напоминание уже было отправлено сегодня', async () => {
       const today = new Date();
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         dateOfBirth: new Date(today.getFullYear() - 30, today.getMonth(), today.getDate()),
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
+        segment: null,
         telegramId: '123456789',
         notificationSettings: { birthdayRemindersEnabled: true },
-      } as User;
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        appointments: [],
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       const mockExistingReminder = {
         id: 'notification-1',
@@ -533,12 +615,32 @@ describe('SchedulerService', () => {
 
   describe('updateClientSegments', () => {
     it('должен установить сегмент "новый" для клиента без записей', async () => {
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        dateOfBirth: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
         segment: null,
+        telegramId: null,
+        notificationSettings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         appointments: [],
-      } as User;
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       mockUserRepository.find.mockResolvedValue([mockUser]);
       mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'новый' } as User);
@@ -553,10 +655,28 @@ describe('SchedulerService', () => {
     it('должен установить сегмент "неактивный" для клиента без визитов более 90 дней', async () => {
       const oldDate = new Date();
       oldDate.setDate(oldDate.getDate() - 100);
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        dateOfBirth: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
         segment: 'постоянный',
+        telegramId: null,
+        notificationSettings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         appointments: [
           {
             id: 'appointment-1',
@@ -565,7 +685,9 @@ describe('SchedulerService', () => {
             price: 1000,
           } as Appointment,
         ],
-      } as User;
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       mockUserRepository.find.mockResolvedValue([mockUser]);
       mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'неактивный' } as User);
@@ -587,12 +709,32 @@ describe('SchedulerService', () => {
         price: 1500,
       })) as Appointment[];
 
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        dateOfBirth: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
         segment: 'постоянный',
+        telegramId: null,
+        notificationSettings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         appointments: mockAppointments,
-      } as User;
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       mockUserRepository.find.mockResolvedValue([mockUser]);
       mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'VIP' } as User);
@@ -614,12 +756,32 @@ describe('SchedulerService', () => {
         price: 1000,
       })) as Appointment[];
 
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        dateOfBirth: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
         segment: 'новый',
+        telegramId: null,
+        notificationSettings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         appointments: mockAppointments,
-      } as User;
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       mockUserRepository.find.mockResolvedValue([mockUser]);
       mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'постоянный' } as User);
@@ -641,12 +803,32 @@ describe('SchedulerService', () => {
         price: 1000,
       })) as Appointment[];
 
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        dateOfBirth: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
         segment: 'постоянный',
+        telegramId: null,
+        notificationSettings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         appointments: mockAppointments,
-      } as User;
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       mockUserRepository.find.mockResolvedValue([mockUser]);
 
@@ -667,12 +849,32 @@ describe('SchedulerService', () => {
         } as Appointment,
       ];
 
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        dateOfBirth: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
         segment: null,
+        telegramId: null,
+        notificationSettings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         appointments: mockAppointments,
-      } as User;
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       mockUserRepository.find.mockResolvedValue([mockUser]);
       mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'новый' } as User);
@@ -695,12 +897,32 @@ describe('SchedulerService', () => {
         price: 1000,
       })) as Appointment[];
 
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        dateOfBirth: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
         segment: null,
+        telegramId: null,
+        notificationSettings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         appointments: mockAppointments,
-      } as User;
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       mockUserRepository.find.mockResolvedValue([mockUser]);
       // Для 3 визитов сегмент остается "новый" (нужно 5+ для "постоянный")
@@ -714,12 +936,32 @@ describe('SchedulerService', () => {
     });
 
     it('должен обработать клиента без lastVisit', async () => {
-      const mockUser: User = {
+      const mockUser = {
         id: 'user-1',
+        firstName: 'Test',
+        lastName: 'User',
+        username: null,
+        phone: null,
+        email: null,
+        password: null,
         role: UserRole.CLIENT,
+        bonusPoints: 0,
+        isActive: true,
+        preferences: null,
+        adminNotes: null,
+        dateOfBirth: null,
+        weight: null,
+        photoUrl: null,
+        tags: null,
         segment: null,
+        telegramId: null,
+        notificationSettings: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         appointments: [],
-      } as User;
+        transactions: [],
+        notifications: [],
+      } as unknown as User;
 
       mockUserRepository.find.mockResolvedValue([mockUser]);
       mockUserRepository.save.mockResolvedValue({ ...mockUser, segment: 'новый' } as User);

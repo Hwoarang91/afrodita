@@ -23,79 +23,85 @@ export enum UserRole {
 @Index(['phone'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column({ unique: true, nullable: true })
   @Index()
-  telegramId: string;
+  telegramId!: string;
 
   @Column({ nullable: true })
-  firstName: string;
+  firstName!: string;
 
   @Column({ nullable: true })
-  lastName: string;
+  lastName!: string;
 
   @Column({ nullable: true })
-  username: string;
+  username!: string;
 
   @Column({ nullable: true })
-  phone: string;
+  phone!: string;
 
   @Column({ nullable: true, unique: true })
   @Index()
-  email: string;
+  email!: string;
 
   @Column({ nullable: true })
-  password: string; // Хешированный пароль для админов
+  password!: string; // Хешированный пароль для админов
 
   @Column({
     type: 'enum',
     enum: UserRole,
     default: UserRole.CLIENT,
   })
-  role: UserRole;
+  role!: UserRole;
 
   @Column({ type: 'int', default: 0 })
-  bonusPoints: number;
+  bonusPoints!: number;
 
   @Column({ type: 'boolean', default: true })
-  isActive: boolean;
+  isActive!: boolean;
 
   @Column({ type: 'jsonb', nullable: true })
-  preferences: Record<string, any>;
+  preferences!: Record<string, any>;
 
   @Column({ type: 'text', nullable: true })
-  adminNotes: string; // Комментарий админа (виден только админам)
+  adminNotes!: string; // Комментарий админа (виден только админам)
 
   @Column({ type: 'date', nullable: true })
-  dateOfBirth: Date; // Дата рождения для напоминаний
+  dateOfBirth!: Date; // Дата рождения для напоминаний
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  weight!: number; // Вес клиента в килограммах
+
+  @Column({ type: 'text', nullable: true })
+  photoUrl!: string; // URL фото клиента
 
   @Column({ type: 'jsonb', nullable: true })
-  tags: string[]; // Ручные метки и категории для клиента
+  tags!: string[]; // Ручные метки и категории для клиента
 
   @Column({ type: 'varchar', nullable: true })
-  segment: string; // Автоматическая сегментация: VIP, постоянный, новый, неактивный
+  segment!: string; // Автоматическая сегментация: VIP, постоянный, новый, неактивный
 
   @Column({ type: 'jsonb', nullable: true })
-  notificationSettings: {
+  notificationSettings!: {
     remindersEnabled?: boolean; // Включены ли напоминания
     reminderIntervals?: number[]; // Настраиваемые интервалы напоминаний в часах (например, [24, 2])
     birthdayRemindersEnabled?: boolean; // Включены ли напоминания о днях рождения
   };
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @OneToMany(() => Appointment, (appointment) => appointment.client)
-  appointments: Appointment[];
+  appointments!: Appointment[];
 
   @OneToMany(() => Transaction, (transaction) => transaction.user)
-  transactions: Transaction[];
+  transactions!: Transaction[];
 
   @OneToMany(() => Notification, (notification) => notification.user)
-  notifications: Notification[];
+  notifications!: Notification[];
 }
 
