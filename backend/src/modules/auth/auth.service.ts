@@ -87,13 +87,6 @@ export class AuthService {
       where: { telegramId: data.id },
     });
 
-    // Если пользователь найден и он не клиент - запрещаем авторизацию через Telegram
-    if (user && user.role !== UserRole.CLIENT) {
-      throw new UnauthorizedException(
-        'Telegram authentication is only available for clients. Please use email/password authentication.',
-      );
-    }
-
     // Если пользователь не найден по Telegram ID, но есть телефон в данных
     // (хотя в Telegram Mini App обычно нет телефона, но на всякий случай)
     if (!user && data.phone) {
@@ -103,26 +96,20 @@ export class AuthService {
       });
       
       if (user) {
-        // Если пользователь найден по телефону и он не клиент - запрещаем авторизацию
-        if (user.role !== UserRole.CLIENT) {
-          throw new UnauthorizedException(
-            'Telegram authentication is only available for clients. Please use email/password authentication.',
-          );
-        }
-        // Объединяем: добавляем Telegram ID к существующему пользователю-клиенту
+        // Объединяем: добавляем Telegram ID к существующему пользователю
+        // Роль пользователя сохраняется (может быть ADMIN, MASTER или CLIENT)
         user.telegramId = data.id;
         user.firstName = data.first_name || user.firstName;
         user.lastName = data.last_name || user.lastName;
         user.username = data.username || user.username;
-        // Убеждаемся, что роль остается CLIENT
-        user.role = UserRole.CLIENT;
         await this.userRepository.save(user);
         return user;
       }
     }
 
     if (!user) {
-      // Создаем нового пользователя только с ролью CLIENT
+      // Создаем нового пользователя с ролью CLIENT по умолчанию
+      // Роль можно будет изменить через админ-панель позже
       user = this.userRepository.create({
         telegramId: data.id,
         firstName: data.first_name,
@@ -132,12 +119,12 @@ export class AuthService {
       });
       await this.userRepository.save(user);
     } else {
-      // Обновление данных существующего клиента
-      // Убеждаемся, что роль остается CLIENT (защита от изменения роли)
+      // Обновление данных существующего пользователя
+      // Роль сохраняется (если пользователь был назначен админом/мастером через админ-панель)
       user.firstName = data.first_name;
       user.lastName = data.last_name;
       user.username = data.username;
-      user.role = UserRole.CLIENT;
+      // Роль НЕ меняется - она управляется через админ-панель
       await this.userRepository.save(user);
     }
 

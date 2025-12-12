@@ -333,7 +333,7 @@ describe('AuthService', () => {
       const result = await service.validateTelegramAuth(telegramData as any);
 
       expect(result.firstName).toBe(telegramData.first_name);
-      expect(result.role).toBe(UserRole.CLIENT); // Роль должна остаться CLIENT
+      expect(result.role).toBe(UserRole.CLIENT); // Для нового пользователя роль CLIENT
       expect(mockUserRepository.save).toHaveBeenCalled();
       
       // Очищаем spy после теста
@@ -600,10 +600,12 @@ describe('AuthService', () => {
       expect(result.role).toBe(UserRole.CLIENT);
     });
 
-    it('должен запретить авторизацию через Telegram для существующего админа', async () => {
+    it('должен разрешить авторизацию через Telegram для существующего админа (роль сохраняется)', async () => {
       const telegramData = {
         id: '123456789',
         first_name: 'Admin',
+        last_name: 'User',
+        username: 'admin_user',
         auth_date: Math.floor(Date.now() / 1000),
         hash: 'hash',
       };
@@ -611,23 +613,39 @@ describe('AuthService', () => {
       const adminUser = {
         id: 'admin-1',
         telegramId: telegramData.id,
-        firstName: 'Admin',
+        firstName: 'Old',
+        lastName: 'Name',
+        username: 'old_username',
         role: UserRole.ADMIN,
+      } as User;
+
+      const updatedAdminUser = {
+        ...adminUser,
+        firstName: telegramData.first_name,
+        lastName: telegramData.last_name,
+        username: telegramData.username,
+        role: UserRole.ADMIN, // Роль сохраняется
       } as User;
 
       mockConfigService.get.mockReturnValue('bot_token');
       jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
       mockUserRepository.findOne.mockResolvedValue(adminUser);
+      mockUserRepository.save.mockResolvedValue(updatedAdminUser);
 
-      await expect(service.validateTelegramAuth(telegramData as any)).rejects.toThrow(
-        'Telegram authentication is only available for clients',
-      );
+      const result = await service.validateTelegramAuth(telegramData as any);
+      
+      expect(result).toBeDefined();
+      expect(result.role).toBe(UserRole.ADMIN); // Роль осталась ADMIN
+      expect(result.firstName).toBe(telegramData.first_name);
+      expect(mockUserRepository.save).toHaveBeenCalled();
     });
 
-    it('должен запретить авторизацию через Telegram для существующего мастера', async () => {
+    it('должен разрешить авторизацию через Telegram для существующего мастера (роль сохраняется)', async () => {
       const telegramData = {
         id: '123456789',
         first_name: 'Master',
+        last_name: 'User',
+        username: 'master_user',
         auth_date: Math.floor(Date.now() / 1000),
         hash: 'hash',
       };
@@ -635,20 +653,34 @@ describe('AuthService', () => {
       const masterUser = {
         id: 'master-1',
         telegramId: telegramData.id,
-        firstName: 'Master',
+        firstName: 'Old',
+        lastName: 'Name',
+        username: 'old_username',
         role: UserRole.MASTER,
+      } as User;
+
+      const updatedMasterUser = {
+        ...masterUser,
+        firstName: telegramData.first_name,
+        lastName: telegramData.last_name,
+        username: telegramData.username,
+        role: UserRole.MASTER, // Роль сохраняется
       } as User;
 
       mockConfigService.get.mockReturnValue('bot_token');
       jest.spyOn(service as any, 'verifyTelegramAuth').mockReturnValue(true);
       mockUserRepository.findOne.mockResolvedValue(masterUser);
+      mockUserRepository.save.mockResolvedValue(updatedMasterUser);
 
-      await expect(service.validateTelegramAuth(telegramData as any)).rejects.toThrow(
-        'Telegram authentication is only available for clients',
-      );
+      const result = await service.validateTelegramAuth(telegramData as any);
+      
+      expect(result).toBeDefined();
+      expect(result.role).toBe(UserRole.MASTER); // Роль осталась MASTER
+      expect(result.firstName).toBe(telegramData.first_name);
+      expect(mockUserRepository.save).toHaveBeenCalled();
     });
 
-    it('должен запретить авторизацию через Telegram для пользователя с ролью ADMIN, найденного по телефону', async () => {
+    it('должен разрешить авторизацию через Telegram для пользователя с ролью ADMIN, найденного по телефону (роль сохраняется)', async () => {
       const telegramData = {
         id: '123456789',
         first_name: 'Admin',
@@ -662,6 +694,13 @@ describe('AuthService', () => {
         phone: '+79991234567',
         firstName: 'Admin',
         role: UserRole.ADMIN,
+      } as User;
+
+      const updatedAdminUser = {
+        ...adminUser,
+        telegramId: telegramData.id,
+        firstName: telegramData.first_name,
+        role: UserRole.ADMIN, // Роль сохраняется
       } as User;
 
       mockConfigService.get.mockReturnValue('bot_token');
@@ -670,10 +709,14 @@ describe('AuthService', () => {
         .mockResolvedValueOnce(null) // Первый вызов - по telegramId
         .mockResolvedValueOnce(adminUser); // Второй вызов - по телефону
       mockUsersService.normalizePhone.mockReturnValue('+79991234567');
+      mockUserRepository.save.mockResolvedValue(updatedAdminUser);
 
-      await expect(service.validateTelegramAuth(telegramData as any)).rejects.toThrow(
-        'Telegram authentication is only available for clients',
-      );
+      const result = await service.validateTelegramAuth(telegramData as any);
+      
+      expect(result).toBeDefined();
+      expect(result.role).toBe(UserRole.ADMIN); // Роль осталась ADMIN
+      expect(result.telegramId).toBe(telegramData.id);
+      expect(mockUserRepository.save).toHaveBeenCalled();
     });
   });
 
@@ -831,18 +874,21 @@ describe('AuthService', () => {
         id: 'user-1',
         phone: '+79991234567',
         telegramId: null,
-        role: UserRole.CLIENT, // Важно: пользователь должен быть клиентом
+        role: UserRole.CLIENT,
+      } as User;
+
+      const updatedUser: User = {
+        ...existingUser,
+        telegramId: telegramData.id,
+        firstName: telegramData.first_name,
+        role: UserRole.CLIENT, // Роль сохраняется
       } as User;
 
       mockUserRepository.findOne
         .mockResolvedValueOnce(null) // не найден по telegramId
         .mockResolvedValueOnce(existingUser); // найден по телефону
       mockUsersService.normalizePhone.mockReturnValue('+79991234567');
-      mockUserRepository.save.mockResolvedValue({
-        ...existingUser,
-        telegramId: telegramData.id,
-        role: UserRole.CLIENT, // Роль должна остаться CLIENT
-      } as User);
+      mockUserRepository.save.mockResolvedValue(updatedUser);
       mockConfigService.get.mockReturnValue('test-bot-token');
       
       const crypto = require('crypto');
