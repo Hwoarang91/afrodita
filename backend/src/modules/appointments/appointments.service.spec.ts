@@ -84,6 +84,7 @@ describe('AppointmentsService', () => {
   const mockTelegramBotService = {
     sendMessage: jest.fn(),
     notifyAdminsAboutNewAppointment: jest.fn(),
+    notifyMasterAboutNewAppointment: jest.fn(),
     notifyAdminsAboutCancelledAppointment: jest.fn(),
   };
 
@@ -211,6 +212,7 @@ describe('AppointmentsService', () => {
         status: AppointmentStatus.PENDING,
       });
       mockTelegramBotService.notifyAdminsAboutNewAppointment.mockResolvedValue(undefined);
+      mockTelegramBotService.notifyMasterAboutNewAppointment.mockResolvedValue(undefined);
 
       const result = await service.create(dto, userId);
 
@@ -1175,6 +1177,7 @@ describe('AppointmentsService', () => {
       mockAppointmentRepository.create.mockReturnValue({});
       mockAppointmentRepository.save.mockResolvedValue(savedAppointment);
       mockTelegramBotService.notifyAdminsAboutNewAppointment.mockRejectedValue(new Error('Telegram error'));
+      mockTelegramBotService.notifyMasterAboutNewAppointment.mockResolvedValue(undefined);
 
       const loggerErrorSpy = jest.spyOn((service as any).logger, 'error');
 

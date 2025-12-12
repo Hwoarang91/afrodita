@@ -123,12 +123,15 @@ export class AppointmentsService {
       startTime,
       endTime,
       price: finalPrice,
-      discount: discount > 0 ? discount : null,
+      discount: discount > 0 ? discount : undefined,
       status: AppointmentStatus.PENDING,
       notes: dto.notes,
     });
 
     const savedAppointment = await this.appointmentRepository.save(appointment);
+    if (Array.isArray(savedAppointment)) {
+      throw new Error('Unexpected array returned from save');
+    }
 
     // Отправка уведомления только если запись подтверждена
     // Если статус PENDING, уведомление не отправляется (будет отправлено при подтверждении админом)
@@ -142,6 +145,14 @@ export class AppointmentsService {
     } catch (error: any) {
       // Логируем ошибку, но не прерываем выполнение
       this.logger.error(`Ошибка при отправке уведомления админам о новой записи: ${error.message}`, error.stack);
+    }
+
+    // Отправка уведомления мастеру о новой записи (всегда, независимо от статуса)
+    try {
+      await this.telegramBotService.notifyMasterAboutNewAppointment(savedAppointment);
+    } catch (error: any) {
+      // Логируем ошибку, но не прерываем выполнение
+      this.logger.error(`Ошибка при отправке уведомления мастеру о новой записи: ${error.message}`, error.stack);
     }
 
     return savedAppointment;
@@ -244,7 +255,10 @@ export class AppointmentsService {
         where: { id: appointment.serviceId },
       });
       const startTime = new Date(dto.startTime);
-      const endTime = new Date(startTime.getTime() + service.duration * 60000);
+      if (!service) {
+        throw new BadRequestException('Service not found');
+      }
+      const endTime = new Date(startTime.getTime() + (service.duration || 60) * 60000);
 
       await this.validateTimeSlot(appointment.masterId, startTime, endTime, id);
 
@@ -269,6 +283,9 @@ export class AppointmentsService {
       appointment.notes = dto.notes;
     }
 
+    // Сохраняем старое время для уведомления
+    const oldStartTime = dto.startTime ? new Date(appointment.startTime) : undefined;
+    
     const updated = await this.appointmentRepository.save(appointment);
 
     // Уведомления
@@ -285,6 +302,27 @@ export class AppointmentsService {
       }
     } else if (dto.startTime) {
       await this.notificationsService.sendAppointmentRescheduled(updated);
+      // Уведомление администратору об изменении времени записи
+      try {
+        await this.telegramBotService.notifyAdminAboutAppointmentUpdate(
+          updated,
+          oldStartTime,
+          originalStatus,
+        );
+      } catch (error: any) {
+        this.logger.error(`Ошибка при отправке уведомления администратору об изменении записи: ${error.message}`, error.stack);
+      }
+    } else if (dto.status && dto.status !== originalStatus) {
+      // Уведомление администратору об изменении статуса (если время не менялось)
+      try {
+        await this.telegramBotService.notifyAdminAboutAppointmentUpdate(
+          updated,
+          undefined,
+          originalStatus,
+        );
+      } catch (error: any) {
+        this.logger.error(`Ошибка при отправке уведомления администратору об изменении статуса: ${error.message}`, error.stack);
+      }
     }
 
     return updated;
@@ -303,7 +341,7 @@ export class AppointmentsService {
     }
 
     appointment.status = AppointmentStatus.CANCELLED;
-    appointment.cancellationReason = reason;
+    appointment.cancellationReason = reason || undefined;
 
     const cancelled = await this.appointmentRepository.save(appointment);
 
@@ -368,6 +406,17 @@ export class AppointmentsService {
 
     // Отправка уведомления
     await this.notificationsService.sendAppointmentRescheduled(rescheduled);
+
+    // Уведомление администратору о переносе записи
+    try {
+      await this.telegramBotService.notifyAdminAboutAppointmentUpdate(
+        rescheduled,
+        new Date(appointment.startTime),
+        appointment.status,
+      );
+    } catch (error: any) {
+      this.logger.error(`Ошибка при отправке уведомления администратору о переносе записи: ${error.message}`, error.stack);
+    }
 
     return rescheduled;
   }
@@ -650,6 +699,13 @@ export class AppointmentsService {
 
     // Отправка уведомления о подтверждении
     await this.notificationsService.sendAppointmentConfirmation(confirmed);
+
+    // Уведомление администратору о подтверждении записи
+    try {
+      await this.telegramBotService.notifyAdminAboutConfirmedAppointment(confirmed);
+    } catch (error: any) {
+      this.logger.error(`Ошибка при отправке уведомления администратору о подтверждении: ${error.message}`, error.stack);
+    }
 
     return confirmed;
   }

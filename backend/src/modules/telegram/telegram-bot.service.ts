@@ -884,6 +884,16 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   // Проверка, является ли пользователь админом
   private async isAdmin(telegramId: string): Promise<boolean> {
     try {
+      // Проверяем, является ли пользователь назначенным администратором Telegram
+      const telegramAdminUserId = await this.settingsService.getTelegramAdminUserId();
+      if (telegramAdminUserId) {
+        const user = await this.usersService.findByTelegramId(telegramId);
+        if (user && user.id === telegramAdminUserId) {
+          return true;
+        }
+      }
+      
+      // Также проверяем роль в базе данных (для обратной совместимости)
       const user = await this.usersService.findByTelegramId(telegramId);
       return user?.role === 'admin';
     } catch (error) {
@@ -901,18 +911,20 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
 
     const adminKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('📊 Статистика', 'admin:stats')],
-      [Markup.button.callback('📢 Рассылка', 'admin:broadcast')],
-      [Markup.button.callback('👥 Пользователи', 'admin:users')],
-      [Markup.button.callback('📅 Записи', 'admin:appointments')],
       [Markup.button.callback('📋 Актуальные записи', 'admin:upcoming')],
+      [Markup.button.callback('⏳ Ожидают подтверждения', 'admin:pending')],
+      [Markup.button.callback('📊 Статистика', 'admin:stats')],
+      [Markup.button.callback('👥 Клиенты', 'admin:clients:list')],
+      [Markup.button.callback('📢 Рассылка', 'admin:broadcast')],
+      [Markup.button.callback('🌐 Web App', 'admin:webapp')],
     ]);
 
-    await ctx.reply(
+    const message = 
       '🔐 *Админская панель*\n\n' +
-      'Выберите действие:',
-      { parse_mode: 'Markdown', ...adminKeyboard },
-    );
+      'Управление системой через Telegram бота.\n\n' +
+      'Выберите действие:';
+    
+    await ctx.reply(message, { parse_mode: 'Markdown', ...adminKeyboard });
   }
 
   // Обработка команды статистики
@@ -1392,6 +1404,22 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
               await this.handleAdminAppointments(ctx);
             } else if (params[0] === 'upcoming') {
               await this.handleAdminUpcomingAppointments(ctx);
+            } else if (params[0] === 'pending') {
+              await this.handleAdminPendingAppointments(ctx);
+            } else if (params[0] === 'clients') {
+              await this.handleAdminClients(ctx, params[1], params[2]);
+            } else if (params[0] === 'appointment') {
+              if (params[1] === 'detail') {
+                await this.handleAdminAppointmentDetail(ctx, params[2]);
+              } else if (params[1] === 'confirm') {
+                await this.handleAdminAppointmentDetail(ctx, params[2], 'confirm');
+              } else if (params[1] === 'cancel') {
+                await this.handleAdminAppointmentDetail(ctx, params[2], 'cancel');
+              }
+            } else if (params[0] === 'client') {
+              await this.handleAdminClients(ctx, params[1], params[2]);
+            } else if (params[0] === 'webapp') {
+              await this.handleAdminWebApp(ctx);
             } else if (params[0] === 'menu') {
               await this.handleAdminCommand(ctx);
             }
@@ -2984,16 +3012,19 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Находим всех админов с Telegram ID
-      const admins = await this.userRepository.find({
-        where: {
-          role: UserRole.ADMIN,
-          telegramId: Not(null),
-        },
+      // Получаем назначенного администратора Telegram
+      const telegramAdminUserId = await this.settingsService.getTelegramAdminUserId();
+      if (!telegramAdminUserId) {
+        this.logger.debug('Не назначен администратор Telegram для отправки уведомлений');
+        return;
+      }
+
+      const admin = await this.userRepository.findOne({
+        where: { id: telegramAdminUserId },
       });
 
-      if (admins.length === 0) {
-        this.logger.debug('Нет админов с Telegram ID для отправки уведомления');
+      if (!admin || !admin.telegramId) {
+        this.logger.debug('У назначенного администратора нет Telegram ID');
         return;
       }
 
@@ -3027,18 +3058,88 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         `👨‍💼 *Мастер:* ${master?.name || 'Неизвестно'}\n\n` +
         `📊 Статус: ⏳ Ожидает подтверждения`;
 
-      // Отправляем уведомление всем админам
-      const sendPromises = admins.map(admin => 
-        this.sendMessage(admin.telegramId!, message, { parse_mode: 'Markdown' })
-          .catch(error => {
-            this.logger.error(`Ошибка при отправке уведомления админу ${admin.id}: ${error.message}`);
-          })
-      );
+      // Создаем inline-кнопку для просмотра записи в админ-панели
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📋 Просмотреть в админ-панели', `admin:appointment:detail:${appointment.id}`)],
+      ]);
 
-      await Promise.allSettled(sendPromises);
-      this.logger.log(`Уведомления о новой записи отправлены ${admins.length} админам`);
+      // Отправляем уведомление назначенному администратору
+      try {
+        await this.bot.telegram.sendMessage(admin.telegramId, message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.reply_markup,
+        });
+        this.logger.log(`Уведомление о новой записи отправлено администратору ${admin.id}`);
+      } catch (error: any) {
+        this.logger.error(`Ошибка при отправке уведомления администратору: ${error.message}`);
+      }
     } catch (error: any) {
       this.logger.error(`Ошибка при отправке уведомлений админам о новой записи: ${error.message}`);
+    }
+  }
+
+  /**
+   * Отправка уведомления мастеру о новой записи
+   */
+  async notifyMasterAboutNewAppointment(appointment: Appointment): Promise<void> {
+    try {
+      if (!this.bot) {
+        this.logger.debug('Telegram бот не инициализирован');
+        return;
+      }
+
+      // Загружаем связанные данные
+      const appointmentWithRelations = await this.appointmentRepository.findOne({
+        where: { id: appointment.id },
+        relations: ['client', 'master', 'service'],
+      });
+
+      if (!appointmentWithRelations || !appointmentWithRelations.master) {
+        return;
+      }
+
+      const master = appointmentWithRelations.master as any;
+      
+      // Загружаем пользователя мастера для получения telegramId
+      const masterUser = await this.userRepository.findOne({
+        where: { id: master.userId },
+      });
+
+      // Проверяем наличие telegramId у пользователя мастера
+      if (!masterUser || !masterUser.telegramId) {
+        this.logger.debug(`У мастера ${master.id} нет Telegram ID`);
+        return;
+      }
+
+      const client = appointmentWithRelations.client as any;
+      const service = appointmentWithRelations.service as any;
+      const date = new Date(appointmentWithRelations.startTime);
+
+      // Получаем таймзону из настроек для правильного отображения времени
+      const timezone = await this.settingsService.get('timezone', 'Europe/Moscow');
+      
+      const message = 
+        `🔔 *Новая запись*\n\n` +
+        `📅 Дата: ${date.toLocaleDateString('ru-RU', { timeZone: timezone })}\n` +
+        `⏰ Время: ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })}\n\n` +
+        `👤 *Клиент:*\n` +
+        `   Имя: ${client?.firstName || 'Не указано'} ${client?.lastName || ''}\n` +
+        `   Телефон: ${client?.phone || 'Не указан'}\n\n` +
+        `💆 *Услуга:* ${service?.name || 'Неизвестно'}\n` +
+        `💰 Цена: ${appointmentWithRelations.price}₽\n\n` +
+        `📊 Статус: ⏳ ${appointmentWithRelations.status === 'pending' ? 'Ожидает подтверждения' : appointmentWithRelations.status === 'confirmed' ? 'Подтверждено' : appointmentWithRelations.status}`;
+
+      // Отправляем уведомление мастеру
+      try {
+        await this.bot.telegram.sendMessage(masterUser.telegramId, message, {
+          parse_mode: 'Markdown',
+        });
+        this.logger.log(`Уведомление о новой записи отправлено мастеру ${master.id}`);
+      } catch (error: any) {
+        this.logger.error(`Ошибка при отправке уведомления мастеру: ${error.message}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`Ошибка при отправке уведомления мастеру о новой записи: ${error.message}`);
     }
   }
 
@@ -3052,16 +3153,19 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Находим всех админов с Telegram ID
-      const admins = await this.userRepository.find({
-        where: {
-          role: UserRole.ADMIN,
-          telegramId: Not(null),
-        },
+      // Получаем назначенного администратора Telegram
+      const telegramAdminUserId = await this.settingsService.getTelegramAdminUserId();
+      if (!telegramAdminUserId) {
+        this.logger.debug('Не назначен администратор Telegram для отправки уведомлений');
+        return;
+      }
+
+      const admin = await this.userRepository.findOne({
+        where: { id: telegramAdminUserId },
       });
 
-      if (admins.length === 0) {
-        this.logger.debug('Нет админов с Telegram ID для отправки уведомления');
+      if (!admin || !admin.telegramId) {
+        this.logger.debug('У назначенного администратора нет Telegram ID');
         return;
       }
 
@@ -3097,16 +3201,15 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         message += `\n📝 Причина: ${reason}`;
       }
 
-      // Отправляем уведомление всем админам
-      const sendPromises = admins.map(admin => 
-        this.sendMessage(admin.telegramId!, message, { parse_mode: 'Markdown' })
-          .catch(error => {
-            this.logger.error(`Ошибка при отправке уведомления админу ${admin.id}: ${error.message}`);
-          })
-      );
-
-      await Promise.allSettled(sendPromises);
-      this.logger.log(`Уведомления об отмене записи отправлены ${admins.length} админам`);
+      // Отправляем уведомление назначенному администратору
+      try {
+        await this.bot.telegram.sendMessage(admin.telegramId, message, {
+          parse_mode: 'Markdown',
+        });
+        this.logger.log(`Уведомление об отмене записи отправлено администратору ${admin.id}`);
+      } catch (error: any) {
+        this.logger.error(`Ошибка при отправке уведомления администратору: ${error.message}`);
+      }
     } catch (error: any) {
       this.logger.error(`Ошибка при отправке уведомлений админам об отмене записи: ${error.message}`);
     }
@@ -3872,6 +3975,466 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     } catch (error: any) {
       this.logger.error(`Ошибка при получении актуальных записей: ${error.message}`);
       await ctx.answerCbQuery('Ошибка');
+    }
+  }
+
+  // Обработка записей, ожидающих подтверждения
+  private async handleAdminPendingAppointments(ctx: Context) {
+    const telegramId = ctx.from!.id.toString();
+    
+    if (!(await this.isAdmin(telegramId))) {
+      await ctx.answerCbQuery('Нет прав');
+      return;
+    }
+
+    try {
+      const pendingAppointments = await this.appointmentRepository.find({
+        where: {
+          status: AppointmentStatus.PENDING,
+        },
+        relations: ['client', 'master', 'service'],
+        order: { startTime: 'ASC' },
+        take: 20,
+      });
+
+      if (pendingAppointments.length === 0) {
+        const message = '⏳ *Записи, ожидающие подтверждения*\n\nНет записей, требующих подтверждения.';
+        const keyboard = Markup.inlineKeyboard([
+          [Markup.button.callback('◀️ Назад', 'admin:menu')],
+        ]);
+
+        await ctx.editMessageText(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.reply_markup,
+        });
+        return;
+      }
+
+      const buttons = pendingAppointments.slice(0, 10).map((apt) => [
+        Markup.button.callback(
+          `${new Date(apt.startTime).toLocaleDateString('ru-RU')} ${new Date(apt.startTime).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} - ${(apt.client as any)?.firstName || 'Клиент'}`,
+          `admin:appointment:detail:${apt.id}`,
+        ),
+      ]);
+
+      const keyboard = Markup.inlineKeyboard([
+        ...buttons,
+        [Markup.button.callback('◀️ Назад', 'admin:menu')],
+      ]);
+
+      const message = `⏳ *Записи, ожидающие подтверждения*\n\nВсего: ${pendingAppointments.length}\n\nВыберите запись для просмотра и управления:`;
+
+      await ctx.editMessageText(message, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard.reply_markup,
+      });
+    } catch (error: any) {
+      this.logger.error(`Ошибка при получении записей на подтверждение: ${error.message}`);
+      await ctx.answerCbQuery('Ошибка');
+    }
+  }
+
+  // Детальная информация о записи и управление
+  private async handleAdminAppointmentDetail(ctx: Context, appointmentId: string, action?: string) {
+    const telegramId = ctx.from!.id.toString();
+    
+    if (!(await this.isAdmin(telegramId))) {
+      await ctx.answerCbQuery('Нет прав');
+      return;
+    }
+
+    try {
+      const appointment = await this.appointmentRepository.findOne({
+        where: { id: appointmentId },
+        relations: ['client', 'master', 'service'],
+      });
+
+      if (!appointment) {
+        await ctx.answerCbQuery('Запись не найдена');
+        return;
+      }
+
+      // Обработка действий
+      if (action === 'confirm') {
+        appointment.status = AppointmentStatus.CONFIRMED;
+        await this.appointmentRepository.save(appointment);
+        await ctx.answerCbQuery('✅ Запись подтверждена');
+        // Отправляем уведомление клиенту
+        if (appointment.client && (appointment.client as any).telegramId) {
+          try {
+            await this.bot.telegram.sendMessage(
+              (appointment.client as any).telegramId,
+              `✅ Ваша запись подтверждена!\n\n` +
+              `📅 Дата: ${new Date(appointment.startTime).toLocaleDateString('ru-RU')}\n` +
+              `⏰ Время: ${new Date(appointment.startTime).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}\n` +
+              `💆 Услуга: ${(appointment.service as any)?.name || 'Услуга'}\n` +
+              `👨‍💼 Мастер: ${(appointment.master as any)?.name || 'Мастер'}`,
+            );
+          } catch (error) {
+            this.logger.warn(`Не удалось отправить уведомление клиенту: ${error.message}`);
+          }
+        }
+      } else if (action === 'cancel') {
+        appointment.status = AppointmentStatus.CANCELLED;
+        await this.appointmentRepository.save(appointment);
+        await ctx.answerCbQuery('❌ Запись отменена');
+      }
+
+      // Формируем сообщение с деталями
+      const date = new Date(appointment.startTime);
+      const statusEmoji = appointment.status === AppointmentStatus.PENDING 
+        ? '⏳' 
+        : appointment.status === AppointmentStatus.CONFIRMED 
+        ? '✅' 
+        : appointment.status === AppointmentStatus.COMPLETED
+        ? '✔️'
+        : '❌';
+      
+      const statusText = appointment.status === AppointmentStatus.PENDING 
+        ? 'Ожидает подтверждения' 
+        : appointment.status === AppointmentStatus.CONFIRMED 
+        ? 'Подтверждена' 
+        : appointment.status === AppointmentStatus.COMPLETED
+        ? 'Завершена'
+        : 'Отменена';
+
+      const message = 
+        `${statusEmoji} *Детали записи*\n\n` +
+        `📅 Дата: ${date.toLocaleDateString('ru-RU')}\n` +
+        `⏰ Время: ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}\n` +
+        `📊 Статус: ${statusText}\n\n` +
+        `👤 *Клиент:*\n` +
+        `   ${(appointment.client as any)?.firstName || ''} ${(appointment.client as any)?.lastName || ''}\n` +
+        `   Телефон: ${(appointment.client as any)?.phone || 'Не указан'}\n\n` +
+        `💆 *Услуга:* ${(appointment.service as any)?.name || 'Услуга'}\n` +
+        `💰 Цена: ${appointment.price}₽\n` +
+        `👨‍💼 *Мастер:* ${(appointment.master as any)?.name || 'Мастер'}\n`;
+
+      const keyboardButtons: any[] = [];
+      
+      if (appointment.status === AppointmentStatus.PENDING) {
+        keyboardButtons.push([
+          Markup.button.callback('✅ Подтвердить', `admin:appointment:confirm:${appointment.id}`),
+          Markup.button.callback('❌ Отменить', `admin:appointment:cancel:${appointment.id}`),
+        ]);
+      }
+
+      keyboardButtons.push([Markup.button.callback('◀️ Назад к записям', 'admin:pending')]);
+      keyboardButtons.push([Markup.button.callback('🏠 Главное меню', 'admin:menu')]);
+
+      const keyboard = Markup.inlineKeyboard(keyboardButtons);
+
+      await ctx.editMessageText(message, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard.reply_markup,
+      });
+    } catch (error: any) {
+      this.logger.error(`Ошибка при обработке записи: ${error.message}`);
+      await ctx.answerCbQuery('Ошибка');
+    }
+  }
+
+  // Список клиентов для администратора
+  private async handleAdminClients(ctx: Context, action?: string, clientId?: string) {
+    const telegramId = ctx.from!.id.toString();
+    
+    if (!(await this.isAdmin(telegramId))) {
+      await ctx.answerCbQuery('Нет прав');
+      return;
+    }
+
+    try {
+      if (action === 'list') {
+        const clients = await this.userRepository.find({
+          where: { role: UserRole.CLIENT },
+          order: { createdAt: 'DESC' },
+          take: 20,
+        });
+
+        if (clients.length === 0) {
+          const message = '👥 *Клиенты*\n\nНет клиентов в системе.';
+          const keyboard = Markup.inlineKeyboard([
+            [Markup.button.callback('◀️ Назад', 'admin:menu')],
+          ]);
+
+          await ctx.editMessageText(message, {
+            parse_mode: 'Markdown',
+            reply_markup: keyboard.reply_markup,
+          });
+          return;
+        }
+
+        const buttons = clients.slice(0, 10).map((client) => [
+          Markup.button.callback(
+            `${client.firstName} ${client.lastName || ''}`.trim(),
+            `admin:client:detail:${client.id}`,
+          ),
+        ]);
+
+        const keyboard = Markup.inlineKeyboard([
+          ...buttons,
+          [Markup.button.callback('◀️ Назад', 'admin:menu')],
+        ]);
+
+        const message = `👥 *Клиенты*\n\nВсего: ${clients.length}\n\nВыберите клиента для просмотра:`;
+
+        await ctx.editMessageText(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.reply_markup,
+        });
+      } else if (action === 'detail' && clientId) {
+        const client = await this.userRepository.findOne({
+          where: { id: clientId },
+        });
+
+        if (!client) {
+          await ctx.answerCbQuery('Клиент не найден');
+          return;
+        }
+
+        const appointmentsCount = await this.appointmentRepository.count({
+          where: { clientId: client.id },
+        });
+
+        const message = 
+          `👤 *Информация о клиенте*\n\n` +
+          `Имя: ${client.firstName} ${client.lastName || ''}\n` +
+          `Телефон: ${client.phone || 'Не указан'}\n` +
+          `Email: ${client.email || 'Не указан'}\n` +
+          `Бонусы: ${client.bonusPoints}\n` +
+          `Записей: ${appointmentsCount}\n` +
+          `Дата регистрации: ${new Date(client.createdAt).toLocaleDateString('ru-RU')}`;
+
+        const keyboard = Markup.inlineKeyboard([
+          [Markup.button.callback('◀️ Назад к списку', 'admin:clients:list')],
+          [Markup.button.callback('🏠 Главное меню', 'admin:menu')],
+        ]);
+
+        await ctx.editMessageText(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.reply_markup,
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(`Ошибка при работе с клиентами: ${error.message}`);
+      await ctx.answerCbQuery('Ошибка');
+    }
+  }
+
+  // Ссылка на Web App для администратора
+  private async handleAdminWebApp(ctx: Context) {
+    const telegramId = ctx.from!.id.toString();
+    
+    if (!(await this.isAdmin(telegramId))) {
+      await ctx.answerCbQuery('Нет прав');
+      return;
+    }
+
+    try {
+      const webAppUrl = process.env.FRONTEND_URL || 'https://your-domain.com';
+      const webAppButton = Markup.button.webApp('🌐 Открыть Web App', `${webAppUrl}/app/admin`);
+
+      const keyboard = Markup.inlineKeyboard([
+        [webAppButton],
+        [Markup.button.callback('◀️ Назад', 'admin:menu')],
+      ]);
+
+      const message = 
+        `🌐 *Web App панель*\n\n` +
+        `Используйте Web App для более удобного управления системой:\n\n` +
+        `• Полная статистика и аналитика\n` +
+        `• Управление записями через календарь\n` +
+        `• Управление клиентами и их данными\n` +
+        `• Настройки системы\n` +
+        `• И многое другое...`;
+
+      await ctx.editMessageText(message, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard.reply_markup,
+      });
+    } catch (error: any) {
+      this.logger.error(`Ошибка при открытии Web App: ${error.message}`);
+      await ctx.answerCbQuery('Ошибка');
+    }
+  }
+
+  /**
+   * Отправка уведомления администратору о подтверждении записи
+   */
+  async notifyAdminAboutConfirmedAppointment(appointment: Appointment): Promise<void> {
+    try {
+      if (!this.bot) {
+        this.logger.debug('Telegram бот не инициализирован');
+        return;
+      }
+
+      // Получаем назначенного администратора Telegram
+      const telegramAdminUserId = await this.settingsService.getTelegramAdminUserId();
+      if (!telegramAdminUserId) {
+        this.logger.debug('Не назначен администратор Telegram для отправки уведомлений');
+        return;
+      }
+
+      const admin = await this.userRepository.findOne({
+        where: { id: telegramAdminUserId },
+      });
+
+      if (!admin || !admin.telegramId) {
+        this.logger.debug('У назначенного администратора нет Telegram ID');
+        return;
+      }
+
+      // Загружаем связанные данные
+      const appointmentWithRelations = await this.appointmentRepository.findOne({
+        where: { id: appointment.id },
+        relations: ['client', 'master', 'service'],
+      });
+
+      if (!appointmentWithRelations) {
+        return;
+      }
+
+      const client = appointmentWithRelations.client as any;
+      const master = appointmentWithRelations.master as any;
+      const service = appointmentWithRelations.service as any;
+      const date = new Date(appointmentWithRelations.startTime);
+
+      // Получаем таймзону из настроек
+      const timezone = await this.settingsService.get('timezone', 'Europe/Moscow');
+      
+      const message = 
+        `✅ *Запись подтверждена*\n\n` +
+        `📅 Дата: ${date.toLocaleDateString('ru-RU', { timeZone: timezone })}\n` +
+        `⏰ Время: ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })}\n\n` +
+        `👤 *Клиент:*\n` +
+        `   Имя: ${client?.firstName || 'Не указано'} ${client?.lastName || ''}\n` +
+        `   Телефон: ${client?.phone || 'Не указан'}\n\n` +
+        `💆 *Услуга:* ${service?.name || 'Неизвестно'}\n` +
+        `💰 Цена: ${appointmentWithRelations.price}₽\n\n` +
+        `👨‍💼 *Мастер:* ${master?.name || 'Неизвестно'}`;
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📋 Просмотреть в админ-панели', `admin:appointment:detail:${appointment.id}`)],
+      ]);
+
+      // Отправляем уведомление
+      try {
+        await this.bot.telegram.sendMessage(admin.telegramId, message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.reply_markup,
+        });
+        this.logger.log(`Уведомление о подтверждении записи отправлено администратору ${admin.id}`);
+      } catch (error: any) {
+        this.logger.error(`Ошибка при отправке уведомления администратору: ${error.message}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`Ошибка при отправке уведомления администратору о подтверждении записи: ${error.message}`);
+    }
+  }
+
+  /**
+   * Отправка уведомления администратору об изменении/переносе записи
+   */
+  async notifyAdminAboutAppointmentUpdate(
+    appointment: Appointment,
+    oldStartTime?: Date,
+    oldStatus?: AppointmentStatus,
+  ): Promise<void> {
+    try {
+      if (!this.bot) {
+        this.logger.debug('Telegram бот не инициализирован');
+        return;
+      }
+
+      // Получаем назначенного администратора Telegram
+      const telegramAdminUserId = await this.settingsService.getTelegramAdminUserId();
+      if (!telegramAdminUserId) {
+        this.logger.debug('Не назначен администратор Telegram для отправки уведомлений');
+        return;
+      }
+
+      const admin = await this.userRepository.findOne({
+        where: { id: telegramAdminUserId },
+      });
+
+      if (!admin || !admin.telegramId) {
+        this.logger.debug('У назначенного администратора нет Telegram ID');
+        return;
+      }
+
+      // Загружаем связанные данные
+      const appointmentWithRelations = await this.appointmentRepository.findOne({
+        where: { id: appointment.id },
+        relations: ['client', 'master', 'service'],
+      });
+
+      if (!appointmentWithRelations) {
+        return;
+      }
+
+      const client = appointmentWithRelations.client as any;
+      const master = appointmentWithRelations.master as any;
+      const service = appointmentWithRelations.service as any;
+      const date = new Date(appointmentWithRelations.startTime);
+
+      // Получаем таймзону из настроек
+      const timezone = await this.settingsService.get('timezone', 'Europe/Moscow');
+      
+      let message = `🔄 *Запись изменена*\n\n`;
+
+      // Если изменилось время
+      if (oldStartTime && oldStartTime.getTime() !== date.getTime()) {
+        message += 
+          `📅 *Дата изменена:*\n` +
+          `   Было: ${oldStartTime.toLocaleDateString('ru-RU', { timeZone: timezone })} ` +
+          `${oldStartTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })}\n` +
+          `   Стало: ${date.toLocaleDateString('ru-RU', { timeZone: timezone })} ` +
+          `${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })}\n\n`;
+      } else {
+        message += 
+          `📅 Дата: ${date.toLocaleDateString('ru-RU', { timeZone: timezone })}\n` +
+          `⏰ Время: ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })}\n\n`;
+      }
+
+      // Если изменился статус
+      if (oldStatus && oldStatus !== appointment.status) {
+        const statusText = appointment.status === AppointmentStatus.PENDING 
+          ? '⏳ Ожидает подтверждения' 
+          : appointment.status === AppointmentStatus.CONFIRMED 
+          ? '✅ Подтверждена'
+          : appointment.status === AppointmentStatus.RESCHEDULED
+          ? '🔄 Перенесена'
+          : appointment.status === AppointmentStatus.COMPLETED
+          ? '✔️ Завершена'
+          : '❌ Отменена';
+        
+        message += `📊 *Статус изменен:* ${statusText}\n\n`;
+      }
+
+      message += 
+        `👤 *Клиент:*\n` +
+        `   Имя: ${client?.firstName || 'Не указано'} ${client?.lastName || ''}\n` +
+        `   Телефон: ${client?.phone || 'Не указан'}\n\n` +
+        `💆 *Услуга:* ${service?.name || 'Неизвестно'}\n` +
+        `💰 Цена: ${appointmentWithRelations.price}₽\n\n` +
+        `👨‍💼 *Мастер:* ${master?.name || 'Неизвестно'}`;
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📋 Просмотреть в админ-панели', `admin:appointment:detail:${appointment.id}`)],
+      ]);
+
+      // Отправляем уведомление
+      try {
+        await this.bot.telegram.sendMessage(admin.telegramId, message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.reply_markup,
+        });
+        this.logger.log(`Уведомление об изменении записи отправлено администратору ${admin.id}`);
+      } catch (error: any) {
+        this.logger.error(`Ошибка при отправке уведомления администратору: ${error.message}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`Ошибка при отправке уведомления администратору об изменении записи: ${error.message}`);
     }
   }
 }
