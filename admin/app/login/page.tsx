@@ -21,15 +21,28 @@ export default function LoginPage() {
   // НО только если мы действительно зашли на страницу логина (не после успешного логина)
   useEffect(() => {
     // Проверяем, не был ли только что успешный логин
-    // Если в sessionStorage есть флаг успешного логина - не очищаем токен
-    const justLoggedIn = sessionStorage.getItem('just-logged-in');
+    // Проверяем сначала cookie (устанавливается сервером), затем sessionStorage
+    const cookieJustLoggedIn = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('just-logged-in='))
+      ?.split('=')[1];
+    const sessionJustLoggedIn = sessionStorage.getItem('just-logged-in');
+    const justLoggedIn = cookieJustLoggedIn === 'true' || sessionJustLoggedIn === 'true';
+    
     if (!justLoggedIn) {
       localStorage.removeItem('admin-token');
       localStorage.removeItem('admin-user');
       document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
     } else {
-      // Удаляем флаг после использования
-      sessionStorage.removeItem('just-logged-in');
+      // Синхронизируем cookie в sessionStorage для совместимости с AuthGuard
+      if (cookieJustLoggedIn === 'true') {
+        sessionStorage.setItem('just-logged-in', 'true');
+      }
+      // Удаляем флаг после использования (через небольшую задержку, чтобы AuthGuard успел проверить)
+      setTimeout(() => {
+        sessionStorage.removeItem('just-logged-in');
+        document.cookie = 'just-logged-in=; path=/; max-age=0; SameSite=Lax';
+      }, 1000);
     }
   }, []);
 
@@ -42,13 +55,31 @@ export default function LoginPage() {
     formData.append('password', password);
 
     startTransition(async () => {
-      const result = await loginAction(formData);
-      
-      if (result?.error) {
-        setError(result.error);
+      try {
+        const result = await loginAction(formData);
+        
+        if (result?.error) {
+          setError(result.error);
+        } else if (result?.success) {
+          // Успешный логин - cookies установлены на сервере
+          // Синхронизируем токен в localStorage и sessionStorage
+          if (result.token) {
+            localStorage.setItem('admin-token', result.token);
+            sessionStorage.setItem('admin-token', result.token);
+            if (result.user) {
+              localStorage.setItem('admin-user', JSON.stringify(result.user));
+            }
+          }
+          // Небольшая задержка для установки cookies на сервере
+          await new Promise(resolve => setTimeout(resolve, 200));
+          // Редирект на дашборд
+          router.push('/admin/dashboard');
+        }
+      } catch (error: any) {
+        // Если произошла ошибка сети или другая ошибка
+        console.error('Ошибка при входе:', error);
+        setError('Ошибка при входе. Проверьте подключение к интернету.');
       }
-      // Если нет ошибки, redirect() в Server Action автоматически перенаправит пользователя
-      // И cookie будет установлен на сервере, что гарантирует синхронизацию
     });
   };
 

@@ -49,7 +49,21 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         currentPath.endsWith('/register');
 
       // Проверяем, был ли только что успешный логин
-      const justLoggedIn = typeof window !== 'undefined' ? sessionStorage.getItem('just-logged-in') : null;
+      // Проверяем сначала cookie (устанавливается сервером), затем sessionStorage
+      let justLoggedIn = null;
+      if (typeof window !== 'undefined') {
+        const cookieJustLoggedIn = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('just-logged-in='))
+          ?.split('=')[1];
+        const sessionJustLoggedIn = sessionStorage.getItem('just-logged-in');
+        justLoggedIn = cookieJustLoggedIn === 'true' || sessionJustLoggedIn === 'true';
+        
+        // Синхронизируем cookie в sessionStorage для совместимости
+        if (cookieJustLoggedIn === 'true' && !sessionJustLoggedIn) {
+          sessionStorage.setItem('just-logged-in', 'true');
+        }
+      }
       
       // Если мы на странице логина или регистрации
       if (isLoginPage || isRegisterPage) {

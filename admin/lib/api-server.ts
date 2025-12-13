@@ -3,10 +3,30 @@ import { cookies } from 'next/headers';
 // Server-side API client для использования в Server Components
 // Использует cookies для аутентификации вместо localStorage
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.API_URL ||
-  'http://localhost:3001/api/v1';
+// Для серверных запросов (Server Components) используем полный URL к backend
+// NEXT_PUBLIC_API_URL используется только для клиентских запросов
+// API_URL используется для серверных запросов (внутри Docker сети)
+const getApiUrl = (): string => {
+  // Если есть API_URL (для серверных запросов), используем его
+  if (process.env.API_URL) {
+    return process.env.API_URL;
+  }
+  
+  // Если NEXT_PUBLIC_API_URL - это полный URL (начинается с http), используем его
+  if (process.env.NEXT_PUBLIC_API_URL?.startsWith('http')) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // В production внутри Docker используем внутренний URL к backend
+  if (process.env.NODE_ENV === 'production') {
+    return 'http://backend:3001/api/v1';
+  }
+  
+  // В development используем localhost
+  return 'http://localhost:3001/api/v1';
+};
+
+const API_URL = getApiUrl();
 
 export async function fetchFromAPI<T>(
   endpoint: string,
