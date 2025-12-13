@@ -11,10 +11,21 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const checkAuth = async () => {
-      // Проверяем токен сначала в sessionStorage, затем в localStorage
-      let token = typeof window !== 'undefined' ? sessionStorage.getItem('admin-token') : null;
-      if (!token) {
-        token = localStorage.getItem('admin-token');
+      // Проверяем токен сначала в cookies (приоритет - установлено сервером), затем в sessionStorage/localStorage
+      let token = null;
+      if (typeof window !== 'undefined') {
+        const cookieToken = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('admin-token='))
+          ?.split('=')[1];
+        if (cookieToken) {
+          token = cookieToken;
+        } else {
+          token = sessionStorage.getItem('admin-token');
+          if (!token) {
+            token = localStorage.getItem('admin-token');
+          }
+        }
       }
       // Определяем базовый путь из window.location, так как Nginx удаляет префикс /admin
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
@@ -64,37 +75,23 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Синхронизируем токен между localStorage, sessionStorage и cookies
-      if (token) {
-        // Синхронизируем токен во все хранилища
-        if (typeof window !== 'undefined') {
-          const tokenLS = localStorage.getItem('admin-token');
-          const tokenSS = sessionStorage.getItem('admin-token');
-          
-          // Если токен есть в одном, но не в другом - синхронизируем
-          if (tokenLS && tokenLS !== token) {
-            localStorage.setItem('admin-token', token);
-          }
-          if (tokenSS && tokenSS !== token) {
-            sessionStorage.setItem('admin-token', token);
-          }
-          if (!tokenLS) {
-            localStorage.setItem('admin-token', token);
-          }
-          if (!tokenSS) {
-            sessionStorage.setItem('admin-token', token);
-          }
-        }
-        
-        // Проверяем, есть ли уже cookie
+      // Синхронизируем токен между cookies, localStorage и sessionStorage
+      // Cookies имеют приоритет, так как устанавливаются сервером
+      if (typeof window !== 'undefined' && token) {
         const cookieToken = document.cookie
           .split('; ')
           .find(row => row.startsWith('admin-token='))
           ?.split('=')[1];
         
-        // Если токен есть, но нет в cookies - добавляем в cookies
-        if (token && !cookieToken) {
-          document.cookie = `admin-token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        // Если токен в cookie - синхронизируем в localStorage и sessionStorage
+        if (cookieToken && cookieToken === token) {
+          localStorage.setItem('admin-token', token);
+          sessionStorage.setItem('admin-token', token);
+        } else if (token) {
+          // Если токена нет в cookie, но есть в localStorage/sessionStorage
+          // Синхронизируем в оба хранилища
+          localStorage.setItem('admin-token', token);
+          sessionStorage.setItem('admin-token', token);
         }
       }
 
