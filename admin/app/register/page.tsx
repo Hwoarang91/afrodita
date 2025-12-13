@@ -32,8 +32,8 @@ export default function RegisterPage() {
       try {
         const { data } = await apiClient.get('/auth/check-setup');
         if (data.hasUsers) {
-          // Если администраторы уже есть - редиректим на логин
-          window.location.href = '/admin/login';
+          // Если администраторы уже есть - редиректим на логин (basePath уже учтен)
+          router.push('/login');
         }
       } catch (error) {
         console.error('Ошибка при проверке настройки системы:', error);
@@ -67,8 +67,8 @@ export default function RegisterPage() {
         }
         // Сохраняем токен в cookies для Server Components
         document.cookie = `admin-token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-        // Используем window.location для редиректа с учетом basePath
-        window.location.href = '/admin/dashboard';
+        // Редиректим на дашборд (basePath уже учтен в next.config.js)
+        router.push('/dashboard');
       } else {
         setError('Ошибка при регистрации');
       }

@@ -10,6 +10,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
+    // Защита от бесконечных редиректов - проверяем, не было ли уже редиректа недавно
+    const lastRedirectTime = typeof window !== 'undefined' ? sessionStorage.getItem('last-auth-redirect-time') : null;
+    const now = typeof window !== 'undefined' ? Date.now() : 0;
+    if (lastRedirectTime && (now - parseInt(lastRedirectTime)) < 1000) {
+      console.log('AuthGuard: Редирект уже был недавно - пропускаем, чтобы избежать бесконечного цикла');
+      setIsChecking(false);
+      return;
+    }
+    
     const checkAuth = async () => {
       // Проверяем токен сначала в cookies (приоритет - установлено сервером), затем в sessionStorage/localStorage
       let token = null;
@@ -69,16 +78,24 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       if (isLoginPage || isRegisterPage) {
         // Если только что залогинились - не очищаем токен, редирект произойдет дальше
         if (justLoggedIn) {
-          // Удаляем флаг сразу после проверки
-          if (typeof window !== 'undefined') {
-            sessionStorage.removeItem('just-logged-in');
+          // Синхронизируем токен из cookies в localStorage/sessionStorage, если его там нет
+          if (token && typeof window !== 'undefined') {
+            if (!localStorage.getItem('admin-token')) {
+              localStorage.setItem('admin-token', token);
+            }
+            if (!sessionStorage.getItem('admin-token')) {
+              sessionStorage.setItem('admin-token', token);
+            }
           }
+          // НЕ удаляем флаг сразу - даем время для редиректа
+          // Флаг будет удален в login/page.tsx или через таймаут
           // Продолжаем проверку - редирект на dashboard произойдет дальше
         } else {
           // Очищаем токен на страницах логина/регистрации, чтобы избежать проблем
           // с невалидными токенами от предыдущих сессий
-          if (token) {
-            console.log('AuthGuard: Очистка токена на странице логина/регистрации');
+          // НО только если нет флага just-logged-in
+          if (token && !justLoggedIn) {
+            console.log('AuthGuard: Очистка токена на странице логина/регистрации (нет флага just-logged-in)');
             localStorage.removeItem('admin-token');
             sessionStorage.removeItem('admin-token');
             localStorage.removeItem('admin-user');
@@ -91,21 +108,24 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
       // Синхронизируем токен между cookies, localStorage и sessionStorage
       // Cookies имеют приоритет, так как устанавливаются сервером
-      if (typeof window !== 'undefined' && token) {
+      if (typeof window !== 'undefined') {
         const cookieToken = document.cookie
           .split('; ')
           .find(row => row.startsWith('admin-token='))
           ?.split('=')[1];
         
-        // Если токен в cookie - синхронизируем в localStorage и sessionStorage
-        if (cookieToken && cookieToken === token) {
-          localStorage.setItem('admin-token', token);
-          sessionStorage.setItem('admin-token', token);
+        // Если токен в cookie - используем его и синхронизируем в localStorage и sessionStorage
+        if (cookieToken) {
+          token = cookieToken;
+          localStorage.setItem('admin-token', cookieToken);
+          sessionStorage.setItem('admin-token', cookieToken);
         } else if (token) {
           // Если токена нет в cookie, но есть в localStorage/sessionStorage
-          // Синхронизируем в оба хранилища
+          // Синхронизируем в оба хранилища и устанавливаем в cookie (для совместимости)
           localStorage.setItem('admin-token', token);
           sessionStorage.setItem('admin-token', token);
+          // Устанавливаем токен в cookie, если его там нет (на случай, если он был потерян)
+          document.cookie = `admin-token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
         }
       }
 
@@ -118,13 +138,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
           // Если нет администраторов и мы не на странице регистрации - редиректим на регистрацию
           if (!hasUsers && !isRegisterPage) {
-            router.push('/admin/register');
+            router.push('/register');
             return;
           }
 
           // Если есть администраторы и мы на странице регистрации - редиректим на логин
           if (hasUsers && isRegisterPage) {
-            router.push('/admin/login');
+            router.push('/login');
             return;
           }
         } catch (error: unknown) {
@@ -141,7 +161,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             // На странице регистрации при любой ошибке - пробуем редирект на логин
             // Но только если у нас нет токена (если есть токен - значит уже авторизованы)
             if (!token) {
-              router.push('/admin/login');
+              router.push('/login');
               return;
             }
           }
@@ -150,18 +170,59 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         }
       }
       
-      // Используем window.location.href для редиректа, всегда через /admin
       // Если нет токена и мы не на странице логина/регистрации - редиректим на логин
       if (!token && !isLoginPage && !isRegisterPage) {
-        // Всегда редиректим на /admin/login
-        window.location.href = '/admin/login';
+        // Сохраняем время редиректа для защиты от бесконечного цикла
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('last-auth-redirect-time', Date.now().toString());
+        }
+        // Используем router.push, basePath уже учтен
+        router.push('/login');
         return;
       }
       
       // Если есть токен и мы на странице логина/регистрации - редиректим на dashboard
+      // НО только если нет флага just-logged-in (чтобы не делать редирект сразу после логина, если токен еще не валидный)
       if (token && (isLoginPage || isRegisterPage)) {
-        // Редиректим на dashboard
-        window.location.href = '/admin/dashboard';
+        // Проверяем флаг just-logged-in - если только что залогинились, даем время для синхронизации токена
+        if (justLoggedIn) {
+          // Если только что залогинились, ждем немного перед редиректом
+          // Увеличиваем задержку для полной синхронизации токена
+          setTimeout(() => {
+            if (typeof window !== 'undefined') {
+              // Проверяем, что токен действительно установлен в cookies перед редиректом
+              const cookieToken = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('admin-token='))
+                ?.split('=')[1];
+              
+              if (cookieToken) {
+                // Синхронизируем токен в storage перед редиректом
+                localStorage.setItem('admin-token', cookieToken);
+                sessionStorage.setItem('admin-token', cookieToken);
+                sessionStorage.setItem('last-auth-redirect-time', Date.now().toString());
+                router.push('/dashboard');
+              } else {
+                // Если токена нет в cookies, но есть в token - устанавливаем вручную
+                if (token) {
+                  document.cookie = `admin-token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+                  localStorage.setItem('admin-token', token);
+                  sessionStorage.setItem('admin-token', token);
+                  sessionStorage.setItem('last-auth-redirect-time', Date.now().toString());
+                  router.push('/dashboard');
+                }
+              }
+            }
+          }, 1000); // Увеличена задержка для синхронизации
+          return;
+        }
+        
+        // Сохраняем время редиректа для защиты от бесконечного цикла
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('last-auth-redirect-time', Date.now().toString());
+        }
+        // Используем router.push, basePath уже учтен
+        router.push('/dashboard');
         return;
       }
       

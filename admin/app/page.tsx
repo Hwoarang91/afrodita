@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 
 export default function Home() {
   const [isChecking, setIsChecking] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     const checkAndRedirect = async () => {
@@ -15,22 +17,22 @@ export default function Home() {
 
         if (!hasUsers) {
           // Если нет администраторов - редиректим на регистрацию
-          window.location.href = '/admin/register';
+          router.push('/register');
         } else {
           // Если есть администраторы - редиректим на логин
-          window.location.href = '/admin/login';
+          router.push('/login');
         }
       } catch (error) {
         console.error('Ошибка при проверке настройки системы:', error);
         // В случае ошибки редиректим на логин
-        window.location.href = '/admin/login';
+        router.push('/login');
       } finally {
         setIsChecking(false);
       }
     };
 
     checkAndRedirect();
-  }, []);
+  }, [router]);
 
   if (isChecking) {
     return (

@@ -92,7 +92,7 @@ services:
   admin:
     build:
       context: ./admin
-      dockerfile: ../infrastructure/docker/admin.Dockerfile
+      dockerfile: Dockerfile
     container_name: afrodita-admin
     env_file:
       - .env

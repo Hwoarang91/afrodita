@@ -67,8 +67,8 @@ export default function Sidebar() {
     localStorage.removeItem('admin-user');
     // Удаляем токен из cookies для Server Components
     document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
-    // Используем window.location для редиректа с учетом basePath
-    window.location.href = '/admin/login';
+    // Используем router.push, basePath уже учтен в next.config.js
+    router.push('/login');
   };
 
   const sidebarContent = (

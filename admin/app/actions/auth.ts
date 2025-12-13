@@ -1,7 +1,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 
 // Для серверных запросов (Server Actions) используем полный URL к backend
 // NEXT_PUBLIC_API_URL используется только для клиентских запросов
@@ -60,12 +60,17 @@ export async function loginAction(formData: FormData) {
       // Это гарантирует синхронизацию с сервером
       // Next.js автоматически перерендерит страницу после установки cookie
       const cookieStore = await cookies();
-      
+
       // Отключаем secure для работы с самоподписанными SSL сертификатами
       const isSecure = false;
-      
-      console.log('[Server Action] Устанавливаем токен в cookie, secure:', isSecure);
-      
+
+      console.log('[Server Action] Устанавливаем токен в cookie, secure:', isSecure, {
+        hasToken: !!data.token,
+        tokenLength: data.token.length,
+        userId: data.user?.id,
+        userRole: data.user?.role,
+      });
+
       // Устанавливаем токен в cookie
       cookieStore.set('admin-token', data.token, {
         path: '/',
@@ -74,7 +79,7 @@ export async function loginAction(formData: FormData) {
         httpOnly: false, // Нужен доступ из клиента для синхронизации с localStorage
         secure: isSecure,
       });
-      
+
       console.log('[Server Action] Токен установлен в cookie');
 
       // Сохраняем также user данные в cookie для использования в клиентских компонентах
@@ -97,6 +102,12 @@ export async function loginAction(formData: FormData) {
         httpOnly: false, // Нужен доступ из клиента для установки в sessionStorage
         secure: isSecure,
       });
+
+      console.log('[Server Action] Все cookies установлены успешно');
+
+      // Обновляем кеш страницы, чтобы cookies были доступны сразу
+      revalidatePath('/dashboard');
+      revalidatePath('/login');
 
       // Возвращаем успешный результат вместо redirect()
       // Редирект будет выполнен на клиенте после установки cookies

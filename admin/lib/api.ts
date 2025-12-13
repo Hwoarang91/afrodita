@@ -59,6 +59,18 @@ apiClient.interceptors.request.use((config) => {
     // Cookies имеют приоритет, так как устанавливаются сервером
     let token = null;
     if (typeof window !== 'undefined') {
+      console.log('🔍 API Request: Проверяем токен перед отправкой запроса', {
+        url: config.url,
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        currentPath: window.location.pathname,
+        currentURL: window.location.href,
+        allCookies: document.cookie,
+        localStorageToken: localStorage.getItem('admin-token'),
+        sessionStorageToken: sessionStorage.getItem('admin-token'),
+        justLoggedIn: sessionStorage.getItem('just-logged-in'),
+      });
+
       // 1. Проверяем cookies (приоритет - установлено сервером)
       const cookieToken = document.cookie
         .split('; ')
@@ -75,17 +87,47 @@ apiClient.interceptors.request.use((config) => {
         token = sessionStorage.getItem('admin-token');
         if (token) {
           localStorage.setItem('admin-token', token);
+          // Если токен есть в storage, но нет в cookies - устанавливаем в cookie для надежности
+          document.cookie = `admin-token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
         } else {
           // 3. Fallback: проверяем localStorage
           token = localStorage.getItem('admin-token');
           if (token) {
             sessionStorage.setItem('admin-token', token);
+            // Если токен есть в storage, но нет в cookies - устанавливаем в cookie для надежности
+            document.cookie = `admin-token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
           }
         }
       }
     }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('✅ API Request: Токен найден и добавлен в заголовок Authorization', {
+        hasToken: !!token,
+        tokenLength: token.length,
+        url: config.url,
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        tokenPrefix: token.substring(0, 20) + '...',
+        hasAuthHeader: !!config.headers.Authorization,
+        fullAuthHeader: config.headers.Authorization,
+        cookieToken: document.cookie.split('; ').find(row => row.startsWith('admin-token='))?.split('=')[1],
+        localStorageToken: localStorage.getItem('admin-token'),
+        sessionStorageToken: sessionStorage.getItem('admin-token'),
+      });
+    } else {
+      console.error('❌ API Request: Токен НЕ найден ни в одном хранилище', {
+        url: config.url,
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        hasCookies: document.cookie.length > 0,
+        allCookies: document.cookie,
+        cookieToken: document.cookie.split('; ').find(row => row.startsWith('admin-token='))?.split('=')[1],
+        localStorageToken: localStorage.getItem('admin-token'),
+        sessionStorageToken: sessionStorage.getItem('admin-token'),
+        localStorageKeys: Object.keys(localStorage),
+        sessionStorageKeys: Object.keys(sessionStorage),
+      });
     }
     
     // Логирование только в development режиме
@@ -196,16 +238,66 @@ apiClient.interceptors.response.use(
         }
         
         // Если пользователь НЕ на странице логина/регистрации - удаляем токен и редиректим
+        // НО проверяем флаг just-logged-in и наличие токена в cookies
         if (!isLoginPage && !isRegisterPage) {
-          console.log('401 на другой странице - делаем редирект на /admin/login');
+          // Проверяем флаг just-logged-in - если только что залогинились, не делаем редирект
+          const cookieJustLoggedIn = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('just-logged-in='))
+            ?.split('=')[1];
+          const sessionJustLoggedIn = sessionStorage.getItem('just-logged-in');
+          const justLoggedIn = cookieJustLoggedIn === 'true' || sessionJustLoggedIn === 'true';
+          
+          // Проверяем наличие токена в cookies
+          const cookieToken = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('admin-token='))
+            ?.split('=')[1];
+          
+          // Если только что залогинились ИЛИ токен есть в cookies - НЕ делаем редирект
+          // Это означает, что токен установлен, но возможно еще не валидирован на бэкенде
+          // Или есть проблема с передачей токена в заголовке Authorization
+          if (justLoggedIn || cookieToken) {
+            console.log('401 после логина или токен есть в cookies - не делаем редирект, возможно проблема с передачей токена', {
+              justLoggedIn,
+              hasCookieToken: !!cookieToken,
+              cookieTokenLength: cookieToken?.length,
+            });
+            // Не делаем редирект, просто возвращаем ошибку
+            // Возможно, токен еще не успел синхронизироваться или не передается в заголовке
+            // Пробуем повторно установить токен в заголовке для следующего запроса
+            if (cookieToken && typeof window !== 'undefined') {
+              // Синхронизируем токен из cookies в storage
+              localStorage.setItem('admin-token', cookieToken);
+              sessionStorage.setItem('admin-token', cookieToken);
+              console.log('Токен синхронизирован из cookies в storage для следующего запроса');
+            }
+            return Promise.reject(error);
+          }
+          
+          // Проверяем, не было ли уже редиректа недавно (защита от бесконечного цикла)
+          const lastRedirectTime = sessionStorage.getItem('last-401-redirect-time');
+          const now = Date.now();
+          if (lastRedirectTime && (now - parseInt(lastRedirectTime)) < 5000) {
+            console.log('401 редирект уже был недавно - пропускаем, чтобы избежать бесконечного цикла');
+            return Promise.reject(error);
+          }
+          
+          console.log('401 на другой странице, токена нет в cookies - делаем редирект на /login');
+          // Сохраняем время редиректа
+          sessionStorage.setItem('last-401-redirect-time', now.toString());
+          
           // Удаляем токен только если мы НЕ на странице логина/регистрации
           localStorage.removeItem('admin-token');
           localStorage.removeItem('admin-user');
+          sessionStorage.removeItem('admin-token');
           // Удаляем токен из cookies
           document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
           
-          // Всегда редиректим на /admin/login
-          window.location.href = '/admin/login';
+          // Редиректим на логин (используем router для правильной работы с basePath)
+          // Но так как мы в interceptor, используем window.location
+          // basePath уже учтен в next.config.js, поэтому используем относительный путь
+          window.location.href = '/login';
         } else {
           console.log('401 на странице логина/регистрации - не делаем редирект');
         }
