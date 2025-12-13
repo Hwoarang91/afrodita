@@ -1,20 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api';
+import { loginAction } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { AxiosError, getErrorMessage } from '@/lib/types';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   // Очищаем токен при загрузке страницы логина
@@ -37,69 +36,20 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setIsLoading(true);
 
-    try {
-      const { data } = await apiClient.post('/auth/login', {
-        email,
-        password,
-      });
+    const formData = new FormData();
+    formData.append('email', email);
+    formData.append('password', password);
 
-      if (data.token) {
-        // Сохраняем токен в sessionStorage (более надежно при навигации)
-        sessionStorage.setItem('admin-token', data.token);
-        sessionStorage.setItem('just-logged-in', 'true');
-        
-        // Сохраняем токен в localStorage
-        localStorage.setItem('admin-token', data.token);
-        if (data.user) {
-          localStorage.setItem('admin-user', JSON.stringify(data.user));
-        }
-        
-        // Сохраняем токен в cookies для Server Components
-        const cookieExpiry = 7 * 24 * 60 * 60; // 7 дней
-        document.cookie = `admin-token=${data.token}; path=/; max-age=${cookieExpiry}; SameSite=Lax`;
-        
-        // Даем время браузеру сохранить данные перед редиректом
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        // Проверяем, что токен действительно сохранился во всех местах
-        const savedTokenLS = localStorage.getItem('admin-token');
-        const savedTokenSS = sessionStorage.getItem('admin-token');
-        
-        if (!savedTokenLS || savedTokenLS !== data.token) {
-          console.warn('Токен не сохранился в localStorage, повторная попытка...');
-          localStorage.setItem('admin-token', data.token);
-        }
-        if (!savedTokenSS || savedTokenSS !== data.token) {
-          console.warn('Токен не сохранился в sessionStorage, повторная попытка...');
-          sessionStorage.setItem('admin-token', data.token);
-          sessionStorage.setItem('just-logged-in', 'true');
-        }
-        
-        // Повторно устанавливаем cookie для гарантии
-        document.cookie = `admin-token=${data.token}; path=/; max-age=${cookieExpiry}; SameSite=Lax`;
-        
-        // Даем дополнительное время для гарантии сохранения cookie
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Используем window.location.href для полной перезагрузки страницы
-        // Это необходимо для синхронизации cookies с сервером для Server Components
-        // Server Component Dashboard пытается загрузить данные на сервере через cookies
-        window.location.href = '/admin/dashboard';
-      } else {
-        setError('Неверный email или пароль');
-        setIsLoading(false);
+    startTransition(async () => {
+      const result = await loginAction(formData);
+      
+      if (result?.error) {
+        setError(result.error);
       }
-    } catch (err: unknown) {
-      // Обрабатываем ошибку авторизации - показываем сообщение и остаемся на странице
-      const errorMessage = getErrorMessage(err);
-      setError(errorMessage || 'Ошибка при входе. Проверьте данные.');
-      setIsLoading(false);
-      // НЕ делаем редирект при ошибке - остаемся на странице логина
-      // Ошибка будет обработана interceptor в api.ts, который не должен делать редирект
-      // если мы уже на странице логина
-    }
+      // Если нет ошибки, redirect() в Server Action автоматически перенаправит пользователя
+      // И cookie будет установлен на сервере, что гарантирует синхронизацию
+    });
   };
 
   return (
@@ -143,10 +93,10 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isPending}
               className="w-full"
             >
-              {isLoading ? 'Вход...' : 'Войти'}
+              {isPending ? 'Вход...' : 'Войти'}
             </Button>
           </form>
         </CardContent>

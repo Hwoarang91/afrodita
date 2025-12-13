@@ -55,33 +55,31 @@ apiClient.interceptors.request.use((config) => {
     }
     
     // Добавляем токен авторизации
-    // Проверяем в порядке приоритета: sessionStorage -> localStorage -> cookies
+    // Проверяем в порядке приоритета: cookies -> sessionStorage -> localStorage
+    // Cookies имеют приоритет, так как устанавливаются сервером
     let token = null;
     if (typeof window !== 'undefined') {
-      // 1. Проверяем sessionStorage (более надежно при навигации)
-      token = sessionStorage.getItem('admin-token');
-      if (token) {
-        // Синхронизируем в localStorage и cookies для надежности
-        localStorage.setItem('admin-token', token);
-        document.cookie = `admin-token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+      // 1. Проверяем cookies (приоритет - установлено сервером)
+      const cookieToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('admin-token='))
+        ?.split('=')[1];
+      
+      if (cookieToken) {
+        token = cookieToken;
+        // Синхронизируем в sessionStorage и localStorage для клиентских компонентов
+        sessionStorage.setItem('admin-token', cookieToken);
+        localStorage.setItem('admin-token', cookieToken);
       } else {
-        // 2. Проверяем localStorage
-        token = localStorage.getItem('admin-token');
+        // 2. Fallback: проверяем sessionStorage
+        token = sessionStorage.getItem('admin-token');
         if (token) {
-          // Синхронизируем в sessionStorage и cookies
-          sessionStorage.setItem('admin-token', token);
-          document.cookie = `admin-token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+          localStorage.setItem('admin-token', token);
         } else {
-          // 3. Fallback: пытаемся получить токен из cookies
-          const cookieToken = document.cookie
-            .split('; ')
-            .find(row => row.startsWith('admin-token='))
-            ?.split('=')[1];
-          if (cookieToken) {
-            token = cookieToken;
-            // Синхронизируем обратно в sessionStorage и localStorage
-            sessionStorage.setItem('admin-token', cookieToken);
-            localStorage.setItem('admin-token', cookieToken);
+          // 3. Fallback: проверяем localStorage
+          token = localStorage.getItem('admin-token');
+          if (token) {
+            sessionStorage.setItem('admin-token', token);
           }
         }
       }
