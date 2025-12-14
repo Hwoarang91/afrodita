@@ -19,11 +19,11 @@ const getApiUrl = (): string => {
   
   // В production внутри Docker используем внутренний URL к backend
   if (process.env.NODE_ENV === 'production') {
-    return 'http://backend:3001/api';
+    return 'http://backend:3001/api/v1';
   }
 
   // В development используем localhost
-  return 'http://localhost:3001/api';
+  return 'http://localhost:3001/api/v1';
 };
 
 const API_URL = getApiUrl();

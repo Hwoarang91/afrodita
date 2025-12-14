@@ -6,14 +6,14 @@ const getApiUrl = (): string => {
     const hostname = window.location.hostname;
     // Если запущено на localhost, используем полный URL к backend
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3001/api';
+      return 'http://localhost:3001/api/v1';
     }
     // В production используем относительный путь (для работы через Nginx)
-    return '/api';
+    return '/api/v1';
   }
 
   // На сервере (SSR) используем localhost или переменную окружения
-  return process.env?.API_URL || 'http://localhost:3001/api';
+  return process.env?.API_URL || 'http://localhost:3001/api/v1';
 };
 
 // Создаем API клиент для работы с httpOnly cookies

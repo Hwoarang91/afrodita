@@ -11,43 +11,45 @@ import {
 import { User } from './user.entity';
 
 @Entity('refresh_tokens')
-  @Index(['userId', 'expiresAt'])
-  @Index(['tokenHash'])
-  // Note: TypeORM will use the column names specified in @Column decorators for indexes
+@Index(['userId', 'expiresAt'])
+@Index(['tokenHash'])
 export class RefreshToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid', name: 'user_id' })
+  @Column({ type: 'uuid' })
   userId: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'user_id' })
+  @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column({ type: 'varchar', length: 255, name: 'token_hash' })
+  @Column({ type: 'varchar', length: 255 })
   tokenHash: string;
 
-  @Column({ type: 'varchar', length: 255, name: 'token_family' })
+  @Column({ type: 'varchar', length: 255 })
   tokenFamily: string; // Для rotation - все tokens в семье инвалидируются при компрометации
 
-  @Column({ type: 'timestamp', name: 'expires_at' })
+  @Column({ type: 'timestamp' })
   expiresAt: Date;
 
-  @Column({ type: 'varchar', nullable: true, name: 'ip_address' })
+  @Column({ type: 'varchar', nullable: true })
   ipAddress: string;
 
-  @Column({ type: 'varchar', nullable: true, name: 'user_agent' })
+  @Column({ type: 'varchar', nullable: true })
   userAgent: string;
 
-  @Column({ type: 'boolean', default: true, name: 'is_active' })
+  @Column({ type: 'boolean', default: true })
   isActive: boolean;
 
-  @Column({ type: 'boolean', default: false, name: 'is_compromised' })
+  @Column({ type: 'boolean', default: false })
   isCompromised: boolean; // Если токен был скомпрометирован
 
-  @Column({ type: 'boolean', default: false, name: 'remember_me' })
+  @Column({ type: 'boolean', default: false })
   rememberMe: boolean; // Флаг "Запомнить меня" - влияет на срок жизни токена
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastUsedAt: Date;
 
   @CreateDateColumn()
   createdAt: Date;

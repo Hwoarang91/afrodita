@@ -18,6 +18,21 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, isAuthenticated, isLoading } = useAuth();
 
+  // Восстанавливаем сохраненные предпочтения при загрузке страницы
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedRememberMe = localStorage.getItem('login_preferences_rememberMe');
+      const savedAutoLogin = localStorage.getItem('login_preferences_autoLogin');
+      
+      if (savedRememberMe === 'true') {
+        setRememberMe(true);
+      }
+      if (savedAutoLogin === 'true') {
+        setAutoLogin(true);
+      }
+    }
+  }, []);
+
   // Если пользователь уже аутентифицирован, перенаправляем на дашборд
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
@@ -31,6 +46,22 @@ export default function LoginPage() {
 
     try {
       await login(email, password, rememberMe, autoLogin);
+      
+      // Сохраняем предпочтения пользователя в localStorage
+      if (typeof window !== 'undefined') {
+        if (rememberMe) {
+          localStorage.setItem('login_preferences_rememberMe', 'true');
+        } else {
+          localStorage.removeItem('login_preferences_rememberMe');
+        }
+        
+        if (autoLogin) {
+          localStorage.setItem('login_preferences_autoLogin', 'true');
+        } else {
+          localStorage.removeItem('login_preferences_autoLogin');
+        }
+      }
+      
       // Auth context автоматически перенаправит на дашборд после успешного логина
     } catch (error: any) {
       setError(error.message || 'Ошибка при входе. Проверьте данные.');

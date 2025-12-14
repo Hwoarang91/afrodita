@@ -59,6 +59,9 @@ export default function Sidebar() {
       // Очищаем старые данные из localStorage (если остались от предыдущих версий)
       localStorage.removeItem('admin-token');
       localStorage.removeItem('admin-user');
+      // Очищаем сохраненные предпочтения логина (пользователь явно вышел)
+      localStorage.removeItem('login_preferences_rememberMe');
+      localStorage.removeItem('login_preferences_autoLogin');
       
       // Закрываем диалог
       setShowLogoutDialog(false);

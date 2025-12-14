@@ -123,18 +123,11 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Токен обновлен' })
   @ApiResponse({ status: 401, description: 'Неверный refresh token' })
   async refreshToken(@Body('refreshToken') refreshToken: string, @Request() req) {
-    // Используем JwtAuthService для обновления токенов
-    // JwtAuthService сам логирует обновление токена
-    const tokenPair = await this.jwtAuthService.refreshTokens(
+    return await this.authService.refreshToken(
       refreshToken,
       req.ip,
       req.get('user-agent'),
     );
-
-    return {
-      accessToken: tokenPair.accessToken,
-      refreshToken: tokenPair.refreshToken,
-    };
   }
 
   @Post('logout')
@@ -143,15 +136,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Выход из системы' })
   async logout(@Body('refreshToken') refreshToken: string, @Request() req) {
-    try {
-      // Используем JwtAuthService для выхода по refresh token
-      // Метод logoutByRefreshToken сам получает пользователя и логирует выход
-      await this.jwtAuthService.logoutByRefreshToken(refreshToken);
-    } catch (error) {
-      // Если refresh token невалиден, просто возвращаем успех
-      this.logger.warn(`Logout with invalid refresh token: ${error.message}`);
-    }
-    return { message: 'Logged out successfully' };
+    return await this.authService.logout(
+      refreshToken,
+      req.ip,
+      req.get('user-agent'),
+    );
   }
 
   @Post('phone')
