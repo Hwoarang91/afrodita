@@ -9,6 +9,7 @@ import { AppDataSource } from './config/data-source';
 import * as fs from 'fs';
 import * as path from 'path';
 import express from 'express';
+import * as cookieParser from 'cookie-parser';
 import { DataSource } from 'typeorm';
 
 async function bootstrap() {
@@ -130,6 +131,10 @@ async function bootstrap() {
       }));
     }
     app.use(compression());
+
+    // Cookie parser для работы с httpOnly cookies
+    app.use(cookieParser());
+
     logger.log('Middleware настроены');
 
   // Rate limiting
