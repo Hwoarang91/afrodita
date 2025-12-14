@@ -145,8 +145,11 @@ export class AuthService {
   }
 
   async logout(refreshToken: string, ipAddress?: string, userAgent?: string) {
-    // Используем JwtAuthService для выхода
-    await this.jwtAuthService.logout(refreshToken, ipAddress, userAgent);
+    // Используем JwtAuthService для выхода по refresh token
+    const userId = await this.jwtAuthService.logoutByRefreshToken(refreshToken);
+    if (userId) {
+      await this.logAuthAction(userId, AuthAction.LOGOUT, ipAddress, userAgent);
+    }
   }
 
   async validatePhone(phone: string): Promise<boolean> {
