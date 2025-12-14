@@ -11,8 +11,8 @@ import {
 import { User } from './user.entity';
 
 @Entity('refresh_tokens')
-@Index(['user_id', 'expires_at'])
-@Index(['token_hash'])
+@Index(['userId', 'expiresAt'])
+@Index(['tokenHash'])
 export class RefreshToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;
