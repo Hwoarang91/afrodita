@@ -222,12 +222,13 @@ export class JwtAuthService {
   async logoutByRefreshToken(refreshToken: string): Promise<void> {
     const refreshTokenHash = this.hashToken(refreshToken);
     const refreshTokenEntity = await this.refreshTokenRepository.findOne({
-      where: { tokenHash: refreshTokenHash, isActive: true },
+      where: { tokenHash: refreshTokenHash },
       relations: ['user'],
     });
 
     if (refreshTokenEntity && refreshTokenEntity.user) {
       await this.logout(refreshTokenEntity.user.id);
+      this.logger.log(`Пользователь ${refreshTokenEntity.user.email} вышел из системы по refresh token`);
     } else {
       this.logger.warn('Refresh token не найден для logout');
     }

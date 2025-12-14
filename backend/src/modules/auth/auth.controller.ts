@@ -145,28 +145,8 @@ export class AuthController {
   async logout(@Body('refreshToken') refreshToken: string, @Request() req) {
     try {
       // Используем JwtAuthService для выхода по refresh token
+      // Метод logoutByRefreshToken сам получает пользователя и логирует выход
       await this.jwtAuthService.logoutByRefreshToken(refreshToken);
-      
-      // Получаем пользователя для логирования (опционально)
-      // Если refresh token невалиден, просто пропускаем логирование
-      try {
-        const refreshTokenHash = this.jwtAuthService['hashToken'](refreshToken);
-        const refreshTokenEntity = await this.jwtAuthService['refreshTokenRepository'].findOne({
-          where: { tokenHash: refreshTokenHash },
-          relations: ['user'],
-        });
-        if (refreshTokenEntity?.user) {
-          await this.authService.logAuthAction(
-            refreshTokenEntity.user.id,
-            await this.getAuthAction('LOGOUT'),
-            req.ip,
-            req.get('user-agent'),
-          );
-        }
-      } catch (logError) {
-        // Игнорируем ошибки логирования
-        this.logger.debug('Could not log logout action:', logError.message);
-      }
     } catch (error) {
       // Если refresh token невалиден, просто возвращаем успех
       this.logger.warn(`Logout with invalid refresh token: ${error.message}`);
