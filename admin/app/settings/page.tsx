@@ -392,7 +392,7 @@ export default function SettingsPage() {
               <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                 <p className="text-sm text-blue-900 dark:text-blue-100">
                   <strong>Примечание:</strong> Время работы определяется расписанием каждого мастера индивидуально. 
-                  Настройте расписание мастера в разделе "Мастера" → выберите мастера → "Расписание".
+                  Настройте расписание мастера в разделе &quot;Мастера&quot; → выберите мастера → &quot;Расписание&quot;.
                 </p>
               </div>
             </div>

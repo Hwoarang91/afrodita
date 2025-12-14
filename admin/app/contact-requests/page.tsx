@@ -176,7 +176,7 @@ export default function ContactRequestsPage() {
         <div>
           <h1 className="text-3xl font-bold">Заявки обратной связи</h1>
           <p className="text-muted-foreground mt-2">
-            Управление заявками, оставленными через форму "Свяжитесь со мной" на лендинге
+            Управление заявками, оставленными через форму &quot;Свяжитесь со мной&quot; на лендинге
           </p>
         </div>
         {selectedIds.size > 0 && (

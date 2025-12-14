@@ -943,7 +943,7 @@ export default function ClientDetailPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Интервалы напоминаний (48ч, 24ч, 12ч, 6ч, 2ч, 1ч) настраиваются в разделе "Настройки" → "Уведомления"
+              Интервалы напоминаний (48ч, 24ч, 12ч, 6ч, 2ч, 1ч) настраиваются в разделе &quot;Настройки&quot; → &quot;Уведомления&quot;
             </p>
           </div>
           <DialogFooter>

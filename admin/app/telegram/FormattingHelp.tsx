@@ -31,8 +31,8 @@ export default function FormattingHelp() {
             <li><code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">&lt;code&gt;код&lt;/code&gt;</code> - моноширинный текст</li>
             <li><code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">&lt;s&gt;зачеркнутый&lt;/s&gt;</code> или <code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">&lt;strike&gt;зачеркнутый&lt;/strike&gt;</code> или <code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">&lt;del&gt;зачеркнутый&lt;/del&gt;</code></li>
             <li><code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">&lt;u&gt;подчеркнутый&lt;/u&gt;</code></li>
-            <li><code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">&lt;pre language="c++"&gt;код&lt;/pre&gt;</code> - блок кода</li>
-            <li><code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">&lt;a href="https://example.com"&gt;ссылка&lt;/a&gt;</code> - ссылка</li>
+            <li><code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">&lt;pre language=&quot;c++&quot;&gt;код&lt;/pre&gt;</code> - блок кода</li>
+            <li><code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">&lt;a href=&quot;https://example.com&quot;&gt;ссылка&lt;/a&gt;</code> - ссылка</li>
           </ul>
         </div>
 
