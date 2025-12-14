@@ -4,7 +4,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { User, UserRole } from '../../entities/user.entity';
-import { Session } from '../../entities/session.entity';
 import { AuthLog, AuthAction } from '../../entities/auth-log.entity';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
@@ -35,8 +34,6 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    @InjectRepository(Session)
-    private sessionRepository: Repository<Session>,
     @InjectRepository(AuthLog)
     private authLogRepository: Repository<AuthLog>,
     private jwtService: JwtService,
@@ -138,55 +135,7 @@ export class AuthService {
   }
 
 
-  async refreshToken(refreshToken: string, ipAddress?: string, userAgent?: string) {
-    const session = await this.sessionRepository.findOne({
-      where: { refreshToken, isActive: true },
-      relations: ['user'],
-    });
-
-    if (!session || session.expiresAt < new Date()) {
-      throw new UnauthorizedException('Invalid or expired refresh token');
-    }
-
-    const user = session.user;
-    const payload: JwtPayload = {
-      sub: user.id,
-      telegramId: user.telegramId || undefined,
-      role: user.role,
-      email: user.email || undefined,
-    };
-
-    const newAccessToken = this.jwtService.sign(payload);
-    const newRefreshToken = this.jwtService.sign(payload, {
-      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
-    });
-
-    // Обновление сессии
-    session.refreshToken = newRefreshToken;
-    session.expiresAt = new Date();
-    session.expiresAt.setDate(session.expiresAt.getDate() + 7);
-    await this.sessionRepository.save(session);
-
-    await this.logAuthAction(user.id, AuthAction.TOKEN_REFRESH, ipAddress, userAgent);
-
-    return {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-    };
-  }
-
-  async logout(refreshToken: string, ipAddress?: string, userAgent?: string) {
-    const session = await this.sessionRepository.findOne({
-      where: { refreshToken },
-      relations: ['user'],
-    });
-
-    if (session) {
-      session.isActive = false;
-      await this.sessionRepository.save(session);
-      await this.logAuthAction(session.userId, AuthAction.LOGOUT, ipAddress, userAgent);
-    }
-  }
+  // Методы refreshToken и logout теперь в JwtAuthService
 
   async validatePhone(phone: string): Promise<boolean> {
     // Простая валидация формата телефона
