@@ -23,7 +23,7 @@ COPY backend/ .
 RUN mkdir -p src && ln -sf /app/shared src/shared
 
 # Собираем проект
-RUN npm run build
+RUN npx nest build
 
 # Компилируем миграции TypeScript в JavaScript явно
 # NestJS не компилирует миграции автоматически, поэтому компилируем их отдельно
