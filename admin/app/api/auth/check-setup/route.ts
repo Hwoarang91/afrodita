@@ -17,7 +17,9 @@ const API_URL = getApiUrl();
 
 export async function GET(request: NextRequest) {
   try {
-    const response = await fetch(`${API_URL}/api/v1/auth/check-setup`, {
+    // API_URL может уже содержать /api/v1, поэтому проверяем
+    const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
+    const response = await fetch(`${backendUrl}/auth/check-setup`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

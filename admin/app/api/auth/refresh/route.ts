@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
     // Передаем все cookies из запроса
     const cookieHeader = request.headers.get('cookie') || '';
     
-    const response = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+    // API_URL может уже содержать /api/v1, поэтому проверяем
+    const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
+    const response = await fetch(`${backendUrl}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

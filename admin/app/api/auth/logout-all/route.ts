@@ -19,7 +19,9 @@ export async function POST(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie') || '';
     
-    const response = await fetch(`${API_URL}/api/v1/auth/logout-all`, {
+    // API_URL может уже содержать /api/v1, поэтому проверяем
+    const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
+    const response = await fetch(`${backendUrl}/auth/logout-all`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
