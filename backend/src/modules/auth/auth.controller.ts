@@ -135,12 +135,8 @@ export class AuthController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Выход из системы' })
-  async logout(@Body('refreshToken') refreshToken: string, @Request() req) {
-    return await this.authService.logout(
-      refreshToken,
-      req.ip,
-      req.get('user-agent'),
-    );
+  async logout(@Request() req) {
+    return await this.authService.logout(req.user.sub, req.ip, req.get('user-agent'));
   }
 
   @Post('phone')
