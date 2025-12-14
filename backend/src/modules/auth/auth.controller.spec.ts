@@ -145,6 +145,15 @@ describe('AuthController', () => {
       );
     });
   });
+
+  describe('telegramAuth', () => {
+    it('должен авторизовать через Telegram', async () => {
+      const telegramData: TelegramAuthData = {
+        id: '123456789',
+        first_name: 'Test',
+        auth_date: Date.now(),
+        hash: 'hash',
+      };
       const req = {
         ip: '127.0.0.1',
         get: jest.fn().mockReturnValue('Mozilla/5.0'),
@@ -154,19 +163,29 @@ describe('AuthController', () => {
         telegramId: telegramData.id,
         role: UserRole.CLIENT,
       } as User;
-      const mockResult = {
+      const tokenPair = {
         accessToken: 'token',
         refreshToken: 'refresh',
-        user: mockUser,
+        accessTokenExpiresAt: new Date(),
+        refreshTokenExpiresAt: new Date(),
       };
 
       mockAuthService.validateTelegramAuth.mockResolvedValue(mockUser);
-      mockAuthService.login.mockResolvedValue(mockResult);
+      mockJwtAuthService.generateTokenPair.mockResolvedValue(tokenPair);
+      mockAuthService.logAuthAction.mockResolvedValue(undefined);
 
       const result = await controller.telegramAuth(telegramData, req);
 
-      expect(result).toEqual(mockResult);
+      expect(result).toHaveProperty('accessToken', 'token');
+      expect(result).toHaveProperty('refreshToken', 'refresh');
+      expect(result).toHaveProperty('user');
       expect(mockAuthService.validateTelegramAuth).toHaveBeenCalledWith(telegramData);
+      expect(mockJwtAuthService.generateTokenPair).toHaveBeenCalledWith(
+        mockUser,
+        req.ip,
+        req.get('user-agent'),
+        false,
+      );
     });
   });
 
