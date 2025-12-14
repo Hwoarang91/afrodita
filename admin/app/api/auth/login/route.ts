@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // Перенаправляем на новый API endpoint, который устанавливает httpOnly cookies
     const cookieHeader = request.headers.get('cookie') || '';
-    const response = await fetch(`${API_URL}/v1/auth/login`, {
+    const response = await fetch(`${API_URL}/api/v1/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

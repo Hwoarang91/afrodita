@@ -10,10 +10,10 @@ const getApiUrl = (): string => {
   }
   
   if (process.env.NODE_ENV === 'production') {
-    return 'http://backend:3001/api';
+    return 'http://backend:3001';
   }
 
-  return 'http://localhost:3001/api';
+  return 'http://localhost:3001';
 };
 
 const API_URL = getApiUrl();
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     // Передаем все cookies из запроса
     const cookieHeader = request.headers.get('cookie') || '';
     
-    const response = await fetch(`${API_URL}/v1/auth/refresh`, {
+    const response = await fetch(`${API_URL}/api/v1/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -8,16 +8,16 @@ const getApiUrl = (): string => {
     return process.env.NEXT_PUBLIC_API_URL;
   }
   if (process.env.NODE_ENV === 'production') {
-    return 'http://backend:3001/api';
+    return 'http://backend:3001';
   }
-  return 'http://localhost:3001/api';
+  return 'http://localhost:3001';
 };
 
 const API_URL = getApiUrl();
 
 export async function GET(request: NextRequest) {
   try {
-    const response = await fetch(`${API_URL}/v1/auth/check-setup`, {
+    const response = await fetch(`${API_URL}/api/v1/auth/check-setup`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
