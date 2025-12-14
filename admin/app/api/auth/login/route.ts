@@ -28,7 +28,7 @@ const API_URL = getApiUrl();
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password } = body;
+    const { email, password, rememberMe } = body;
 
     if (!email || !password) {
       return NextResponse.json(
@@ -40,12 +40,15 @@ export async function POST(request: NextRequest) {
     console.log('[Route Handler] Попытка логина для:', email);
 
     // Перенаправляем на новый API endpoint, который устанавливает httpOnly cookies
-    const response = await fetch(`${API_URL}/auth/login`, {
+    const cookieHeader = request.headers.get('cookie') || '';
+    const response = await fetch(`${API_URL}/v1/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': cookieHeader,
       },
-      body: JSON.stringify({ email, password }),
+      credentials: 'include',
+      body: JSON.stringify({ email, password, rememberMe: rememberMe ?? false }),
     });
 
     if (!response.ok) {
@@ -71,12 +74,21 @@ export async function POST(request: NextRequest) {
 
     console.log('[Route Handler] Успешная аутентификация, токены установлены в httpOnly cookies');
 
-    // Возвращаем успешный ответ с данными
-    // Токены уже установлены в httpOnly cookies backend'ом
-    return NextResponse.json({
+    // Копируем cookies из ответа backend
+    const setCookieHeaders = response.headers.getSetCookie();
+    const nextResponse = NextResponse.json({
       success: true,
       user: data.user,
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
     });
+
+    // Устанавливаем cookies из ответа backend
+    setCookieHeaders.forEach(cookie => {
+      nextResponse.headers.append('Set-Cookie', cookie);
+    });
+
+    return nextResponse;
 
   } catch (error: any) {
     console.error('[Route Handler] Ошибка при входе:', error);

@@ -217,26 +217,6 @@ export class JwtAuthService {
   }
 
   /**
-   * Выходит из системы по refresh token (инвалидирует конкретный refresh token)
-   */
-  async logoutByRefreshToken(refreshToken: string): Promise<string | null> {
-    const refreshTokenHash = this.hashToken(refreshToken);
-    const refreshTokenEntity = await this.refreshTokenRepository.findOne({
-      where: { tokenHash: refreshTokenHash, isActive: true },
-      relations: ['user'],
-    });
-
-    if (refreshTokenEntity) {
-      refreshTokenEntity.isActive = false;
-      await this.refreshTokenRepository.save(refreshTokenEntity);
-      this.logger.log(`Refresh token инвалидирован для пользователя ${refreshTokenEntity.userId}`);
-      return refreshTokenEntity.userId;
-    }
-
-    return null;
-  }
-
-  /**
    * Выходит из системы на всех устройствах (инвалидирует всю семью токенов)
    */
   async logoutAllDevices(userId: string): Promise<void> {
