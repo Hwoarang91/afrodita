@@ -1,4 +1,4 @@
-FROM node:20-alpine as builder
+FROM node:18-alpine as builder
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ RUN npm ci --include=dev
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:18-alpine
 
 # Установка wget для health checks
 RUN apk add --no-cache wget
