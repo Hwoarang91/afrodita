@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, IsBoolean, IsOptional } from 'class-validator';
 
 export class LoginRequestDto {
   @IsEmail({}, { message: 'Неверный формат email' })
@@ -8,4 +8,8 @@ export class LoginRequestDto {
   @IsString({ message: 'Пароль должен быть строкой' })
   @IsNotEmpty({ message: 'Пароль обязателен' })
   password: string;
+
+  @IsBoolean({ message: 'rememberMe должен быть boolean' })
+  @IsOptional()
+  rememberMe?: boolean;
 }

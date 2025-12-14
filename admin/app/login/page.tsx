@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [autoLogin, setAutoLogin] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
   const { login, isAuthenticated, isLoading } = useAuth();
@@ -27,7 +30,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await login(email, password);
+      await login(email, password, rememberMe, autoLogin);
       // Auth context автоматически перенаправит на дашборд после успешного логина
     } catch (error: any) {
       setError(error.message || 'Ошибка при входе. Проверьте данные.');
@@ -73,12 +76,41 @@ export default function LoginPage() {
               />
             </div>
 
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked === true)}
+                />
+                <Label
+                  htmlFor="rememberMe"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Запомнить меня
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="autoLogin"
+                  checked={autoLogin}
+                  onCheckedChange={(checked) => setAutoLogin(checked === true)}
+                />
+                <Label
+                  htmlFor="autoLogin"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Входить автоматически
+                </Label>
+              </div>
+            </div>
+
             <Button
               type="submit"
-              disabled={isPending}
+              disabled={isLoading}
               className="w-full"
             >
-              {isPending ? 'Вход...' : 'Войти'}
+              {isLoading ? 'Вход...' : 'Войти'}
             </Button>
           </form>
         </CardContent>

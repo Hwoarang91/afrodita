@@ -55,15 +55,17 @@ export class AuthController {
         loginDto.password,
       );
 
-      // Генерируем токены
+      // Генерируем токены с учетом rememberMe
+      const rememberMe = loginDto.rememberMe ?? false;
       const tokenPair = await this.jwtService.generateTokenPair(
         user,
         req.ip,
         req.get('user-agent'),
+        rememberMe,
       );
 
-      // Устанавливаем httpOnly cookies
-      this.setAuthCookies(res, tokenPair);
+      // Устанавливаем httpOnly cookies с учетом rememberMe
+      this.setAuthCookies(res, tokenPair, rememberMe);
 
       // Генерируем CSRF токен
       const csrfToken = this.csrfService.generateCsrfToken();
@@ -121,8 +123,14 @@ export class AuthController {
         req.get('user-agent'),
       );
 
+      // Определяем rememberMe по сроку жизни refresh token (30 дней = rememberMe, 7 дней = нет)
+      const refreshTokenDays = Math.round(
+        (tokenPair.refreshTokenExpiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
+      );
+      const rememberMe = refreshTokenDays >= 30;
+
       // Устанавливаем новые httpOnly cookies
-      this.setAuthCookies(res, tokenPair);
+      this.setAuthCookies(res, tokenPair, rememberMe);
 
       // Генерируем новый CSRF токен
       const csrfToken = this.csrfService.generateCsrfToken();
@@ -247,7 +255,7 @@ export class AuthController {
         req.get('user-agent'),
       );
 
-      // Устанавливаем cookies для нового администратора
+      // Устанавливаем cookies для нового администратора (rememberMe=false при регистрации)
       const tokenPair: TokenPair = {
         accessToken: result.token,
         refreshToken: result.refreshToken,
@@ -255,7 +263,7 @@ export class AuthController {
         refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       };
 
-      this.setAuthCookies(res, tokenPair);
+      this.setAuthCookies(res, tokenPair, false);
 
       const csrfToken = this.csrfService.generateCsrfToken();
       this.setCsrfCookie(res, csrfToken);
@@ -269,7 +277,7 @@ export class AuthController {
     }
   }
 
-  private setAuthCookies(res: ExpressResponse, tokenPair: TokenPair): void {
+  private setAuthCookies(res: ExpressResponse, tokenPair: TokenPair, rememberMe: boolean = false): void {
     const isProduction = process.env.NODE_ENV === 'production';
 
     // Access token в httpOnly cookie (недоступен JS)
@@ -282,11 +290,13 @@ export class AuthController {
     });
 
     // Refresh token в httpOnly cookie (недоступен JS)
+    // Срок жизни зависит от rememberMe: 30 дней если true, 7 дней если false
+    const refreshTokenMaxAge = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
     res.cookie('refresh_token', tokenPair.refreshToken, {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
+      maxAge: refreshTokenMaxAge,
       path: '/',
     });
   }

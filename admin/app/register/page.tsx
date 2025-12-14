@@ -61,12 +61,7 @@ export default function RegisterPage() {
       });
 
       if (data.token) {
-        localStorage.setItem('admin-token', data.token);
-        if (data.user) {
-          localStorage.setItem('admin-user', JSON.stringify(data.user));
-        }
-        // Сохраняем токен в cookies для Server Components
-        document.cookie = `admin-token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        // Токены устанавливаются в httpOnly cookies backend'ом
         // Редиректим на дашборд (basePath уже учтен в next.config.js)
         router.push('/dashboard');
       } else {

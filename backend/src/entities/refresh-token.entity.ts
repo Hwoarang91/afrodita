@@ -45,6 +45,9 @@ export class RefreshToken {
   @Column({ type: 'boolean', default: false })
   isCompromised: boolean; // Если токен был скомпрометирован
 
+  @Column({ type: 'boolean', default: false })
+  rememberMe: boolean; // Флаг "Запомнить меня" - влияет на срок жизни токена
+
   @Column({ type: 'timestamp', nullable: true })
   lastUsedAt: Date;
 

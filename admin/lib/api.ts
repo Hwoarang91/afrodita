@@ -49,17 +49,61 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     if (typeof window !== 'undefined') {
-      // Обработка 401 ошибки
+      // Обработка 401 ошибки - пытаемся обновить токены через refresh
       if (error.response?.status === 401) {
-        console.log('🔄 401 Error: Токен истек или недействителен, перенаправляем на логин');
+        const originalRequest = error.config;
+        
+        // Проверяем, не является ли это запросом на refresh (чтобы избежать бесконечного цикла)
+        if (originalRequest?.url?.includes('/auth/refresh') || originalRequest?._retry) {
+          console.log('🔄 Refresh token истек, перенаправляем на логин');
+          // Очищаем локальное состояние
+          localStorage.removeItem('admin-token');
+          sessionStorage.removeItem('admin-token');
+          sessionStorage.removeItem('autoLogin');
+          // Перенаправляем на страницу логина
+          window.location.href = '/login';
+          return Promise.reject(error);
+        }
 
-        // Очищаем локальное состояние
-        localStorage.removeItem('admin-token');
-        sessionStorage.removeItem('admin-token');
+        // Пытаемся обновить токены через refresh
+        try {
+          console.log('🔄 401 Error: Пытаемся обновить токены через refresh');
+          
+          // Получаем CSRF токен
+          const csrfToken = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrf_token='))
+            ?.split('=')[1] || '';
 
-        // Перенаправляем на страницу логина
-        window.location.href = '/login';
-        return Promise.reject(error);
+          const refreshResponse = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': csrfToken,
+            },
+            credentials: 'include',
+            body: JSON.stringify({ refreshToken: '' }), // Route handler получит из cookies
+          });
+
+          if (refreshResponse.ok) {
+            console.log('✅ Токены успешно обновлены, повторяем оригинальный запрос');
+            // Помечаем запрос как повторный, чтобы избежать бесконечного цикла
+            originalRequest._retry = true;
+            // Повторяем оригинальный запрос с обновленными токенами
+            return apiClient(originalRequest);
+          } else {
+            throw new Error('Refresh failed');
+          }
+        } catch (refreshError) {
+          console.log('❌ Не удалось обновить токены, перенаправляем на логин');
+          // Очищаем локальное состояние
+          localStorage.removeItem('admin-token');
+          sessionStorage.removeItem('admin-token');
+          sessionStorage.removeItem('autoLogin');
+          // Перенаправляем на страницу логина
+          window.location.href = '/login';
+          return Promise.reject(error);
+        }
       }
 
       // Обработка сетевых ошибок

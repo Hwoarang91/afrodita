@@ -19,7 +19,7 @@ export interface AuthState {
 }
 
 export interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean, autoLogin?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   logoutAllDevices: () => Promise<void>;
   refreshToken: () => Promise<void>;
@@ -68,11 +68,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Логин
-  const login = async (email: string, password: string): Promise<void> => {
+  const login = async (email: string, password: string, rememberMe?: boolean, autoLogin?: boolean): Promise<void> => {
     try {
       setAuthState(prev => ({ ...prev, isLoading: true }));
 
       const csrfToken = await getCsrfToken();
+
+      // Сохраняем autoLogin в sessionStorage для автоматического входа при следующей загрузке
+      if (autoLogin !== undefined) {
+        if (autoLogin) {
+          sessionStorage.setItem('autoLogin', 'true');
+        } else {
+          sessionStorage.removeItem('autoLogin');
+        }
+      }
 
       const response = await fetch('/api/auth/login', {
         method: 'POST',
@@ -81,7 +90,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           'X-CSRF-Token': csrfToken,
         },
         credentials: 'include',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe: rememberMe ?? false }),
       });
 
       if (!response.ok) {
@@ -179,6 +188,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const csrfToken = authState.csrfToken || await getCsrfToken();
 
+      // Используем route handler который работает с httpOnly cookies
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: {
@@ -186,12 +196,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           'X-CSRF-Token': csrfToken,
         },
         credentials: 'include',
-        body: JSON.stringify({
-          refreshToken: document.cookie
-            .split('; ')
-            .find(row => row.startsWith('refresh_token='))
-            ?.split('=')[1],
-        }),
+        body: JSON.stringify({ refreshToken: '' }), // Route handler получит из cookies
       });
 
       if (!response.ok) {
@@ -211,8 +216,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }));
     } catch (error) {
       console.error('Token refresh error:', error);
-      // При ошибке обновления токена выходим из системы
-      await logout();
+      // При ошибке обновления токена выходим из системы только если refresh token истек
+      // Если это временная ошибка сети, не выходим
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('expired') || errorMessage.includes('invalid')) {
+        await logout();
+      }
     }
   };
 
@@ -220,7 +229,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const checkAuth = async (): Promise<void> => {
     try {
       const csrfToken = await getCsrfToken();
+      const autoLogin = sessionStorage.getItem('autoLogin') === 'true';
 
+      // Проверка аутентификации через /api/auth/me
       const response = await fetch('/api/auth/me', {
         method: 'GET',
         headers: {
@@ -237,7 +248,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           isLoading: false,
           csrfToken,
         });
+        if (autoLogin) {
+          console.log('Автоматический вход выполнен успешно');
+        }
       } else {
+        // Если токен недействителен и включен autoLogin, пытаемся обновить через refresh
+        if (autoLogin && response.status === 401) {
+          try {
+            // Используем route handler для refresh, который работает с httpOnly cookies
+            const refreshResponse = await fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken,
+              },
+              credentials: 'include',
+              body: JSON.stringify({ refreshToken: '' }), // Route handler получит из cookies
+            });
+
+            if (refreshResponse.ok) {
+              // После успешного refresh повторно проверяем аутентификацию
+              const meResponse = await fetch('/api/auth/me', {
+                method: 'GET',
+                headers: {
+                  'X-CSRF-Token': csrfToken,
+                },
+                credentials: 'include',
+              });
+
+              if (meResponse.ok) {
+                const user = await meResponse.json();
+                setAuthState({
+                  user,
+                  isAuthenticated: true,
+                  isLoading: false,
+                  csrfToken,
+                });
+                console.log('Автоматический вход выполнен через refresh');
+                return;
+              }
+            }
+          } catch (refreshError) {
+            console.log('Автоматический refresh не удался:', refreshError);
+          }
+        }
+
         // Если токен недействителен, очищаем состояние
         setAuthState({
           user: null,

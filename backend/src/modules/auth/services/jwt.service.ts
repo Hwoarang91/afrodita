@@ -39,8 +39,14 @@ export class JwtAuthService {
 
   /**
    * Генерирует пару access + refresh токенов
+   * @param rememberMe - если true, refresh token будет жить 30 дней, иначе 7 дней
    */
-  async generateTokenPair(user: User, ipAddress?: string, userAgent?: string): Promise<TokenPair> {
+  async generateTokenPair(
+    user: User,
+    ipAddress?: string,
+    userAgent?: string,
+    rememberMe: boolean = false,
+  ): Promise<TokenPair> {
     const tokenFamily = this.generateTokenFamily();
     const now = new Date();
 
@@ -53,12 +59,14 @@ export class JwtAuthService {
       type: 'access',
     };
 
-    const accessToken = this.jwtService.sign(accessPayload, {
+    const accessToken = await this.jwtService.signAsync(accessPayload, {
       expiresIn: '15m',
     });
 
-    // Refresh token (долгоживущий, 7 дней)
-    const refreshTokenExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 дней
+    // Refresh token (долгоживущий, зависит от rememberMe)
+    // Если rememberMe=true → 30 дней, иначе → 7 дней
+    const refreshTokenDays = rememberMe ? 30 : 7;
+    const refreshTokenExpiresAt = new Date(now.getTime() + refreshTokenDays * 24 * 60 * 60 * 1000);
     const refreshToken = this.generateSecureToken();
     const refreshTokenHash = this.hashToken(refreshToken);
 
@@ -72,11 +80,14 @@ export class JwtAuthService {
       userAgent,
       isActive: true,
       isCompromised: false,
+      rememberMe,
     });
 
     await this.refreshTokenRepository.save(refreshTokenEntity);
 
-    this.logger.log(`Сгенерирована новая пара токенов для пользователя ${user.email}`);
+    this.logger.log(
+      `Сгенерирована новая пара токенов для пользователя ${user.email} (rememberMe: ${rememberMe}, срок: ${refreshTokenDays} дней)`,
+    );
 
     return {
       accessToken,
@@ -123,6 +134,9 @@ export class JwtAuthService {
     refreshTokenEntity.isActive = false;
     await this.refreshTokenRepository.save(refreshTokenEntity);
 
+    // Сохраняем rememberMe из старого токена для нового
+    const rememberMe = refreshTokenEntity.rememberMe ?? false;
+
     // Генерируем новую пару токенов в той же семье
     const tokenFamily = refreshTokenEntity.tokenFamily;
     const now = new Date();
@@ -135,11 +149,13 @@ export class JwtAuthService {
       type: 'access',
     };
 
-    const accessToken = this.jwtService.sign(accessPayload, {
+    const accessToken = await this.jwtService.signAsync(accessPayload, {
       expiresIn: '15m',
     });
 
-    const refreshTokenExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    // Используем тот же срок жизни что и у старого токена (на основе rememberMe)
+    const refreshTokenDays = rememberMe ? 30 : 7;
+    const refreshTokenExpiresAt = new Date(now.getTime() + refreshTokenDays * 24 * 60 * 60 * 1000);
     const newRefreshToken = this.generateSecureToken();
     const newRefreshTokenHash = this.hashToken(newRefreshToken);
 
@@ -152,6 +168,7 @@ export class JwtAuthService {
       userAgent,
       isActive: true,
       isCompromised: false,
+      rememberMe,
     });
 
     await this.refreshTokenRepository.save(newRefreshTokenEntity);

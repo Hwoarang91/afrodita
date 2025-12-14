@@ -8,6 +8,7 @@ import { Session } from '../../entities/session.entity';
 import { AuthLog, AuthAction } from '../../entities/auth-log.entity';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
+import { JwtAuthService } from './services/jwt.service';
 
 export interface TelegramAuthData {
   id: string;
@@ -41,6 +42,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private usersService: UsersService,
+    private jwtAuthService: JwtAuthService,
   ) {}
 
   async validateEmailPassword(email: string, password: string): Promise<User> {
@@ -135,51 +137,6 @@ export class AuthService {
     return user;
   }
 
-  async login(user: User, ipAddress?: string, userAgent?: string) {
-    const payload: JwtPayload = {
-      sub: user.id,
-      telegramId: user.telegramId || undefined,
-      role: user.role,
-      email: user.email || undefined,
-    };
-
-    const accessToken = this.jwtService.sign(payload);
-    const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
-    });
-
-    // Сохранение сессии
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    const session = this.sessionRepository.create({
-      userId: user.id,
-      refreshToken,
-      expiresAt,
-      ipAddress,
-      userAgent,
-    });
-    await this.sessionRepository.save(session);
-
-    // Логирование
-    await this.logAuthAction(user.id, AuthAction.LOGIN, ipAddress, userAgent);
-
-    return {
-      accessToken,
-      token: accessToken, // Для совместимости с админкой
-      refreshToken,
-      user: {
-        id: user.id,
-        telegramId: user.telegramId,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        bonusPoints: user.bonusPoints,
-      },
-    };
-  }
 
   async refreshToken(refreshToken: string, ipAddress?: string, userAgent?: string) {
     const session = await this.sessionRepository.findOne({
@@ -317,8 +274,29 @@ export class AuthService {
     // Логируем регистрацию
     await this.logAuthAction(savedAdmin.id, AuthAction.LOGIN, ipAddress, userAgent);
 
-    // Выполняем вход для нового администратора
-    return await this.login(savedAdmin, ipAddress, userAgent);
+    // Выполняем вход для нового администратора используя JwtAuthService
+    const tokenPair = await this.jwtAuthService.generateTokenPair(
+      savedAdmin,
+      ipAddress,
+      userAgent,
+      false, // rememberMe=false при регистрации
+    );
+
+    return {
+      accessToken: tokenPair.accessToken,
+      token: tokenPair.accessToken, // Для совместимости с админкой
+      refreshToken: tokenPair.refreshToken,
+      user: {
+        id: savedAdmin.id,
+        telegramId: savedAdmin.telegramId,
+        firstName: savedAdmin.firstName,
+        lastName: savedAdmin.lastName,
+        username: savedAdmin.username,
+        email: savedAdmin.email,
+        role: savedAdmin.role,
+        bonusPoints: savedAdmin.bonusPoints,
+      },
+    };
   }
 
   async logAuthAction(

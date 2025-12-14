@@ -49,24 +49,16 @@ export default function Sidebar() {
   const [user, setUser] = useState<any>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  useEffect(() => {
-    const userStr = localStorage.getItem('admin-user');
-    if (userStr) {
-      try {
-        setUser(JSON.parse(userStr));
-      } catch (e) {
-        // ignore
-      }
-    }
-  }, []);
+  // Пользователь должен получаться из AuthContext или через API
+  // localStorage больше не используется для хранения токенов
 
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const handleLogout = () => {
+    // Очищаем старые данные из localStorage (если остались от предыдущих версий)
     localStorage.removeItem('admin-token');
     localStorage.removeItem('admin-user');
-    // Удаляем токен из cookies для Server Components
-    document.cookie = 'admin-token=; path=/; max-age=0; SameSite=Lax';
+    // Cookies очищаются backend'ом при logout
     // Используем router.push, basePath уже учтен в next.config.js
     router.push('/login');
   };
