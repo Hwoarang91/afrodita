@@ -67,55 +67,50 @@ export default function LoginPage() {
 
     console.log('Login page: handleSubmit вызван');
 
-    const formData = new FormData();
-    formData.append('email', email);
-    formData.append('password', password);
-
     setIsPending(true);
     try {
-      try {
-        console.log('Login page: Отправляем запрос на /admin/api/auth/login');
+      console.log('Login page: Отправляем запрос на /admin/api/auth/login');
 
-        const response = await fetch('/admin/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email, password }),
-        });
+      const response = await fetch('/admin/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-        const result = await response.json();
+      const result = await response.json();
 
-        console.log('Login page: Получен результат от Route Handler', result);
-        
-        if (!response.ok || result?.error) {
-          setError(result?.error || 'Ошибка при входе. Проверьте данные.');
-          return;
-        }
+      console.log('Login page: Получен результат от Route Handler', result);
 
-        if (result?.success && result?.token) {
-          console.log('Login page: Успешный логин, синхронизируем данные в хранилищах');
-
-          // Синхронизируем токен в localStorage и sessionStorage для клиентских компонентов
-          // Cookies уже установлены Route Handler'ом
-          sessionStorage.setItem('just-logged-in', 'true');
-          localStorage.setItem('admin-token', result.token);
-          sessionStorage.setItem('admin-token', result.token);
-          if (result.user) {
-            localStorage.setItem('admin-user', JSON.stringify(result.user));
-          }
-
-          console.log('Login page: Данные синхронизированы, выполняем редирект на /dashboard');
-
-          // Редирект на дашборд (basePath уже учтен в next.config.js)
-          router.push('/dashboard');
-        }
-      } catch (error: any) {
-        console.error('Login page: Ошибка при входе:', error);
-        setError('Ошибка при входе. Проверьте подключение к интернету.');
-      } finally {
-        setIsPending(false);
+      if (!response.ok || result?.error) {
+        setError(result?.error || 'Ошибка при входе. Проверьте данные.');
+        return;
       }
+
+      if (result?.success && result?.token) {
+        console.log('Login page: Успешный логин, синхронизируем данные в хранилищах');
+
+        // Синхронизируем токен в localStorage и sessionStorage для клиентских компонентов
+        // Cookies уже установлены Route Handler'ом
+        sessionStorage.setItem('just-logged-in', 'true');
+        localStorage.setItem('admin-token', result.token);
+        sessionStorage.setItem('admin-token', result.token);
+        if (result.user) {
+          localStorage.setItem('admin-user', JSON.stringify(result.user));
+        }
+
+        console.log('Login page: Данные синхронизированы, выполняем редирект на /dashboard');
+
+        // Редирект на дашборд (basePath уже учтен в next.config.js)
+        router.push('/dashboard');
+      }
+    } catch (error: any) {
+      console.error('Login page: Ошибка при входе:', error);
+      setError('Ошибка при входе. Проверьте подключение к интернету.');
+    } finally {
+      setIsPending(false);
+    }
   };
 
   return (
