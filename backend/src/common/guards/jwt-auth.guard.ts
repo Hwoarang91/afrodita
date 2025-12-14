@@ -7,42 +7,37 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers.authorization;
-    
-    // Логируем для диагностики (временно включаем для всех запросов)
-    if (!authHeader) {
-      this.logger.warn('Authorization header отсутствует', {
-        url: request.url,
-        method: request.method,
-        headers: Object.keys(request.headers),
-      });
-    } else {
-      this.logger.log('Authorization header присутствует', {
-        url: request.url,
-        method: request.method,
-        hasBearer: authHeader.startsWith('Bearer '),
-        tokenLength: authHeader.length,
-        tokenPrefix: authHeader.substring(0, 30) + '...',
-      });
+
+    // Проверяем, есть ли пользователь в request (установлен JWT middleware)
+    if (request.user) {
+      this.logger.debug('JwtAuthGuard: Пользователь уже аутентифицирован middleware');
+      return true;
     }
-    
+
+    // Если нет пользователя в request, используем Passport стратегию
+    this.logger.debug('JwtAuthGuard: Используем Passport стратегию');
     return super.canActivate(context);
   }
 
   handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
-    
+
+    // Если пользователь уже установлен middleware, возвращаем его
+    if (request.user) {
+      this.logger.debug(`JwtAuthGuard: Возвращаем пользователя из middleware: ${request.user.email}`);
+      return request.user;
+    }
+
+    // Иначе используем стандартную логику Passport
     if (err || !user) {
-      this.logger.warn('JWT валидация не прошла', {
-        url: request.url,
-        method: request.method,
+      this.logger.warn('JwtAuthGuard: Passport аутентификация не прошла', {
         error: err?.message,
         info: info?.message,
-        hasAuthHeader: !!request.headers.authorization,
       });
+    } else {
+      this.logger.debug(`JwtAuthGuard: Passport аутентификация успешна: ${user.email}`);
     }
-    
+
     return super.handleRequest(err, user, info, context);
   }
 }
-

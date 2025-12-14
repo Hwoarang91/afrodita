@@ -14,22 +14,23 @@ export class JwtMiddleware implements NestMiddleware {
 
   async use(req: RequestWithUser, res: Response, next: NextFunction) {
     try {
-      this.logger.debug('JWT middleware: Проверка cookies', {
+      this.logger.log('JWT middleware: Начинаем проверку', {
         url: req.url,
         method: req.method,
-        allCookies: req.cookies,
-        hasAccessToken: !!req.cookies?.access_token,
-        accessTokenLength: req.cookies?.access_token?.length,
+        cookiesKeys: Object.keys(req.cookies || {}),
+        hasCookies: !!req.cookies,
       });
 
       // Пытаемся получить access token из cookies
       const accessToken = req.cookies?.access_token;
 
       if (!accessToken) {
-        this.logger.debug('JWT middleware: Нет access token в cookies');
+        this.logger.log('JWT middleware: Нет access_token в cookies, доступные cookies:', req.cookies);
         // Нет токена - продолжаем без аутентификации
         return next();
       }
+
+      this.logger.log('JWT middleware: Найден access_token, пытаемся валидировать');
 
       // Валидируем access token
       const user = await this.jwtService.validateAccessToken(accessToken);
@@ -45,9 +46,9 @@ export class JwtMiddleware implements NestMiddleware {
           bonusPoints: user.bonusPoints,
         };
 
-        this.logger.log(`JWT middleware: Пользователь ${user.email} аутентифицирован`);
+        this.logger.log(`JWT middleware: ✅ Пользователь ${user.email} (${user.role}) аутентифицирован`);
       } else {
-        this.logger.warn('JWT middleware: Неверный или истекший access token');
+        this.logger.warn('JWT middleware: ❌ Токен не валиден или истек');
       }
 
       next();
