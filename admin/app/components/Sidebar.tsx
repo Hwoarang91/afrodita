@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useTheme } from './ThemeProvider';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
@@ -46,21 +47,31 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
-  const [user, setUser] = useState<any>(null);
+  const { user, logout } = useAuth();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-
-  // Пользователь должен получаться из AuthContext или через API
-  // localStorage больше не используется для хранения токенов
 
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Очищаем sessionStorage (включая autoLogin)
+    sessionStorage.clear();
     // Очищаем старые данные из localStorage (если остались от предыдущих версий)
     localStorage.removeItem('admin-token');
     localStorage.removeItem('admin-user');
-    // Cookies очищаются backend'ом при logout
-    // Используем router.push, basePath уже учтен в next.config.js
-    router.push('/login');
+    
+    // Закрываем диалог
+    setShowLogoutDialog(false);
+    
+    // Вызываем logout из AuthContext в фоне (не ждем завершения)
+    // Это очистит токены на сервере, но не блокирует редирект
+    logout().catch((error) => {
+      console.error('Logout error:', error);
+    });
+    
+    // Используем window.location.href для принудительного редиректа
+    // Это гарантирует полную перезагрузку страницы и очистку состояния
+    // Редирект выполняется сразу, не дожидаясь завершения logout
+    window.location.href = '/admin/login';
   };
 
   const sidebarContent = (
