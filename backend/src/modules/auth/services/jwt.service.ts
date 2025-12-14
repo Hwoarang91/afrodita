@@ -217,6 +217,23 @@ export class JwtAuthService {
   }
 
   /**
+   * Выходит из системы по refresh token (инвалидирует все refresh tokens пользователя)
+   */
+  async logoutByRefreshToken(refreshToken: string): Promise<void> {
+    const refreshTokenHash = this.hashToken(refreshToken);
+    const refreshTokenEntity = await this.refreshTokenRepository.findOne({
+      where: { tokenHash: refreshTokenHash, isActive: true },
+      relations: ['user'],
+    });
+
+    if (refreshTokenEntity && refreshTokenEntity.user) {
+      await this.logout(refreshTokenEntity.user.id);
+    } else {
+      this.logger.warn('Refresh token не найден для logout');
+    }
+  }
+
+  /**
    * Выходит из системы на всех устройствах (инвалидирует всю семью токенов)
    */
   async logoutAllDevices(userId: string): Promise<void> {
