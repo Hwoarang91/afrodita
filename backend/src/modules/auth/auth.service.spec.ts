@@ -191,41 +191,8 @@ describe('AuthService', () => {
     });
   });
 
-  describe('login', () => {
-    it('должен создать сессию и вернуть токен', async () => {
-      const mockUser: User = {
-        id: 'user-1',
-        email: 'test@example.com',
-        isActive: true,
-        role: UserRole.CLIENT,
-        firstName: 'Test',
-        lastName: 'User',
-        bonusPoints: 0,
-      } as User;
-
-      const mockSession: Session = {
-        id: 'session-1',
-        userId: 'user-1',
-        refreshToken: 'refresh-token',
-      } as Session;
-
-      mockJwtService.sign
-        .mockReturnValueOnce('access-token')
-        .mockReturnValueOnce('refresh-token');
-      mockConfigService.get.mockReturnValue('7d');
-      mockSessionRepository.create.mockReturnValue(mockSession);
-      mockSessionRepository.save.mockResolvedValue(mockSession);
-      mockAuthLogRepository.create.mockReturnValue({});
-      mockAuthLogRepository.save.mockResolvedValue({});
-
-      const result = await service.login(mockUser);
-
-      expect(result).toHaveProperty('accessToken');
-      expect(result).toHaveProperty('refreshToken');
-      expect(result).toHaveProperty('user');
-      expect(mockJwtService.sign).toHaveBeenCalled();
-    });
-  });
+  // Тесты для метода login() удалены, так как метод был удален
+  // Вместо него используется JwtAuthService.generateTokenPair()
 
   describe('logout', () => {
     it('должен деактивировать сессию', async () => {

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService, TelegramAuthData } from './auth.service';
+import { JwtAuthService } from './services/jwt.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
 import { User, UserRole } from '../../entities/user.entity';
@@ -8,16 +9,21 @@ import { User, UserRole } from '../../entities/user.entity';
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: AuthService;
+  let jwtAuthService: JwtAuthService;
 
   const mockAuthService = {
     validateEmailPassword: jest.fn(),
     validateTelegramAuth: jest.fn(),
-    login: jest.fn(),
     refreshToken: jest.fn(),
     logout: jest.fn(),
     updatePhone: jest.fn(),
     checkHasUsers: jest.fn(),
     registerFirstAdmin: jest.fn(),
+    logAuthAction: jest.fn(),
+  };
+
+  const mockJwtAuthService = {
+    generateTokenPair: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -28,6 +34,10 @@ describe('AuthController', () => {
           provide: AuthService,
           useValue: mockAuthService,
         },
+        {
+          provide: JwtAuthService,
+          useValue: mockJwtAuthService,
+        },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -36,6 +46,7 @@ describe('AuthController', () => {
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get<AuthService>(AuthService);
+    jwtAuthService = module.get<JwtAuthService>(JwtAuthService);
   });
 
   afterEach(() => {
@@ -63,20 +74,31 @@ describe('AuthController', () => {
         user: mockUser,
       };
 
+      const tokenPair = {
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        accessTokenExpiresAt: new Date(),
+        refreshTokenExpiresAt: new Date(),
+      };
+
       mockAuthService.validateEmailPassword.mockResolvedValue(mockUser);
-      mockAuthService.login.mockResolvedValue(mockResult);
+      mockJwtAuthService.generateTokenPair.mockResolvedValue(tokenPair);
+      mockAuthService.logAuthAction.mockResolvedValue(undefined);
 
       const result = await controller.login(loginDto, req);
 
-      expect(result).toEqual(mockResult);
+      expect(result).toHaveProperty('accessToken', 'token');
+      expect(result).toHaveProperty('refreshToken', 'refresh');
+      expect(result).toHaveProperty('user');
       expect(mockAuthService.validateEmailPassword).toHaveBeenCalledWith(
         loginDto.email,
         loginDto.password,
       );
-      expect(mockAuthService.login).toHaveBeenCalledWith(
+      expect(mockJwtAuthService.generateTokenPair).toHaveBeenCalledWith(
         mockUser,
         req.ip,
         req.get('user-agent'),
+        false,
       );
     });
   });
@@ -89,6 +111,40 @@ describe('AuthController', () => {
         auth_date: Date.now(),
         hash: 'hash',
       };
+      const req = {
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const mockUser: User = {
+        id: 'user-1',
+        telegramId: telegramData.id,
+        role: UserRole.CLIENT,
+      } as User;
+      const tokenPair = {
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        accessTokenExpiresAt: new Date(),
+        refreshTokenExpiresAt: new Date(),
+      };
+
+      mockAuthService.validateTelegramAuth.mockResolvedValue(mockUser);
+      mockJwtAuthService.generateTokenPair.mockResolvedValue(tokenPair);
+      mockAuthService.logAuthAction.mockResolvedValue(undefined);
+
+      const result = await controller.telegramAuth(telegramData, req);
+
+      expect(result).toHaveProperty('accessToken', 'token');
+      expect(result).toHaveProperty('refreshToken', 'refresh');
+      expect(result).toHaveProperty('user');
+      expect(mockAuthService.validateTelegramAuth).toHaveBeenCalledWith(telegramData);
+      expect(mockJwtAuthService.generateTokenPair).toHaveBeenCalledWith(
+        mockUser,
+        req.ip,
+        req.get('user-agent'),
+        false,
+      );
+    });
+  });
       const req = {
         ip: '127.0.0.1',
         get: jest.fn().mockReturnValue('Mozilla/5.0'),

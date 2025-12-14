@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AuthService, TelegramAuthData } from './auth.service';
+import { JwtAuthService } from './services/jwt.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
 import { LoginDto } from './dto/login.dto';
@@ -21,7 +22,10 @@ import { RegisterDto } from './dto/register.dto';
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly jwtAuthService: JwtAuthService,
+  ) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -35,13 +39,38 @@ export class AuthController {
         loginDto.email,
         loginDto.password,
       );
-      const result = await this.authService.login(
+      // Используем JwtAuthService для генерации токенов
+      const tokenPair = await this.jwtAuthService.generateTokenPair(
         user,
         req.ip,
         req.get('user-agent'),
+        false, // rememberMe=false по умолчанию для старого контроллера
       );
+
+      // Логируем вход
+      await this.authService.logAuthAction(
+        user.id,
+        await this.getAuthAction('LOGIN'),
+        req.ip,
+        req.get('user-agent'),
+      );
+
       this.logger.log(`Успешный вход: ${loginDto.email}`);
-      return result;
+      return {
+        accessToken: tokenPair.accessToken,
+        token: tokenPair.accessToken, // Для совместимости
+        refreshToken: tokenPair.refreshToken,
+        user: {
+          id: user.id,
+          telegramId: user.telegramId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          bonusPoints: user.bonusPoints,
+        },
+      };
     } catch (error: any) {
       this.logger.error(`Ошибка входа для ${loginDto.email}: ${error.message}`);
       throw error;
@@ -55,11 +84,37 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Неверные данные авторизации' })
   async telegramAuth(@Body() data: TelegramAuthData, @Request() req) {
     const user = await this.authService.validateTelegramAuth(data);
-    return await this.authService.login(
+    // Используем JwtAuthService для генерации токенов
+    const tokenPair = await this.jwtAuthService.generateTokenPair(
       user,
       req.ip,
       req.get('user-agent'),
+      false, // rememberMe=false по умолчанию
     );
+
+    // Логируем вход
+    await this.authService.logAuthAction(
+      user.id,
+      await this.getAuthAction('LOGIN'),
+      req.ip,
+      req.get('user-agent'),
+    );
+
+    return {
+      accessToken: tokenPair.accessToken,
+      token: tokenPair.accessToken, // Для совместимости
+      refreshToken: tokenPair.refreshToken,
+      user: {
+        id: user.id,
+        telegramId: user.telegramId,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        bonusPoints: user.bonusPoints,
+      },
+    };
   }
 
   @Post('refresh')
@@ -134,6 +189,12 @@ export class AuthController {
       this.logger.error(`Ошибка регистрации для ${registerDto.email}: ${error.message}`);
       throw error;
     }
+  }
+
+  private async getAuthAction(action: string) {
+    // Импорт AuthAction enum
+    const { AuthAction } = await import('../../entities/auth-log.entity');
+    return AuthAction[action as keyof typeof AuthAction];
   }
 }
 
