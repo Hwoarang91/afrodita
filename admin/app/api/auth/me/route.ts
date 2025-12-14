@@ -33,11 +33,38 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: 'Failed to get user info' }));
+      // Если ответ не OK, пытаемся получить JSON, но если его нет - возвращаем общую ошибку
+      let errorData;
+      try {
+        const text = await response.text();
+        errorData = text ? JSON.parse(text) : { message: 'Failed to get user info' };
+      } catch {
+        errorData = { message: 'Failed to get user info' };
+      }
       return NextResponse.json(
         { error: errorData.message || 'Failed to get user info' },
         { status: response.status }
       );
+    }
+
+    // Проверяем, есть ли контент в ответе
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      if (!text) {
+        return NextResponse.json(
+          { error: 'Empty response from server' },
+          { status: 500 }
+        );
+      }
+      try {
+        return NextResponse.json(JSON.parse(text));
+      } catch {
+        return NextResponse.json(
+          { error: 'Invalid JSON response from server' },
+          { status: 500 }
+        );
+      }
     }
 
     const data = await response.json();
