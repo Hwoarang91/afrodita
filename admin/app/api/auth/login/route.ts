@@ -16,11 +16,11 @@ const getApiUrl = (): string => {
 
   // В production внутри Docker используем внутренний URL к backend
   if (process.env.NODE_ENV === 'production') {
-    return 'http://backend:3001/api/v1';
+    return 'http://backend:3001/api';
   }
 
   // В development используем localhost
-  return 'http://localhost:3001/api/v1';
+  return 'http://localhost:3001/api';
 };
 
 const API_URL = getApiUrl();
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     console.log('[Route Handler] Попытка логина для:', email);
 
-    // Вызываем API для аутентификации
+    // Перенаправляем на новый API endpoint, который устанавливает httpOnly cookies
     const response = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: {
@@ -61,63 +61,20 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
 
-    if (!data.token) {
-      console.log('[Route Handler] Нет токена в ответе');
+    if (!data.accessToken) {
+      console.log('[Route Handler] Нет accessToken в ответе');
       return NextResponse.json(
         { error: 'Неверный email или пароль' },
         { status: 401 }
       );
     }
 
-    console.log('[Route Handler] Успешная аутентификация, устанавливаем cookies', {
-      hasToken: !!data.token,
-      tokenLength: data.token.length,
-      userId: data.user?.id,
-      userRole: data.user?.role,
-    });
-
-    // Получаем cookie store
-    const cookieStore = await cookies();
-
-    // Отключаем secure для работы с самоподписанными SSL сертификатами
-    const isSecure = false;
-
-    // Устанавливаем токен в cookie
-    cookieStore.set('admin-token', data.token, {
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60, // 7 дней
-      sameSite: 'lax',
-      httpOnly: false, // Нужен доступ из клиента для синхронизации с localStorage
-      secure: isSecure,
-    });
-
-    // Сохраняем также user данные в cookie для использования в клиентских компонентах
-    if (data.user) {
-      cookieStore.set('admin-user', JSON.stringify(data.user), {
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60,
-        sameSite: 'lax',
-        httpOnly: false,
-        secure: isSecure,
-      });
-    }
-
-    // Устанавливаем флаг успешного логина в cookie
-    // Это предотвратит очистку токена в AuthGuard и login/page.tsx
-    cookieStore.set('just-logged-in', 'true', {
-      path: '/',
-      maxAge: 60, // 1 минута - достаточно для редиректа
-      sameSite: 'lax',
-      httpOnly: false, // Нужен доступ из клиента для установки в sessionStorage
-      secure: isSecure,
-    });
-
-    console.log('[Route Handler] Все cookies установлены успешно');
+    console.log('[Route Handler] Успешная аутентификация, токены установлены в httpOnly cookies');
 
     // Возвращаем успешный ответ с данными
+    // Токены уже установлены в httpOnly cookies backend'ом
     return NextResponse.json({
       success: true,
-      token: data.token,
       user: data.user,
     });
 

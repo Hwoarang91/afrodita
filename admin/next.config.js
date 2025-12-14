@@ -5,7 +5,7 @@ const nextConfig = {
   env: {
     // Загружаем переменные из корневого .env
     // Если NEXT_PUBLIC_API_URL не установлен, используем относительный путь в продакшене
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || (process.env.NODE_ENV === 'production' ? '/api/v1' : 'http://localhost:3001/api/v1'),
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:3001/api'),
   },
   // Настройка для правильной работы чанков в Docker
   webpack: (config, { isServer, dev }) => {

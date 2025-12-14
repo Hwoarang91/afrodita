@@ -321,7 +321,7 @@ export class AuthService {
     return await this.login(savedAdmin, ipAddress, userAgent);
   }
 
-  private async logAuthAction(
+  async logAuthAction(
     userId: string,
     action: AuthAction,
     ipAddress?: string,
