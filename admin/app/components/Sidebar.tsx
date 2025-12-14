@@ -53,25 +53,36 @@ export default function Sidebar() {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const handleLogout = async () => {
-    // Очищаем sessionStorage (включая autoLogin)
-    sessionStorage.clear();
-    // Очищаем старые данные из localStorage (если остались от предыдущих версий)
-    localStorage.removeItem('admin-token');
-    localStorage.removeItem('admin-user');
-    
-    // Закрываем диалог
-    setShowLogoutDialog(false);
-    
-    // Вызываем logout из AuthContext в фоне (не ждем завершения)
-    // Это очистит токены на сервере, но не блокирует редирект
-    logout().catch((error) => {
-      console.error('Logout error:', error);
-    });
-    
-    // Используем window.location.href для принудительного редиректа
-    // Это гарантирует полную перезагрузку страницы и очистку состояния
-    // Редирект выполняется сразу, не дожидаясь завершения logout
-    window.location.href = '/admin/login';
+    try {
+      // Очищаем sessionStorage (включая autoLogin)
+      sessionStorage.clear();
+      // Очищаем старые данные из localStorage (если остались от предыдущих версий)
+      localStorage.removeItem('admin-token');
+      localStorage.removeItem('admin-user');
+      
+      // Закрываем диалог
+      setShowLogoutDialog(false);
+      
+      // Вызываем logout из AuthContext в фоне (не ждем завершения)
+      // Это очистит токены на сервере, но не блокирует редирект
+      logout().catch((error) => {
+        console.error('Logout error:', error);
+      });
+      
+      // Используем window.location.replace() для принудительного редиректа
+      // replace() не добавляет запись в историю браузера, что лучше для logout
+      // Добавляем небольшую задержку для гарантии выполнения всех операций
+      setTimeout(() => {
+        window.location.replace('/admin/login');
+      }, 100);
+    } catch (error) {
+      console.error('Handle logout error:', error);
+      // Даже при ошибке выполняем редирект
+      setShowLogoutDialog(false);
+      setTimeout(() => {
+        window.location.replace('/admin/login');
+      }, 100);
+    }
   };
 
   const sidebarContent = (
