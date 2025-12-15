@@ -106,11 +106,12 @@ export async function POST(request: NextRequest) {
           }
           
           // Извлекаем атрибуты
+          // Важно: path должен быть '/admin' из-за basePath в next.config.js
           const cookieOptions: any = {
             httpOnly: cookie.includes('HttpOnly'),
             secure: cookie.includes('Secure'),
             sameSite: cookie.includes('SameSite=Lax') ? 'lax' : cookie.includes('SameSite=Strict') ? 'strict' : 'lax',
-            path: '/',
+            path: '/admin', // Изменено с '/' на '/admin' из-за basePath
           };
           
           // Извлекаем maxAge (в секундах для Next.js)
