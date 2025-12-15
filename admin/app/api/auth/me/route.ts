@@ -18,16 +18,25 @@ const API_URL = getApiUrl();
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
+    // Используем заголовок cookie напрямую из запроса, если он есть
+    // Это гарантирует правильную передачу всех cookies, включая httpOnly
+    const cookieHeader = request.headers.get('cookie') || '';
     
-    // Собираем все cookies в строку для передачи в backend
-    const cookiePairs: string[] = [];
-    cookieStore.getAll().forEach(cookie => {
-      cookiePairs.push(`${cookie.name}=${cookie.value}`);
-    });
-    const cookieHeader = cookiePairs.join('; ');
+    // Если cookie header пустой, пытаемся получить через cookies() API
+    let finalCookieHeader = cookieHeader;
+    if (!cookieHeader) {
+      const cookieStore = await cookies();
+      const cookiePairs: string[] = [];
+      cookieStore.getAll().forEach(cookie => {
+        // Кодируем имя и значение cookie для безопасной передачи
+        const encodedName = encodeURIComponent(cookie.name);
+        const encodedValue = encodeURIComponent(cookie.value);
+        cookiePairs.push(`${encodedName}=${encodedValue}`);
+      });
+      finalCookieHeader = cookiePairs.join('; ');
+    }
     
-    console.log('[Route Handler] Cookies для /auth/me:', cookiePairs.length > 0 ? 'есть' : 'нет');
+    console.log('[Route Handler] Cookies для /auth/me:', finalCookieHeader ? 'есть' : 'нет');
     
     // API_URL может уже содержать /api/v1, поэтому проверяем
     const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
@@ -35,7 +44,7 @@ export async function GET(request: NextRequest) {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': cookieHeader,
+        ...(finalCookieHeader && { 'Cookie': finalCookieHeader }),
       },
       credentials: 'include',
     });
