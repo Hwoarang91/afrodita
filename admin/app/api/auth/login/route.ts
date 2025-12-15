@@ -92,49 +92,23 @@ export async function POST(request: NextRequest) {
     });
 
     // Устанавливаем cookies из ответа backend
-    // Используем cookies.set() как в refresh/route.ts, но с path='/'
+    // Используем headers.append напрямую, как в csrf-token/route.ts
+    // Это гарантирует, что Set-Cookie заголовки попадут в ответ
     if (setCookieHeaders.length > 0) {
       setCookieHeaders.forEach(cookie => {
         try {
-          const [nameValue, ...rest] = cookie.split(';');
-          const [name, value] = nameValue.split('=');
-          
-          if (!name || !value) {
-            console.warn('[Route Handler] Неверный формат cookie:', cookie);
-            return;
-          }
-          
-          const options: any = {};
-          
-          // Парсим атрибуты cookie
-          rest.forEach(part => {
-            const trimmed = part.trim();
-            if (trimmed.toLowerCase() === 'httponly') {
-              options.httpOnly = true;
-            } else if (trimmed.toLowerCase().startsWith('secure')) {
-              options.secure = true;
-            } else if (trimmed.toLowerCase().startsWith('samesite')) {
-              options.sameSite = trimmed.split('=')[1]?.toLowerCase() || 'lax';
-            } else if (trimmed.toLowerCase().startsWith('path')) {
-              // Используем path='/' вместо '/admin' для работы с basePath
-              options.path = '/';
-            } else if (trimmed.toLowerCase().startsWith('max-age')) {
-              options.maxAge = parseInt(trimmed.split('=')[1] || '0', 10);
-            }
+          // Используем cookie строку напрямую из backend
+          // Path уже установлен как '/' в backend, что правильно для basePath
+          console.log('[Route Handler] Устанавливаем cookie через headers.append:', { 
+            cookie: cookie.substring(0, 100) + '...'
           });
           
-          console.log('[Route Handler] Устанавливаем cookie через cookies.set():', { 
-            name: name.trim(), 
-            hasValue: !!value,
-            options: options
-          });
-          
-          nextResponse.cookies.set(name.trim(), value.trim(), options);
+          nextResponse.headers.append('Set-Cookie', cookie);
         } catch (error) {
           console.error('[Route Handler] Ошибка при установке cookie:', error, cookie);
         }
       });
-      console.log('[Route Handler] Cookies установлены в ответе через cookies.set(), всего:', setCookieHeaders.length);
+      console.log('[Route Handler] Cookies установлены в ответе через headers.append, всего:', setCookieHeaders.length);
     } else {
       console.warn('[Route Handler] Нет Set-Cookie заголовков от backend!');
     }
