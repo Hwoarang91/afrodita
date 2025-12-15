@@ -245,7 +245,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
       const newClient = new Client({
         apiId,
         apiHash,
-        storage,
+        storage: storage as any,
       });
 
       // Сохраняем сессию в БД
