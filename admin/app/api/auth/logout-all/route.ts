@@ -36,10 +36,29 @@ export async function POST(request: NextRequest) {
       { status: response.ok ? 200 : response.status }
     );
 
-    // Очищаем cookies
-    nextResponse.cookies.delete('access_token');
-    nextResponse.cookies.delete('refresh_token');
-    nextResponse.cookies.delete('csrf_token');
+    // Очищаем cookies - устанавливаем пустое значение с истекшим сроком
+    const isProduction = process.env.NODE_ENV === 'production';
+    nextResponse.cookies.set('access_token', '', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
+    nextResponse.cookies.set('refresh_token', '', {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
+    nextResponse.cookies.set('csrf_token', '', {
+      httpOnly: false,
+      secure: isProduction,
+      sameSite: 'strict',
+      maxAge: 0,
+      path: '/',
+    });
 
     return nextResponse;
   } catch (error: any) {

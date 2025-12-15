@@ -314,7 +314,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Проверка аутентификации при загрузке приложения
   useEffect(() => {
-    checkAuth();
+    // Не проверяем аутентификацию на странице логина/регистрации
+    // Это предотвратит ошибки 401 после выхода
+    if (typeof window !== 'undefined') {
+      const pathname = window.location.pathname;
+      const isLoginPage = pathname === '/admin/login' || pathname === '/login';
+      const isRegisterPage = pathname === '/admin/register' || pathname === '/register';
+      
+      if (!isLoginPage && !isRegisterPage) {
+        checkAuth();
+      } else {
+        // На странице логина просто устанавливаем isLoading = false
+        setAuthState(prev => ({
+          ...prev,
+          isLoading: false,
+        }));
+      }
+    }
   }, []);
 
   // Автоматическое обновление токена каждые 10 минут

@@ -54,6 +54,9 @@ export default function Sidebar() {
 
   const handleLogout = async () => {
     try {
+      // Закрываем диалог сразу для лучшего UX
+      setShowLogoutDialog(false);
+      
       // Очищаем sessionStorage (включая autoLogin)
       sessionStorage.clear();
       // Очищаем старые данные из localStorage (если остались от предыдущих версий)
@@ -63,28 +66,23 @@ export default function Sidebar() {
       localStorage.removeItem('login_preferences_rememberMe');
       localStorage.removeItem('login_preferences_autoLogin');
       
-      // Закрываем диалог
-      setShowLogoutDialog(false);
-      
-      // Вызываем logout из AuthContext в фоне (не ждем завершения)
-      // Это очистит токены на сервере, но не блокирует редирект
-      logout().catch((error) => {
+      // Вызываем logout из AuthContext и ждем завершения
+      // Это очистит токены на сервере и cookies
+      try {
+        await logout();
+      } catch (error) {
         console.error('Logout error:', error);
-      });
+        // Даже при ошибке продолжаем - очистка локального состояния уже выполнена
+      }
       
       // Используем window.location.replace() для принудительного редиректа
       // replace() не добавляет запись в историю браузера, что лучше для logout
-      // Добавляем небольшую задержку для гарантии выполнения всех операций
-      setTimeout(() => {
-        window.location.replace('/admin/login');
-      }, 100);
+      window.location.replace('/admin/login');
     } catch (error) {
       console.error('Handle logout error:', error);
       // Даже при ошибке выполняем редирект
       setShowLogoutDialog(false);
-      setTimeout(() => {
-        window.location.replace('/admin/login');
-      }, 100);
+      window.location.replace('/admin/login');
     }
   };
 
