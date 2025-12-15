@@ -20,7 +20,6 @@ class DatabaseStorage implements Partial<Storage> {
     private apiHash: string,
   ) {}
 
-  // @ts-expect-error - временно игнорируем ошибку типов Storage
   async get<T = Uint8Array>(key: readonly StorageKeyPart[]): Promise<T | null> {
     try {
       const session = await this.sessionRepository.findOne({
@@ -51,10 +50,10 @@ class DatabaseStorage implements Partial<Storage> {
       }
 
       if (typeof current === 'string') {
-        return new TextEncoder().encode(current);
+        return new TextEncoder().encode(current) as T;
       }
 
-      return current instanceof Uint8Array ? current : null;
+      return (current instanceof Uint8Array ? current : null) as T | null;
     } catch (error) {
       return null;
     }

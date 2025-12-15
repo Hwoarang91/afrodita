@@ -9,7 +9,6 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { JwtAuthService } from './services/jwt.service';
 import { TelegramUserClientService } from '../../telegram/services/telegram-user-client.service';
-// @ts-ignore - временно игнорируем ошибку импорта
 import { Client } from '@mtkruto/node';
 
 export interface TelegramAuthData {

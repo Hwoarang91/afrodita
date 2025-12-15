@@ -363,9 +363,10 @@ export class TelegramService {
     // Telegraf API: restrictChatMember(chatId, userId, permissions, extra?)
     // @ts-ignore - временно игнорируем ошибку типов Telegraf API
     if (untilDate !== undefined) {
-      return await this.getBot().telegram.restrictChatMember(chatId, userId, { permissions } as any, {
+      return await this.getBot().telegram.restrictChatMember(chatId, userId, {
+        permissions,
         until_date: untilDate,
-      });
+      } as any);
     }
     // @ts-ignore - временно игнорируем ошибку типов Telegraf API
     return await this.getBot().telegram.restrictChatMember(chatId, userId, { permissions } as any);

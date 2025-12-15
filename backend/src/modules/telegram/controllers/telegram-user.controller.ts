@@ -131,8 +131,8 @@ export class TelegramUserController {
 
       // Определяем метод отправки в зависимости от типа медиа
       let result;
-      const peer = {
-        _: 'inputPeerUser',
+      const peer: any = {
+        _: 'inputPeerUser' as const,
         user_id: BigInt(chatId),
         access_hash: BigInt(0),
       };
@@ -148,8 +148,9 @@ export class TelegramUserController {
                 _: 'inputPhoto',
                 id: BigInt(0), // Нужно получить из uploadFile или использовать file_id
                 access_hash: BigInt(0),
-              },
-            },
+                file_reference: new Uint8Array(0),
+              } as any,
+            } as any,
             message: dto.caption || '',
             random_id: BigInt(Date.now()),
             ...(dto.parseMode && { parse_mode: dto.parseMode }),
