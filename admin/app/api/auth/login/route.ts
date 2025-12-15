@@ -92,13 +92,11 @@ export async function POST(request: NextRequest) {
     });
 
     // Устанавливаем cookies из ответа backend
-    // Используем заголовки напрямую, так как cookies.set() может не работать с basePath
+    // Используем cookies.set() как в refresh/route.ts, но с path='/'
     if (setCookieHeaders.length > 0) {
       setCookieHeaders.forEach(cookie => {
         try {
-          // Парсим cookie и модифицируем path для basePath
-          const cookieParts = cookie.split(';');
-          const [nameValue] = cookieParts;
+          const [nameValue, ...rest] = cookie.split(';');
           const [name, value] = nameValue.split('=');
           
           if (!name || !value) {
@@ -106,25 +104,37 @@ export async function POST(request: NextRequest) {
             return;
           }
           
-          // Модифицируем path в cookie строке для basePath
-          let modifiedCookie = cookie;
-          // Заменяем Path=/ на Path=/admin для работы с basePath
-          modifiedCookie = modifiedCookie.replace(/Path=\//g, 'Path=/admin');
+          const options: any = {};
           
-          console.log('[Route Handler] Устанавливаем cookie через заголовок:', { 
-            name: name.trim(), 
-            hasValue: !!value,
-            originalPath: cookie.includes('Path=/') ? '/' : 'unknown',
-            modifiedPath: '/admin'
+          // Парсим атрибуты cookie
+          rest.forEach(part => {
+            const trimmed = part.trim();
+            if (trimmed.toLowerCase() === 'httponly') {
+              options.httpOnly = true;
+            } else if (trimmed.toLowerCase().startsWith('secure')) {
+              options.secure = true;
+            } else if (trimmed.toLowerCase().startsWith('samesite')) {
+              options.sameSite = trimmed.split('=')[1]?.toLowerCase() || 'lax';
+            } else if (trimmed.toLowerCase().startsWith('path')) {
+              // Используем path='/' вместо '/admin' для работы с basePath
+              options.path = '/';
+            } else if (trimmed.toLowerCase().startsWith('max-age')) {
+              options.maxAge = parseInt(trimmed.split('=')[1] || '0', 10);
+            }
           });
           
-          // Устанавливаем через заголовок напрямую
-          nextResponse.headers.append('Set-Cookie', modifiedCookie);
+          console.log('[Route Handler] Устанавливаем cookie через cookies.set():', { 
+            name: name.trim(), 
+            hasValue: !!value,
+            options: options
+          });
+          
+          nextResponse.cookies.set(name.trim(), value.trim(), options);
         } catch (error) {
           console.error('[Route Handler] Ошибка при установке cookie:', error, cookie);
         }
       });
-      console.log('[Route Handler] Cookies установлены в ответе через заголовки, всего:', setCookieHeaders.length);
+      console.log('[Route Handler] Cookies установлены в ответе через cookies.set(), всего:', setCookieHeaders.length);
     } else {
       console.warn('[Route Handler] Нет Set-Cookie заголовков от backend!');
     }
