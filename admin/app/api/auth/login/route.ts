@@ -92,12 +92,13 @@ export async function POST(request: NextRequest) {
     });
 
     // Устанавливаем cookies из ответа backend
-    // Важно: используем правильный формат для Next.js
+    // Используем заголовки напрямую, так как cookies.set() может не работать с basePath
     if (setCookieHeaders.length > 0) {
       setCookieHeaders.forEach(cookie => {
         try {
-          // Парсим cookie и устанавливаем через NextResponse
-          const [nameValue, ...attributes] = cookie.split(';');
+          // Парсим cookie и модифицируем path для basePath
+          const cookieParts = cookie.split(';');
+          const [nameValue] = cookieParts;
           const [name, value] = nameValue.split('=');
           
           if (!name || !value) {
@@ -105,28 +106,25 @@ export async function POST(request: NextRequest) {
             return;
           }
           
-          // Извлекаем атрибуты
-          // Важно: path должен быть '/admin' из-за basePath в next.config.js
-          const cookieOptions: any = {
-            httpOnly: cookie.includes('HttpOnly'),
-            secure: cookie.includes('Secure'),
-            sameSite: cookie.includes('SameSite=Lax') ? 'lax' : cookie.includes('SameSite=Strict') ? 'strict' : 'lax',
-            path: '/admin', // Изменено с '/' на '/admin' из-за basePath
-          };
+          // Модифицируем path в cookie строке для basePath
+          let modifiedCookie = cookie;
+          // Заменяем Path=/ на Path=/admin для работы с basePath
+          modifiedCookie = modifiedCookie.replace(/Path=\//g, 'Path=/admin');
           
-          // Извлекаем maxAge (в секундах для Next.js)
-          const maxAgeMatch = cookie.match(/Max-Age=(\d+)/);
-          if (maxAgeMatch) {
-            cookieOptions.maxAge = parseInt(maxAgeMatch[1]);
-          }
+          console.log('[Route Handler] Устанавливаем cookie через заголовок:', { 
+            name: name.trim(), 
+            hasValue: !!value,
+            originalPath: cookie.includes('Path=/') ? '/' : 'unknown',
+            modifiedPath: '/admin'
+          });
           
-          console.log('[Route Handler] Устанавливаем cookie:', { name: name.trim(), hasValue: !!value, options: cookieOptions });
-          nextResponse.cookies.set(name.trim(), value.trim(), cookieOptions);
+          // Устанавливаем через заголовок напрямую
+          nextResponse.headers.append('Set-Cookie', modifiedCookie);
         } catch (error) {
           console.error('[Route Handler] Ошибка при установке cookie:', error, cookie);
         }
       });
-      console.log('[Route Handler] Cookies установлены в ответе, всего:', setCookieHeaders.length);
+      console.log('[Route Handler] Cookies установлены в ответе через заголовки, всего:', setCookieHeaders.length);
     } else {
       console.warn('[Route Handler] Нет Set-Cookie заголовков от backend!');
     }
