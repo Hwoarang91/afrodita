@@ -155,8 +155,8 @@ export class TelegramUserController {
             random_id: BigInt(Date.now()),
             ...(dto.parseMode && { parse_mode: dto.parseMode }),
             ...(dto.replyToMessageId && { reply_to_msg_id: dto.replyToMessageId }),
-            ...(dto.disableNotification !== undefined && { silent: dto.disableNotification }),
-          });
+            ...(dto.disableNotification === true && { silent: true as const }),
+          } as any);
           break;
         case 'document':
           // @ts-ignore - временно игнорируем ошибку типов MTProto
