@@ -84,37 +84,55 @@ export async function POST(request: NextRequest) {
       allResponseHeaders: Object.fromEntries(response.headers.entries()),
     });
 
-    // Создаем Headers объект для Set-Cookie заголовков, как в csrf-token/route.ts
-    // Это работает для httpOnly cookies с basePath
-    const responseHeaders = new Headers();
-    
-    // Устанавливаем cookies из ответа backend
-    if (setCookieHeaders.length > 0) {
-      setCookieHeaders.forEach(cookie => {
-        try {
-          // Используем cookie строку напрямую из backend
-          // Path уже установлен как '/' в backend, что правильно для basePath
-          console.log('[Route Handler] Устанавливаем cookie через responseHeaders.append:', { 
-            cookie: cookie.substring(0, 100) + '...'
-          });
-          
-          responseHeaders.append('Set-Cookie', cookie);
-        } catch (error) {
-          console.error('[Route Handler] Ошибка при установке cookie:', error, cookie);
-        }
-      });
-      console.log('[Route Handler] Cookies установлены в responseHeaders, всего:', setCookieHeaders.length);
-    } else {
-      console.warn('[Route Handler] Нет Set-Cookie заголовков от backend!');
-    }
-
-    // Возвращаем NextResponse с заголовками
-    return NextResponse.json({
+    // Создаем NextResponse для установки cookies через cookies.set(), как в refresh/route.ts
+    const nextResponse = NextResponse.json({
       success: true,
       user: data.user,
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
-    }, { headers: responseHeaders });
+    });
+    
+    // Устанавливаем cookies из ответа backend через cookies.set()
+    if (setCookieHeaders.length > 0) {
+      setCookieHeaders.forEach(cookie => {
+        try {
+          // Парсим cookie строку из backend
+          const [nameValue, ...rest] = cookie.split(';');
+          const [name, value] = nameValue.split('=');
+          const options: any = {};
+          
+          rest.forEach(part => {
+            const trimmed = part.trim();
+            if (trimmed.toLowerCase() === 'httponly') {
+              options.httpOnly = true;
+            } else if (trimmed.toLowerCase().startsWith('secure')) {
+              options.secure = true;
+            } else if (trimmed.toLowerCase().startsWith('samesite')) {
+              options.sameSite = trimmed.split('=')[1]?.toLowerCase() || 'lax';
+            } else if (trimmed.toLowerCase().startsWith('path')) {
+              options.path = trimmed.split('=')[1] || '/';
+            } else if (trimmed.toLowerCase().startsWith('max-age')) {
+              options.maxAge = parseInt(trimmed.split('=')[1] || '0', 10);
+            }
+          });
+
+          console.log('[Route Handler] Устанавливаем cookie через cookies.set():', { 
+            name,
+            hasValue: !!value,
+            options
+          });
+          
+          nextResponse.cookies.set(name, value, options);
+        } catch (error) {
+          console.error('[Route Handler] Ошибка при установке cookie:', error, cookie);
+        }
+      });
+      console.log('[Route Handler] Cookies установлены через cookies.set(), всего:', setCookieHeaders.length);
+    } else {
+      console.warn('[Route Handler] Нет Set-Cookie заголовков от backend!');
+    }
+
+    return nextResponse;
 
   } catch (error: any) {
     console.error('[Route Handler] Ошибка при входе:', error);
