@@ -21,8 +21,6 @@ const API_URL = getApiUrl();
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
-    console.log('[Route Handler] Попытка refresh токенов');
 
     // Вызываем backend API для refresh
     // Backend должен получить refresh token из cookies (он httpOnly)
@@ -84,7 +82,6 @@ export async function POST(request: NextRequest) {
       nextResponse.cookies.set(name, value, options);
     });
 
-    console.log('[Route Handler] Токены успешно обновлены');
     return nextResponse;
 
   } catch (error: any) {

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 const getApiUrl = (): string => {
   if (process.env.API_URL) {

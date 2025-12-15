@@ -25,13 +25,6 @@ export async function GET(request: NextRequest) {
     // Также пробуем получить из заголовка запроса (может содержать cookies, которые не видны через cookies() API)
     const requestCookieHeader = request.headers.get('cookie') || '';
     
-    // Логируем все доступные cookies для отладки
-    console.log('[Route Handler] Все cookies:', {
-      fromHeader: requestCookieHeader,
-      fromStore: allCookies.map(c => ({ name: c.name, hasValue: !!c.value })),
-      allHeaders: Object.fromEntries(request.headers.entries()),
-    });
-    
     // Используем cookies из cookieStore (они должны содержать httpOnly cookies)
     // Если их нет, используем из заголовка
     let cookieHeader = '';
@@ -45,17 +38,8 @@ export async function GET(request: NextRequest) {
       cookieHeader = requestCookieHeader;
     }
     
-    console.log('[Route Handler] Итоговый cookie header для backend:', {
-      hasHeader: !!cookieHeader,
-      length: cookieHeader.length,
-      hasAccessToken: cookieHeader.includes('access_token'),
-      hasRefreshToken: cookieHeader.includes('refresh_token'),
-      preview: cookieHeader.substring(0, 100),
-    });
-    
     // Если нет access_token, но есть refresh_token, пытаемся обновить токены
     if (!cookieHeader.includes('access_token') && cookieHeader.includes('refresh_token')) {
-      console.log('[Route Handler] Нет access_token, пытаемся обновить через refresh_token');
       
       const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
       const refreshResponse = await fetch(`${backendUrl}/auth/refresh`, {

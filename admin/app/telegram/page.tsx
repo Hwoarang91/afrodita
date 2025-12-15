@@ -6,6 +6,9 @@ import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import MessageTypeSelector from './MessageTypeSelector';
 import FormattingHelp from './FormattingHelp';
+import MembersManagement from './MembersManagement';
+import AutoRepliesManagement from './AutoRepliesManagement';
+import ScheduledMessagesManagement from './ScheduledMessagesManagement';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -39,7 +42,7 @@ interface TelegramChat {
 }
 
 export default function TelegramPage() {
-  const [selectedTab, setSelectedTab] = useState<'send' | 'manage' | 'chats' | 'settings'>('chats');
+      const [selectedTab, setSelectedTab] = useState<'send' | 'manage' | 'chats' | 'members' | 'scheduled' | 'settings'>('chats');
   const [welcomeMessage, setWelcomeMessage] = useState('');
   const [selectedChatId, setSelectedChatId] = useState<string>('');
   const [chatId, setChatId] = useState('');
@@ -167,6 +170,26 @@ export default function TelegramPage() {
             Группы и чаты
           </button>
           <button
+            onClick={() => setSelectedTab('members')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              selectedTab === 'members'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+            }`}
+          >
+            Участники
+          </button>
+          <button
+            onClick={() => setSelectedTab('scheduled')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              selectedTab === 'scheduled'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+            }`}
+          >
+            Планировщик
+          </button>
+          <button
             onClick={() => setSelectedTab('settings')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               selectedTab === 'settings'
@@ -283,12 +306,23 @@ export default function TelegramPage() {
         <ChatsList />
       )}
 
+      {/* Вкладка: Участники */}
+      {selectedTab === 'members' && (
+        <MembersManagement />
+      )}
+
+      {/* Вкладка: Планировщик сообщений */}
+      {selectedTab === 'scheduled' && (
+        <ScheduledMessagesManagement />
+      )}
+
       {/* Вкладка: Настройки */}
       {selectedTab === 'settings' && (
         <div className="space-y-6">
           <WelcomeMessageSettings welcomeMessage={welcomeMessage} setWelcomeMessage={setWelcomeMessage} />
           <StartMessageSettings />
           <AutoRefreshSettings />
+          <AutoRepliesManagement />
         </div>
       )}
     </div>

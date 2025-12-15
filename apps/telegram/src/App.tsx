@@ -22,6 +22,11 @@ const History = lazy(() => import('./features/appointments/History'));
 const Notifications = lazy(() => import('./features/profile/Notifications'));
 const Reschedule = lazy(() => import('./features/appointments/Reschedule'));
 const AdminPage = lazy(() => import('./features/admin/page'));
+const AppointmentsPage = lazy(() => import('./features/admin/AppointmentsPage'));
+const ClientsPage = lazy(() => import('./features/admin/ClientsPage'));
+const MastersPage = lazy(() => import('./features/admin/MastersPage'));
+const ServicesPage = lazy(() => import('./features/admin/ServicesPage'));
+const StatsPage = lazy(() => import('./features/admin/StatsPage'));
 const NotFound = lazy(() => import('./shared/NotFound'));
 
 // Настройка QueryClient с retry механизмом и обработкой ошибок
@@ -75,6 +80,11 @@ function App() {
                 <Route path="/reschedule/:id" element={<Reschedule />} />
                 {/* Админ-панель */}
                 <Route path="/admin" element={<AdminPage />} />
+                <Route path="/admin/appointments" element={<AppointmentsPage />} />
+                <Route path="/admin/clients" element={<ClientsPage />} />
+                <Route path="/admin/masters" element={<MastersPage />} />
+                <Route path="/admin/services" element={<ServicesPage />} />
+                <Route path="/admin/stats" element={<StatsPage />} />
                 {/* Редирект админ-панели на правильный путь */}
                 <Route path="/login" element={<AdminRedirect />} />
                 <Route path="/register" element={<AdminRedirect />} />

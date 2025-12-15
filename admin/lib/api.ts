@@ -55,7 +55,6 @@ apiClient.interceptors.response.use(
         
         // Проверяем, не является ли это запросом на refresh (чтобы избежать бесконечного цикла)
         if (originalRequest?.url?.includes('/auth/refresh') || originalRequest?._retry) {
-          console.log('🔄 Refresh token истек, перенаправляем на логин');
           // Очищаем локальное состояние
           localStorage.removeItem('admin-token');
           sessionStorage.removeItem('admin-token');
@@ -67,7 +66,6 @@ apiClient.interceptors.response.use(
 
         // Пытаемся обновить токены через refresh
         try {
-          console.log('🔄 401 Error: Пытаемся обновить токены через refresh');
           
           // Получаем CSRF токен
           const csrfToken = document.cookie
@@ -86,7 +84,6 @@ apiClient.interceptors.response.use(
           });
 
           if (refreshResponse.ok) {
-            console.log('✅ Токены успешно обновлены, повторяем оригинальный запрос');
             // Помечаем запрос как повторный, чтобы избежать бесконечного цикла
             originalRequest._retry = true;
             // Повторяем оригинальный запрос с обновленными токенами
@@ -95,7 +92,6 @@ apiClient.interceptors.response.use(
             throw new Error('Refresh failed');
           }
         } catch (refreshError) {
-          console.log('❌ Не удалось обновить токены, перенаправляем на логин');
           // Очищаем локальное состояние
           localStorage.removeItem('admin-token');
           sessionStorage.removeItem('admin-token');

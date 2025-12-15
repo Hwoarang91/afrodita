@@ -51,7 +51,6 @@ apiClient.interceptors.response.use(
     if (typeof window !== 'undefined') {
       // Обработка 401 ошибки
       if (error.response?.status === 401) {
-        console.log('🔄 401 Error: Токен истек или недействителен, перенаправляем на логин');
 
         // Очищаем локальное состояние
         localStorage.removeItem('admin-token');

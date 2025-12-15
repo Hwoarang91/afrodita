@@ -103,6 +103,22 @@ export default function AdminPage() {
             </Button>
             
             <Button
+              onClick={() => navigate('/admin/masters')}
+              className="w-full justify-start"
+              variant="outline"
+            >
+              👨‍💼 Управление мастерами
+            </Button>
+            
+            <Button
+              onClick={() => navigate('/admin/services')}
+              className="w-full justify-start"
+              variant="outline"
+            >
+              ✨ Управление услугами
+            </Button>
+            
+            <Button
               onClick={() => navigate('/admin/stats')}
               className="w-full justify-start"
               variant="outline"

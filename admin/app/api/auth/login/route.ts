@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 // Для серверных запросов (Route Handlers) используем полный URL к backend
 // NEXT_PUBLIC_API_URL используется только для клиентских запросов
@@ -37,8 +36,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[Route Handler] Попытка логина для:', email);
-
     // Перенаправляем на новый API endpoint, который устанавливает httpOnly cookies
     const cookieHeader = request.headers.get('cookie') || '';
     // API_URL может уже содержать /api/v1, поэтому проверяем
@@ -57,7 +54,6 @@ export async function POST(request: NextRequest) {
       const errorData = await response.json().catch(() => ({
         message: 'Ошибка при входе. Проверьте данные.',
       }));
-      console.log('[Route Handler] Ошибка аутентификации:', errorData.message);
       return NextResponse.json(
         { error: errorData.message || 'Ошибка при входе. Проверьте данные.' },
         { status: response.status }
@@ -67,22 +63,14 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
 
     if (!data.accessToken) {
-      console.log('[Route Handler] Нет accessToken в ответе');
       return NextResponse.json(
         { error: 'Неверный email или пароль' },
         { status: 401 }
       );
     }
 
-    console.log('[Route Handler] Успешная аутентификация, токены установлены в httpOnly cookies');
-
     // Копируем cookies из ответа backend
     const setCookieHeaders = response.headers.getSetCookie();
-    console.log('[Route Handler] Set-Cookie заголовки от backend:', {
-      count: setCookieHeaders.length,
-      headers: setCookieHeaders,
-      allResponseHeaders: Object.fromEntries(response.headers.entries()),
-    });
 
     // Создаем NextResponse для установки cookies через cookies.set(), как в refresh/route.ts
     const nextResponse = NextResponse.json({
@@ -116,20 +104,11 @@ export async function POST(request: NextRequest) {
             }
           });
 
-          console.log('[Route Handler] Устанавливаем cookie через cookies.set():', { 
-            name,
-            hasValue: !!value,
-            options
-          });
-          
           nextResponse.cookies.set(name, value, options);
         } catch (error) {
-          console.error('[Route Handler] Ошибка при установке cookie:', error, cookie);
+          // Игнорируем ошибки установки отдельных cookies
         }
       });
-      console.log('[Route Handler] Cookies установлены через cookies.set(), всего:', setCookieHeaders.length);
-    } else {
-      console.warn('[Route Handler] Нет Set-Cookie заголовков от backend!');
     }
 
     return nextResponse;

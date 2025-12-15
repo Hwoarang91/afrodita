@@ -107,7 +107,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         csrfToken,
       });
 
-      console.log('Login successful:', data.user.email);
     } catch (error) {
       setAuthState(prev => ({ ...prev, isLoading: false }));
       console.error('Login error:', error);
@@ -136,7 +135,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         csrfToken: null,
       });
 
-      console.log('Logout successful');
     } catch (error) {
       console.error('Logout error:', error);
       // Даже при ошибке очищаем локальное состояние
@@ -170,7 +168,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         csrfToken: null,
       });
 
-      console.log('Logout from all devices successful');
     } catch (error) {
       console.error('Logout from all devices error:', error);
       // Даже при ошибке очищаем локальное состояние
@@ -206,7 +203,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const data = await response.json();
 
       // Токены обновлены автоматически через cookies
-      console.log('Token refresh successful');
 
       // Обновляем CSRF токен
       const newCsrfToken = await getCsrfToken();
@@ -249,7 +245,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           csrfToken,
         });
         if (autoLogin) {
-          console.log('Автоматический вход выполнен успешно');
         }
       } else {
         // Если токен недействителен и включен autoLogin, пытаемся обновить через refresh
@@ -284,12 +279,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   isLoading: false,
                   csrfToken,
                 });
-                console.log('Автоматический вход выполнен через refresh');
                 return;
               }
             }
           } catch (refreshError) {
-            console.log('Автоматический refresh не удался:', refreshError);
           }
         }
 

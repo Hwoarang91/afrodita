@@ -37,8 +37,9 @@ const menuItems = [
   { href: '/masters', label: 'Мастера', icon: UserCog },
   { href: '/contact-requests', label: 'Заявки', icon: MessageSquare },
   { href: '/mailings', label: 'Рассылки', icon: Mail },
-  { href: '/telegram', label: 'Telegram бот', icon: Bot },
-  { href: '/templates', label: 'Шаблоны', icon: FileCode },
+      { href: '/telegram', label: 'Telegram бот', icon: Bot },
+      { href: '/telegram-user', label: 'Мои сообщения', icon: MessageSquare },
+      { href: '/templates', label: 'Шаблоны', icon: FileCode },
   { href: '/audit', label: 'Журнал действий', icon: FileText },
   { href: '/settings', label: 'Настройки', icon: Settings },
 ];

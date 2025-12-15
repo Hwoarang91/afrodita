@@ -328,9 +328,12 @@ export class TelegramService {
     options?: { until_date?: number; revoke_messages?: boolean },
   ): Promise<boolean> {
     const untilDate = options?.until_date;
-    return await this.getBot().telegram.banChatMember(chatId, userId, untilDate, {
-      revoke_messages: options?.revoke_messages,
-    });
+    if (options?.revoke_messages !== undefined) {
+      return await this.getBot().telegram.banChatMember(chatId, userId, untilDate, {
+        revoke_messages: options.revoke_messages,
+      });
+    }
+    return await this.getBot().telegram.banChatMember(chatId, userId, untilDate);
   }
 
   async unbanChatMember(
@@ -357,7 +360,14 @@ export class TelegramService {
     options?: { until_date?: number },
   ): Promise<boolean> {
     const untilDate = options?.until_date;
-    return await this.getBot().telegram.restrictChatMember(chatId, userId, permissions, untilDate);
+    // Telegraf API: restrictChatMember(chatId, userId, permissions, extra?)
+    // until_date должен быть частью extra объекта
+    if (untilDate !== undefined) {
+      return await this.getBot().telegram.restrictChatMember(chatId, userId, permissions, {
+        until_date: untilDate,
+      });
+    }
+    return await this.getBot().telegram.restrictChatMember(chatId, userId, permissions);
   }
 
   async promoteChatMember(
