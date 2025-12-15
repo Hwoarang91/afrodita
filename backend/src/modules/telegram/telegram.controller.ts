@@ -347,6 +347,97 @@ export class TelegramController {
     return { success: true, result };
   }
 
+  // ========== Управление участниками ==========
+
+  @Post('ban-chat-member')
+  @ApiOperation({ summary: 'Забанить участника чата' })
+  async banChatMember(
+    @Body() dto: { chatId: string | number; userId: number; untilDate?: number; revokeMessages?: boolean },
+  ) {
+    const result = await this.telegramService.banChatMember(dto.chatId, dto.userId, {
+      until_date: dto.untilDate,
+      revoke_messages: dto.revokeMessages,
+    });
+    return { success: true, result };
+  }
+
+  @Post('unban-chat-member')
+  @ApiOperation({ summary: 'Разбанить участника чата' })
+  async unbanChatMember(
+    @Body() dto: { chatId: string | number; userId: number; onlyIfBanned?: boolean },
+  ) {
+    const result = await this.telegramService.unbanChatMember(dto.chatId, dto.userId, {
+      only_if_banned: dto.onlyIfBanned,
+    });
+    return { success: true, result };
+  }
+
+  @Post('restrict-chat-member')
+  @ApiOperation({ summary: 'Ограничить права участника чата' })
+  async restrictChatMember(
+    @Body()
+    dto: {
+      chatId: string | number;
+      userId: number;
+      permissions: {
+        can_send_messages?: boolean;
+        can_send_media_messages?: boolean;
+        can_send_polls?: boolean;
+        can_send_other_messages?: boolean;
+        can_add_web_page_previews?: boolean;
+        can_change_info?: boolean;
+        can_invite_users?: boolean;
+        can_pin_messages?: boolean;
+      };
+      untilDate?: number;
+    },
+  ) {
+    const result = await this.telegramService.restrictChatMember(dto.chatId, dto.userId, dto.permissions, {
+      until_date: dto.untilDate,
+    });
+    return { success: true, result };
+  }
+
+  @Post('promote-chat-member')
+  @ApiOperation({ summary: 'Повысить участника до администратора' })
+  async promoteChatMember(
+    @Body()
+    dto: {
+      chatId: string | number;
+      userId: number;
+      permissions?: {
+        is_anonymous?: boolean;
+        can_manage_chat?: boolean;
+        can_post_messages?: boolean;
+        can_edit_messages?: boolean;
+        can_delete_messages?: boolean;
+        can_manage_video_chats?: boolean;
+        can_restrict_members?: boolean;
+        can_promote_members?: boolean;
+        can_change_info?: boolean;
+        can_invite_users?: boolean;
+        can_pin_messages?: boolean;
+        can_manage_topics?: boolean;
+      };
+    },
+  ) {
+    const result = await this.telegramService.promoteChatMember(dto.chatId, dto.userId, dto.permissions);
+    return { success: true, result };
+  }
+
+  @Post('set-chat-administrator-custom-title')
+  @ApiOperation({ summary: 'Установить кастомный заголовок для администратора' })
+  async setChatAdministratorCustomTitle(
+    @Body() dto: { chatId: string | number; userId: number; customTitle: string },
+  ) {
+    const result = await this.telegramService.setChatAdministratorCustomTitle(
+      dto.chatId,
+      dto.userId,
+      dto.customTitle,
+    );
+    return { success: true, result };
+  }
+
   @Get('get-user-photos/:userId')
   @ApiOperation({ summary: 'Получить фото профиля пользователя' })
   async getUserPhotos(@Param('userId') userId: string, @Query('limit') limit?: string) {

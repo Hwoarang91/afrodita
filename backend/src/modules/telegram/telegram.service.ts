@@ -320,6 +320,71 @@ export class TelegramService {
     }
   }
 
+  // ========== Управление участниками ==========
+
+  async banChatMember(
+    chatId: string | number,
+    userId: number,
+    options?: { until_date?: number; revoke_messages?: boolean },
+  ): Promise<boolean> {
+    return await this.getBot().telegram.banChatMember(chatId, userId, options);
+  }
+
+  async unbanChatMember(
+    chatId: string | number,
+    userId: number,
+    options?: { only_if_banned?: boolean },
+  ): Promise<boolean> {
+    return await this.getBot().telegram.unbanChatMember(chatId, userId, options);
+  }
+
+  async restrictChatMember(
+    chatId: string | number,
+    userId: number,
+    permissions: {
+      can_send_messages?: boolean;
+      can_send_media_messages?: boolean;
+      can_send_polls?: boolean;
+      can_send_other_messages?: boolean;
+      can_add_web_page_previews?: boolean;
+      can_change_info?: boolean;
+      can_invite_users?: boolean;
+      can_pin_messages?: boolean;
+    },
+    options?: { until_date?: number },
+  ): Promise<boolean> {
+    return await this.getBot().telegram.restrictChatMember(chatId, userId, permissions, options);
+  }
+
+  async promoteChatMember(
+    chatId: string | number,
+    userId: number,
+    options?: {
+      is_anonymous?: boolean;
+      can_manage_chat?: boolean;
+      can_post_messages?: boolean;
+      can_edit_messages?: boolean;
+      can_delete_messages?: boolean;
+      can_manage_video_chats?: boolean;
+      can_restrict_members?: boolean;
+      can_promote_members?: boolean;
+      can_change_info?: boolean;
+      can_invite_users?: boolean;
+      can_pin_messages?: boolean;
+      can_manage_topics?: boolean;
+    },
+  ): Promise<boolean> {
+    return await this.getBot().telegram.promoteChatMember(chatId, userId, options);
+  }
+
+  async setChatAdministratorCustomTitle(
+    chatId: string | number,
+    userId: number,
+    customTitle: string,
+  ): Promise<boolean> {
+    return await this.getBot().telegram.setChatAdministratorCustomTitle(chatId, userId, customTitle);
+  }
+
   // ========== Inline кнопки ==========
 
   createInlineKeyboard(buttons: Array<Array<{ text: string; callback_data?: string; url?: string; switch_inline_query?: string; request_contact?: boolean; request_location?: boolean }>>) {

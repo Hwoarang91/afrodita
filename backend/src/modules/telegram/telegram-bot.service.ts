@@ -19,6 +19,7 @@ import { NotificationChannel } from '../../entities/notification.entity';
 import { ReviewsService } from '../reviews/reviews.service';
 import { FinancialService } from '../financial/financial.service';
 import { Transaction, TransactionType } from '../../entities/transaction.entity';
+import { AutoRepliesService } from './auto-replies.service';
 
 interface BotSession {
   step?: string;
@@ -67,6 +68,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     private notificationsService: NotificationsService,
     private reviewsService: ReviewsService,
     private financialService: FinancialService,
+    private autoRepliesService: AutoRepliesService,
   ) {}
 
   async onModuleInit() {
@@ -239,6 +241,28 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       // Проверяем, не является ли это командой
       if (ctx.message.text.startsWith('/')) {
         return; // Команды обрабатываются отдельно
+      }
+
+      // Проверяем автоматические ответы (только в группах и супергруппах)
+      const isGroup = this.isGroupChat(ctx.chat);
+      if (isGroup) {
+        try {
+          const chatType = ctx.chat.type === 'group' ? 'group' : ctx.chat.type === 'supergroup' ? 'supergroup' : null;
+          if (chatType) {
+            const autoReply = await this.autoRepliesService.findMatchingReply(
+              ctx.message.text,
+              chatType,
+              ctx.chat.id.toString(),
+            );
+            if (autoReply) {
+              // Отправляем ответ в группу
+              await ctx.reply(autoReply.response, { parse_mode: 'HTML' });
+              return; // Не обрабатываем дальше
+            }
+          }
+        } catch (error: any) {
+          this.logger.error(`Ошибка при проверке автоматических ответов: ${error.message}`);
+        }
       }
 
       const session = this.getSession(ctx.from.id);

@@ -43,5 +43,18 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   emitAppointmentStatusChange(appointmentId: string, status: string) {
     this.server.emit('appointment-status-change', { appointmentId, status });
   }
+
+  // Синхронизация данных между админ панелями
+  emitDataSync(type: 'appointment' | 'user' | 'master' | 'service' | 'telegram-chat', action: 'create' | 'update' | 'delete', data: any) {
+    this.server.emit('data-sync', { type, action, data });
+  }
+
+  emitTelegramMessageSent(chatId: string, messageId: number) {
+    this.server.emit('telegram-message-sent', { chatId, messageId });
+  }
+
+  emitScheduledMessageStatusChange(messageId: string, status: string) {
+    this.server.emit('scheduled-message-status-change', { messageId, status });
+  }
 }
 

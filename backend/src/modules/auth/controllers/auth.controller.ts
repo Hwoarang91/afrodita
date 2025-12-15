@@ -10,6 +10,7 @@ import {
   Response,
   UnauthorizedException,
   Logger,
+  Param,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Response as ExpressResponse } from 'express';
@@ -21,6 +22,12 @@ import { LoginRequestDto } from '../dto/login-request.dto';
 import { LoginResponseDto } from '../dto/login-response.dto';
 import { RefreshRequestDto } from '../dto/refresh-request.dto';
 import { RefreshResponseDto } from '../dto/refresh-response.dto';
+import { TelegramPhoneRequestDto } from '../dto/telegram-phone-request.dto';
+import { TelegramPhoneVerifyDto } from '../dto/telegram-phone-verify.dto';
+import { TelegramAuthResponseDto } from '../dto/telegram-auth-response.dto';
+import { TelegramQrGenerateResponseDto } from '../dto/telegram-qr-generate.dto';
+import { TelegramQrStatusResponseDto, QrTokenStatus } from '../dto/telegram-qr-status.dto';
+import { Telegram2FAVerifyDto } from '../dto/telegram-2fa-verify.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -332,6 +339,204 @@ export class AuthController {
 
   private clearCsrfCookie(res: ExpressResponse): void {
     res.clearCookie('csrf_token', { path: '/' });
+  }
+
+  @Post('telegram/phone/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Запрос кода подтверждения для авторизации по номеру телефона' })
+  @ApiResponse({
+    status: 200,
+    description: 'Код отправлен',
+    schema: {
+      type: 'object',
+      properties: {
+        phoneCodeHash: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Неверный номер телефона или ошибка отправки кода' })
+  async requestPhoneCode(
+    @Body() dto: TelegramPhoneRequestDto,
+    @Request() req,
+  ): Promise<{ phoneCodeHash: string }> {
+    this.logger.debug(`Запрос кода для телефона: ${dto.phoneNumber}`);
+    try {
+      return await this.authService.requestPhoneCode(dto.phoneNumber);
+    } catch (error: any) {
+      this.logger.error(`Ошибка запроса кода: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Post('telegram/phone/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Проверка кода подтверждения и авторизация по номеру телефона' })
+  @ApiResponse({
+    status: 200,
+    description: 'Успешная авторизация',
+    type: TelegramAuthResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Неверный код или ошибка авторизации' })
+  async verifyPhoneCode(
+    @Body() dto: TelegramPhoneVerifyDto,
+    @Request() req,
+    @Response({ passthrough: true }) res: ExpressResponse,
+  ): Promise<TelegramAuthResponseDto> {
+    this.logger.debug(`Проверка кода для телефона: ${dto.phoneNumber}`);
+    try {
+      const result = await this.authService.verifyPhoneCode(
+        dto.phoneNumber,
+        dto.code,
+        dto.phoneCodeHash,
+        req.ip,
+        req.get('user-agent'),
+      );
+
+      if (result.requires2FA) {
+        return {
+          success: false,
+          requires2FA: true,
+        };
+      }
+
+      // Устанавливаем cookies
+      this.setAuthCookies(res, result.tokens, false);
+
+      const csrfToken = this.csrfService.generateCsrfToken();
+      this.setCsrfCookie(res, csrfToken);
+
+      this.logger.log(`Успешная авторизация по телефону: ${dto.phoneNumber}`);
+
+      return {
+        success: true,
+        requires2FA: false,
+        user: {
+          id: result.user.id,
+          phoneNumber: result.user.phone,
+          firstName: result.user.firstName,
+          lastName: result.user.lastName,
+          username: result.user.username,
+        },
+        tokens: result.tokens,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка проверки кода: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Post('telegram/qr/generate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Генерация QR-кода для авторизации через Telegram' })
+  @ApiResponse({
+    status: 200,
+    description: 'QR-код успешно сгенерирован',
+    type: TelegramQrGenerateResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Ошибка генерации QR-кода' })
+  async generateQrCode(): Promise<TelegramQrGenerateResponseDto> {
+    this.logger.debug('Запрос на генерацию QR-кода');
+    try {
+      return await this.authService.generateQrCode();
+    } catch (error: any) {
+      this.logger.error(`Ошибка генерации QR-кода: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Get('telegram/qr/status/:tokenId')
+  @ApiOperation({ summary: 'Проверка статуса QR токена' })
+  @ApiResponse({
+    status: 200,
+    description: 'Статус токена',
+    type: TelegramQrStatusResponseDto,
+  })
+  async checkQrTokenStatus(
+    @Param('tokenId') tokenId: string,
+    @Request() req,
+    @Response({ passthrough: true }) res: ExpressResponse,
+  ): Promise<TelegramQrStatusResponseDto> {
+    this.logger.debug(`Проверка статуса QR токена: ${tokenId}`);
+    try {
+      const result = await this.authService.checkQrTokenStatus(tokenId);
+
+      if (result.status === 'accepted' && result.user && result.tokens) {
+        // Устанавливаем cookies
+        this.setAuthCookies(res, result.tokens, false);
+
+        const csrfToken = this.csrfService.generateCsrfToken();
+        this.setCsrfCookie(res, csrfToken);
+
+        this.logger.log(`QR токен принят для пользователя: ${result.user.id}`);
+      }
+
+      return {
+        status: result.status as QrTokenStatus,
+        user: result.user
+          ? {
+              id: result.user.id,
+              phoneNumber: result.user.phone,
+              firstName: result.user.firstName,
+              lastName: result.user.lastName,
+              username: result.user.username,
+            }
+          : undefined,
+        tokens: result.tokens,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка проверки статуса QR токена: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Post('telegram/2fa/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Проверка 2FA пароля и завершение авторизации' })
+  @ApiResponse({
+    status: 200,
+    description: 'Успешная авторизация с 2FA',
+    type: TelegramAuthResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Неверный 2FA пароль или ошибка авторизации' })
+  async verify2FA(
+    @Body() dto: Telegram2FAVerifyDto,
+    @Request() req,
+    @Response({ passthrough: true }) res: ExpressResponse,
+  ): Promise<TelegramAuthResponseDto> {
+    this.logger.debug(`Проверка 2FA для телефона: ${dto.phoneNumber}`);
+    try {
+      const result = await this.authService.verify2FAPassword(
+        dto.phoneNumber,
+        dto.password,
+        dto.phoneCodeHash,
+        req.ip,
+        req.get('user-agent'),
+      );
+
+      // Устанавливаем cookies
+      this.setAuthCookies(res, result.tokens, false);
+
+      const csrfToken = this.csrfService.generateCsrfToken();
+      this.setCsrfCookie(res, csrfToken);
+
+      this.logger.log(`Успешная авторизация с 2FA: ${dto.phoneNumber}`);
+
+      return {
+        success: true,
+        requires2FA: false,
+        user: {
+          id: result.user.id,
+          phoneNumber: result.user.phone,
+          firstName: result.user.firstName,
+          lastName: result.user.lastName,
+          username: result.user.username,
+        },
+        tokens: result.tokens,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка проверки 2FA: ${error.message}`);
+      throw error;
+    }
   }
 
   private async getAuthAction(action: string) {
