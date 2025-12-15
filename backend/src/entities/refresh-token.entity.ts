@@ -48,9 +48,6 @@ export class RefreshToken {
   @Column({ type: 'boolean', default: false, name: 'rememberMe' })
   rememberMe: boolean; // Флаг "Запомнить меня" - влияет на срок жизни токена
 
-  @Column({ type: 'timestamp', nullable: true, name: 'last_used_at' })
-  lastUsedAt: Date;
-
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
