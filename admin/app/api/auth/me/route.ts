@@ -70,17 +70,38 @@ export async function GET(request: NextRequest) {
       
       if (refreshResponse.ok) {
         const refreshData = await refreshResponse.json();
-        // Обновляем cookies из ответа refresh
+        // Обновляем cookies из ответа refresh через cookies.set(), как в refresh/route.ts
         const setCookieHeaders = refreshResponse.headers.getSetCookie();
         const nextResponse = NextResponse.json(refreshData);
+        
         setCookieHeaders.forEach(cookie => {
-          nextResponse.headers.append('Set-Cookie', cookie);
+          const [nameValue, ...rest] = cookie.split(';');
+          const [name, value] = nameValue.split('=');
+          const options: any = {};
+          
+          rest.forEach(part => {
+            const trimmed = part.trim();
+            if (trimmed.toLowerCase() === 'httponly') {
+              options.httpOnly = true;
+            } else if (trimmed.toLowerCase().startsWith('secure')) {
+              options.secure = true;
+            } else if (trimmed.toLowerCase().startsWith('samesite')) {
+              options.sameSite = trimmed.split('=')[1]?.toLowerCase() || 'lax';
+            } else if (trimmed.toLowerCase().startsWith('path')) {
+              options.path = trimmed.split('=')[1] || '/';
+            } else if (trimmed.toLowerCase().startsWith('max-age')) {
+              options.maxAge = parseInt(trimmed.split('=')[1] || '0', 10);
+            }
+          });
+          
+          nextResponse.cookies.set(name, value, options);
         });
         
         // Теперь повторяем запрос /auth/me с обновленными cookies
-        const updatedCookieHeader = setCookieHeaders
-          .map(cookie => cookie.split(';')[0])
-          .join('; ');
+        // Используем cookies из cookieStore после обновления
+        const updatedCookieStore = await cookies();
+        const updatedCookies = updatedCookieStore.getAll();
+        const updatedCookieHeader = updatedCookies.map(c => `${c.name}=${c.value}`).join('; ');
         
         const meResponse = await fetch(`${backendUrl}/auth/me`, {
           method: 'GET',
@@ -93,12 +114,31 @@ export async function GET(request: NextRequest) {
         
         if (meResponse.ok) {
           const meData = await meResponse.json();
-          // Обновляем cookies из ответа me
+          // Обновляем cookies из ответа me (если есть)
           const meSetCookieHeaders = meResponse.headers.getSetCookie();
           meSetCookieHeaders.forEach(cookie => {
-            nextResponse.headers.append('Set-Cookie', cookie);
+            const [nameValue, ...rest] = cookie.split(';');
+            const [name, value] = nameValue.split('=');
+            const options: any = {};
+            
+            rest.forEach(part => {
+              const trimmed = part.trim();
+              if (trimmed.toLowerCase() === 'httponly') {
+                options.httpOnly = true;
+              } else if (trimmed.toLowerCase().startsWith('secure')) {
+                options.secure = true;
+              } else if (trimmed.toLowerCase().startsWith('samesite')) {
+                options.sameSite = trimmed.split('=')[1]?.toLowerCase() || 'lax';
+              } else if (trimmed.toLowerCase().startsWith('path')) {
+                options.path = trimmed.split('=')[1] || '/';
+              } else if (trimmed.toLowerCase().startsWith('max-age')) {
+                options.maxAge = parseInt(trimmed.split('=')[1] || '0', 10);
+              }
+            });
+            
+            nextResponse.cookies.set(name, value, options);
           });
-          return NextResponse.json(meData);
+          return nextResponse;
         }
       }
     }
