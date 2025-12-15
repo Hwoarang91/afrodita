@@ -468,7 +468,13 @@ export class AuthController {
 
       if (result.status === 'accepted' && result.user && result.tokens) {
         // Устанавливаем cookies
-        this.setAuthCookies(res, result.tokens, false);
+        const tokenPair: TokenPair = {
+          accessToken: result.tokens.accessToken,
+          refreshToken: result.tokens.refreshToken,
+          accessTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+          refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        };
+        this.setAuthCookies(res, tokenPair, false);
 
         const csrfToken = this.csrfService.generateCsrfToken();
         this.setCsrfCookie(res, csrfToken);

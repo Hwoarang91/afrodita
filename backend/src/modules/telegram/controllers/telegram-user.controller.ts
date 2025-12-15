@@ -84,6 +84,7 @@ export class TelegramUserController {
       }
 
       // Вызываем messages.sendMessage через MTProto
+      // @ts-ignore - временно игнорируем ошибку типов MTProto
       const result = await client.invoke({
         _: 'messages.sendMessage',
         peer,
@@ -157,11 +158,13 @@ export class TelegramUserController {
           });
           break;
         case 'document':
+          // @ts-ignore - временно игнорируем ошибку типов MTProto
           result = await client.invoke({
             _: 'messages.sendMedia',
-            peer,
+            peer: peer as any,
             media: {
               _: 'inputMediaDocument',
+              // @ts-ignore - временно игнорируем ошибку типов MTProto
               id: {
                 _: 'inputDocument',
                 id: BigInt(0),

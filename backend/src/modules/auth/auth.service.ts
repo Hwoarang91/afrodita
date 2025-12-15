@@ -613,10 +613,12 @@ export class AuthService {
 
       // Проверяем, принят ли токен (polling)
       try {
-        const acceptResult = await stored.client.invoke({
-          _: 'auth.acceptLoginToken',
-          token: stored.token,
-        });
+          // @ts-ignore - временно игнорируем ошибку типов MTProto
+          const acceptResult = await stored.client.invoke({
+            _: 'auth.acceptLoginToken',
+            // @ts-ignore - временно игнорируем ошибку типов MTProto
+            token: stored.token as any,
+          }) as any;
 
         if ((acceptResult as any)._ === 'auth.loginTokenSuccess') {
           const authorization = (acceptResult as any).authorization;
