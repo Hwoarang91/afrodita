@@ -93,29 +93,42 @@ export async function POST(request: NextRequest) {
 
     // Устанавливаем cookies из ответа backend
     // Важно: используем правильный формат для Next.js
-    setCookieHeaders.forEach(cookie => {
-      // Парсим cookie и устанавливаем через NextResponse
-      const [nameValue, ...attributes] = cookie.split(';');
-      const [name, value] = nameValue.split('=');
-      
-      // Извлекаем атрибуты
-      const cookieOptions: any = {
-        httpOnly: cookie.includes('HttpOnly'),
-        secure: cookie.includes('Secure'),
-        sameSite: cookie.includes('SameSite=Lax') ? 'lax' : cookie.includes('SameSite=Strict') ? 'strict' : 'lax',
-        path: '/',
-      };
-      
-      // Извлекаем maxAge
-      const maxAgeMatch = cookie.match(/Max-Age=(\d+)/);
-      if (maxAgeMatch) {
-        cookieOptions.maxAge = parseInt(maxAgeMatch[1]);
-      }
-      
-      nextResponse.cookies.set(name.trim(), value.trim(), cookieOptions);
-    });
-
-    console.log('[Route Handler] Cookies установлены в ответе');
+    if (setCookieHeaders.length > 0) {
+      setCookieHeaders.forEach(cookie => {
+        try {
+          // Парсим cookie и устанавливаем через NextResponse
+          const [nameValue, ...attributes] = cookie.split(';');
+          const [name, value] = nameValue.split('=');
+          
+          if (!name || !value) {
+            console.warn('[Route Handler] Неверный формат cookie:', cookie);
+            return;
+          }
+          
+          // Извлекаем атрибуты
+          const cookieOptions: any = {
+            httpOnly: cookie.includes('HttpOnly'),
+            secure: cookie.includes('Secure'),
+            sameSite: cookie.includes('SameSite=Lax') ? 'lax' : cookie.includes('SameSite=Strict') ? 'strict' : 'lax',
+            path: '/',
+          };
+          
+          // Извлекаем maxAge (в секундах для Next.js)
+          const maxAgeMatch = cookie.match(/Max-Age=(\d+)/);
+          if (maxAgeMatch) {
+            cookieOptions.maxAge = parseInt(maxAgeMatch[1]);
+          }
+          
+          console.log('[Route Handler] Устанавливаем cookie:', { name: name.trim(), hasValue: !!value, options: cookieOptions });
+          nextResponse.cookies.set(name.trim(), value.trim(), cookieOptions);
+        } catch (error) {
+          console.error('[Route Handler] Ошибка при установке cookie:', error, cookie);
+        }
+      });
+      console.log('[Route Handler] Cookies установлены в ответе, всего:', setCookieHeaders.length);
+    } else {
+      console.warn('[Route Handler] Нет Set-Cookie заголовков от backend!');
+    }
 
     return nextResponse;
 
