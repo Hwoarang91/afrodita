@@ -10,7 +10,7 @@ import { User } from '../../../entities/user.entity';
 /**
  * Кастомный Storage адаптер для MTKruto, который сохраняет сессии в БД с шифрованием
  */
-class DatabaseStorage implements Storage {
+class DatabaseStorage implements Partial<Storage> {
   constructor(
     private sessionRepository: Repository<TelegramUserSession>,
     private encryptionService: SessionEncryptionService,

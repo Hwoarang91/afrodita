@@ -92,7 +92,7 @@ export class TelegramUserController {
         ...(dto.parseMode && { parse_mode: dto.parseMode }),
         ...(dto.replyToMessageId && { reply_to_msg_id: dto.replyToMessageId }),
         ...(dto.disableNotification !== undefined && { silent: dto.disableNotification }),
-      });
+      }) as any;
 
       this.logger.log(`Сообщение отправлено от пользователя ${userId} в чат ${dto.chatId}`);
 
@@ -216,7 +216,8 @@ export class TelegramUserController {
         offset_peer: {
           _: 'inputPeerEmpty',
         },
-      });
+        hash: BigInt(0),
+      }) as any;
 
       if (result._ !== 'messages.dialogs') {
         throw new UnauthorizedException('Failed to get dialogs');
@@ -304,7 +305,8 @@ export class TelegramUserController {
         add_offset: 0,
         max_id: 0,
         min_id: 0,
-      });
+        hash: BigInt(0),
+      }) as any;
 
       if (result._ !== 'messages.messages') {
         throw new UnauthorizedException('Failed to get messages');
