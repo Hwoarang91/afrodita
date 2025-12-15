@@ -13,21 +13,28 @@ export class SessionEncryptionService {
 
   constructor(private configService: ConfigService) {
     const key = this.configService.get<string>('TELEGRAM_SESSION_ENCRYPTION_KEY');
+    
     if (!key) {
-      throw new Error('TELEGRAM_SESSION_ENCRYPTION_KEY is not set in environment variables');
-    }
-
-    // Преобразуем ключ в Buffer (если это hex строка, декодируем, иначе используем как есть)
-    if (key.length === 64) {
-      // Предполагаем hex формат
-      this.encryptionKey = Buffer.from(key, 'hex');
+      this.logger.warn(
+        'TELEGRAM_SESSION_ENCRYPTION_KEY is not set in environment variables. ' +
+        'Generating a random key for development. ' +
+        'WARNING: This key will be different on each restart, so encrypted sessions will not be recoverable!'
+      );
+      // Генерируем случайный ключ для разработки
+      this.encryptionKey = crypto.randomBytes(this.keyLength);
     } else {
-      // Используем SHA-256 хеш от ключа для получения 32-байтового ключа
-      this.encryptionKey = crypto.createHash('sha256').update(key).digest();
-    }
+      // Преобразуем ключ в Buffer (если это hex строка, декодируем, иначе используем как есть)
+      if (key.length === 64) {
+        // Предполагаем hex формат
+        this.encryptionKey = Buffer.from(key, 'hex');
+      } else {
+        // Используем SHA-256 хеш от ключа для получения 32-байтового ключа
+        this.encryptionKey = crypto.createHash('sha256').update(key).digest();
+      }
 
-    if (this.encryptionKey.length !== this.keyLength) {
-      throw new Error(`Encryption key must be ${this.keyLength} bytes (${this.keyLength * 2} hex characters)`);
+      if (this.encryptionKey.length !== this.keyLength) {
+        throw new Error(`Encryption key must be ${this.keyLength} bytes (${this.keyLength * 2} hex characters)`);
+      }
     }
 
     this.logger.log('SessionEncryptionService initialized');
