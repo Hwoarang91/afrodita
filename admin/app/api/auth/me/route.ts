@@ -20,33 +20,36 @@ export async function GET(request: NextRequest) {
   try {
     // Получаем cookies через cookies() API - это работает для httpOnly cookies на сервере
     const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
     
     // Также пробуем получить из заголовка запроса (может содержать cookies, которые не видны через cookies() API)
     const requestCookieHeader = request.headers.get('cookie') || '';
     
-    // Собираем все cookies в строку для передачи в backend
-    const cookiePairs: string[] = [];
-    
-    // Сначала добавляем cookies из заголовка запроса (если есть)
-    if (requestCookieHeader) {
-      cookiePairs.push(requestCookieHeader);
-    }
-    
-    // Затем добавляем cookies из cookies() API (если они не были в заголовке)
-    cookieStore.getAll().forEach(cookie => {
-      // Проверяем, не добавлен ли уже этот cookie из заголовка
-      if (!requestCookieHeader.includes(`${cookie.name}=`)) {
-        cookiePairs.push(`${cookie.name}=${cookie.value}`);
-      }
+    // Логируем все доступные cookies для отладки
+    console.log('[Route Handler] Все cookies:', {
+      fromHeader: requestCookieHeader,
+      fromStore: allCookies.map(c => ({ name: c.name, hasValue: !!c.value })),
+      allHeaders: Object.fromEntries(request.headers.entries()),
     });
     
-    const cookieHeader = cookiePairs.length > 0 ? cookiePairs.join('; ') : '';
+    // Используем cookies из cookieStore (они должны содержать httpOnly cookies)
+    // Если их нет, используем из заголовка
+    let cookieHeader = '';
     
-    console.log('[Route Handler] Cookies для /auth/me:', {
-      fromHeader: !!requestCookieHeader,
-      fromStore: cookieStore.getAll().length,
-      total: cookiePairs.length,
+    if (allCookies.length > 0) {
+      // Собираем cookies из cookieStore
+      const cookiePairs = allCookies.map(cookie => `${cookie.name}=${cookie.value}`);
+      cookieHeader = cookiePairs.join('; ');
+    } else if (requestCookieHeader) {
+      // Fallback на заголовок, если cookieStore пуст
+      cookieHeader = requestCookieHeader;
+    }
+    
+    console.log('[Route Handler] Итоговый cookie header для backend:', {
+      hasHeader: !!cookieHeader,
+      length: cookieHeader.length,
       hasAccessToken: cookieHeader.includes('access_token'),
+      preview: cookieHeader.substring(0, 100),
     });
     
     // API_URL может уже содержать /api/v1, поэтому проверяем
