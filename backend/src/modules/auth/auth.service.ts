@@ -332,8 +332,8 @@ export class AuthService {
           _: 'codeSettings',
           allow_flashcall: false,
           current_number: false,
-        } as any,
-      });
+        },
+      } as any);
 
       if (result._ !== 'auth.sentCode') {
         throw new UnauthorizedException('Failed to send code');
