@@ -335,7 +335,7 @@ export default function TelegramUserPage() {
                       if (currentSession) {
                         deactivateOtherSessionsMutation.mutate(currentSession.id);
                       } else {
-                        deactivateOtherSessionsMutation.mutate();
+                        deactivateOtherSessionsMutation.mutate(undefined);
                       }
                     }}
                     disabled={deactivateOtherSessionsMutation.isPending}
