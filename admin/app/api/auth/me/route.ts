@@ -49,8 +49,59 @@ export async function GET(request: NextRequest) {
       hasHeader: !!cookieHeader,
       length: cookieHeader.length,
       hasAccessToken: cookieHeader.includes('access_token'),
+      hasRefreshToken: cookieHeader.includes('refresh_token'),
       preview: cookieHeader.substring(0, 100),
     });
+    
+    // Если нет access_token, но есть refresh_token, пытаемся обновить токены
+    if (!cookieHeader.includes('access_token') && cookieHeader.includes('refresh_token')) {
+      console.log('[Route Handler] Нет access_token, пытаемся обновить через refresh_token');
+      
+      const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
+      const refreshResponse = await fetch(`${backendUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(cookieHeader && { 'Cookie': cookieHeader }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ refreshToken: '' }), // Backend получит из cookies
+      });
+      
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json();
+        // Обновляем cookies из ответа refresh
+        const setCookieHeaders = refreshResponse.headers.getSetCookie();
+        const nextResponse = NextResponse.json(refreshData);
+        setCookieHeaders.forEach(cookie => {
+          nextResponse.headers.append('Set-Cookie', cookie);
+        });
+        
+        // Теперь повторяем запрос /auth/me с обновленными cookies
+        const updatedCookieHeader = setCookieHeaders
+          .map(cookie => cookie.split(';')[0])
+          .join('; ');
+        
+        const meResponse = await fetch(`${backendUrl}/auth/me`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(updatedCookieHeader && { 'Cookie': updatedCookieHeader }),
+          },
+          credentials: 'include',
+        });
+        
+        if (meResponse.ok) {
+          const meData = await meResponse.json();
+          // Обновляем cookies из ответа me
+          const meSetCookieHeaders = meResponse.headers.getSetCookie();
+          meSetCookieHeaders.forEach(cookie => {
+            nextResponse.headers.append('Set-Cookie', cookie);
+          });
+          return NextResponse.json(meData);
+        }
+      }
+    }
     
     // API_URL может уже содержать /api/v1, поэтому проверяем
     const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
