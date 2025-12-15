@@ -177,8 +177,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('[Route Handler] Error getting user info:', error);
+    console.error('[Route Handler] Error stack:', error?.stack);
+    console.error('[Route Handler] Error message:', error?.message);
     return NextResponse.json(
-      { error: 'Internal server error during user info retrieval' },
+      { 
+        error: 'Internal server error during user info retrieval',
+        details: process.env.NODE_ENV === 'development' ? error?.message : undefined
+      },
       { status: 500 }
     );
   }
