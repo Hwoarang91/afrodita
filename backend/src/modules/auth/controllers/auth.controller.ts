@@ -299,10 +299,11 @@ export class AuthController {
     const isProduction = process.env.NODE_ENV === 'production';
 
     // Access token в httpOnly cookie (недоступен JS)
+    // Используем 'lax' вместо 'strict' для работы через прокси/nginx
     res.cookie('access_token', tokenPair.accessToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: 'lax', // Изменено с 'strict' на 'lax' для работы через прокси
       maxAge: 15 * 60 * 1000, // 15 минут
       path: '/',
     });
@@ -313,7 +314,7 @@ export class AuthController {
     res.cookie('refresh_token', tokenPair.refreshToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: 'lax', // Изменено с 'strict' на 'lax' для работы через прокси
       maxAge: refreshTokenMaxAge,
       path: '/',
     });
