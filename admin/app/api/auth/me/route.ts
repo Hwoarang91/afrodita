@@ -18,8 +18,16 @@ const API_URL = getApiUrl();
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies();
-    const cookieHeader = request.headers.get('cookie') || '';
+    const cookieStore = await cookies();
+    
+    // Собираем все cookies в строку для передачи в backend
+    const cookiePairs: string[] = [];
+    cookieStore.getAll().forEach(cookie => {
+      cookiePairs.push(`${cookie.name}=${cookie.value}`);
+    });
+    const cookieHeader = cookiePairs.join('; ');
+    
+    console.log('[Route Handler] Cookies для /auth/me:', cookiePairs.length > 0 ? 'есть' : 'нет');
     
     // API_URL может уже содержать /api/v1, поэтому проверяем
     const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
