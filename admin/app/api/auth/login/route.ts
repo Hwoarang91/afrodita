@@ -80,7 +80,8 @@ export async function POST(request: NextRequest) {
     const setCookieHeaders = response.headers.getSetCookie();
     console.log('[Route Handler] Set-Cookie заголовки от backend:', {
       count: setCookieHeaders.length,
-      headers: setCookieHeaders.map(h => h.substring(0, 100)),
+      headers: setCookieHeaders,
+      allResponseHeaders: Object.fromEntries(response.headers.entries()),
     });
 
     const nextResponse = NextResponse.json({
