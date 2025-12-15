@@ -21,17 +21,33 @@ export async function GET(request: NextRequest) {
     // Получаем cookies через cookies() API - это работает для httpOnly cookies на сервере
     const cookieStore = await cookies();
     
-    // Собираем все cookies в строку для передачи в backend
-    // НЕ кодируем имена cookies, только значения если они содержат специальные символы
-    const cookiePairs: string[] = [];
-    cookieStore.getAll().forEach(cookie => {
-      // Имена cookies не кодируем (они должны быть ASCII)
-      // Значения кодируем только если нужно (но обычно JWT токены уже в правильном формате)
-      cookiePairs.push(`${cookie.name}=${cookie.value}`);
-    });
-    const cookieHeader = cookiePairs.join('; ');
+    // Также пробуем получить из заголовка запроса (может содержать cookies, которые не видны через cookies() API)
+    const requestCookieHeader = request.headers.get('cookie') || '';
     
-    console.log('[Route Handler] Cookies для /auth/me:', cookiePairs.length > 0 ? `${cookiePairs.length} cookies` : 'нет');
+    // Собираем все cookies в строку для передачи в backend
+    const cookiePairs: string[] = [];
+    
+    // Сначала добавляем cookies из заголовка запроса (если есть)
+    if (requestCookieHeader) {
+      cookiePairs.push(requestCookieHeader);
+    }
+    
+    // Затем добавляем cookies из cookies() API (если они не были в заголовке)
+    cookieStore.getAll().forEach(cookie => {
+      // Проверяем, не добавлен ли уже этот cookie из заголовка
+      if (!requestCookieHeader.includes(`${cookie.name}=`)) {
+        cookiePairs.push(`${cookie.name}=${cookie.value}`);
+      }
+    });
+    
+    const cookieHeader = cookiePairs.length > 0 ? cookiePairs.join('; ') : '';
+    
+    console.log('[Route Handler] Cookies для /auth/me:', {
+      fromHeader: !!requestCookieHeader,
+      fromStore: cookieStore.getAll().length,
+      total: cookiePairs.length,
+      hasAccessToken: cookieHeader.includes('access_token'),
+    });
     
     // API_URL может уже содержать /api/v1, поэтому проверяем
     const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
