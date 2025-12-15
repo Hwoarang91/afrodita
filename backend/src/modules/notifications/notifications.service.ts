@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification, NotificationType, NotificationChannel, NotificationStatus } from '../../entities/notification.entity';
@@ -20,6 +20,7 @@ export class NotificationsService {
     private templateRepository: Repository<Template>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @Inject(forwardRef(() => TelegramService))
     private telegramService: TelegramService,
     private settingsService: SettingsService,
   ) {}
