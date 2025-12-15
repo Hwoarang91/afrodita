@@ -159,25 +159,24 @@ export class TelegramUserController {
           } as any);
           break;
         case 'document':
-          // @ts-ignore - временно игнорируем ошибку типов MTProto
           result = await client.invoke({
             _: 'messages.sendMedia',
             peer: peer as any,
             media: {
               _: 'inputMediaDocument',
-              // @ts-ignore - временно игнорируем ошибку типов MTProto
               id: {
                 _: 'inputDocument',
                 id: BigInt(0),
                 access_hash: BigInt(0),
-              },
-            },
+                file_reference: new Uint8Array(0),
+              } as any,
+            } as any,
             message: dto.caption || '',
             random_id: BigInt(Date.now()),
             ...(dto.parseMode && { parse_mode: dto.parseMode }),
             ...(dto.replyToMessageId && { reply_to_msg_id: dto.replyToMessageId }),
-            ...(dto.disableNotification !== undefined && { silent: dto.disableNotification }),
-          });
+            ...(dto.disableNotification === true && { silent: true as const }),
+          } as any);
           break;
         default:
           throw new UnauthorizedException(`Unsupported media type: ${dto.mediaType}`);
