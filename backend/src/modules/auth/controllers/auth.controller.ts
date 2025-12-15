@@ -16,6 +16,7 @@ import { Response as ExpressResponse } from 'express';
 import { AuthService } from '../auth.service';
 import { JwtAuthService, TokenPair } from '../services/jwt.service';
 import { CsrfService } from '../services/csrf.service';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { LoginRequestDto } from '../dto/login-request.dto';
 import { LoginResponseDto } from '../dto/login-response.dto';
 import { RefreshRequestDto } from '../dto/refresh-request.dto';
@@ -220,9 +221,26 @@ export class AuthController {
   }
 
   @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Получение текущего пользователя' })
   async getMe(@Request() req) {
-    return req.user;
+    if (!req.user) {
+      this.logger.warn('getMe: req.user не установлен');
+      throw new UnauthorizedException('User not authenticated');
+    }
+    
+    this.logger.debug(`getMe: Возвращаем данные пользователя: ${req.user.email || req.user.sub}`);
+    
+    // Возвращаем только необходимые поля пользователя
+    return {
+      id: req.user.sub || req.user.id,
+      email: req.user.email,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      role: req.user.role,
+      bonusPoints: req.user.bonusPoints || 0,
+    };
   }
 
   @Get('check-setup')
