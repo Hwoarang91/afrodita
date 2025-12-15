@@ -27,6 +27,22 @@ export default function TelegramAuthPage() {
   const [isRequestingCode, setIsRequestingCode] = useState(false);
   const router = useRouter();
 
+  const generateQrCode = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.post('/auth/telegram/qr/generate');
+      setQrTokenId(response.data.tokenId);
+      setQrUrl(response.data.qrUrl);
+      setQrExpiresAt(response.data.expiresAt);
+      setQrStatus('pending');
+      toast.success('QR-код сгенерирован');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Ошибка генерации QR-кода');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Генерация QR-кода при выборе метода QR
   useEffect(() => {
     if (authMethod === 'qr' && !qrTokenId) {
@@ -58,22 +74,6 @@ export default function TelegramAuthPage() {
       return () => clearInterval(interval);
     }
   }, [authMethod, qrTokenId, qrStatus, router, generateQrCode]);
-
-  const generateQrCode = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const response = await apiClient.post('/auth/telegram/qr/generate');
-      setQrTokenId(response.data.tokenId);
-      setQrUrl(response.data.qrUrl);
-      setQrExpiresAt(response.data.expiresAt);
-      setQrStatus('pending');
-      toast.success('QR-код сгенерирован');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Ошибка генерации QR-кода');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   const handleRequestCode = async () => {
     if (!phoneNumber) {
