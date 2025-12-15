@@ -15,14 +15,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     @InjectRepository(User)
     private userRepository: Repository<User>,
   ) {
+    // Кастомный экстрактор для cookies
+    const cookieExtractor = (request: any) => {
+      let token = null;
+      if (request && request.cookies) {
+        token = request.cookies['access_token'] || null;
+      }
+      return token;
+    };
+
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         // Сначала пытаемся извлечь из заголовка Authorization
         ExtractJwt.fromAuthHeaderAsBearerToken(),
         // Затем из cookies
-        (request: any) => {
-          return request?.cookies?.access_token || null;
-        },
+        cookieExtractor,
       ]),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET', 'your-secret-key'),
