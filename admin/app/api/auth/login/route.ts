@@ -84,36 +84,36 @@ export async function POST(request: NextRequest) {
       allResponseHeaders: Object.fromEntries(response.headers.entries()),
     });
 
-    const nextResponse = NextResponse.json({
-      success: true,
-      user: data.user,
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-    });
-
+    // Создаем Headers объект для Set-Cookie заголовков, как в csrf-token/route.ts
+    const responseHeaders = new Headers();
+    
     // Устанавливаем cookies из ответа backend
-    // Используем headers.append напрямую, как в csrf-token/route.ts
-    // Это гарантирует, что Set-Cookie заголовки попадут в ответ
     if (setCookieHeaders.length > 0) {
       setCookieHeaders.forEach(cookie => {
         try {
           // Используем cookie строку напрямую из backend
           // Path уже установлен как '/' в backend, что правильно для basePath
-          console.log('[Route Handler] Устанавливаем cookie через headers.append:', { 
+          console.log('[Route Handler] Устанавливаем cookie через responseHeaders.append:', { 
             cookie: cookie.substring(0, 100) + '...'
           });
           
-          nextResponse.headers.append('Set-Cookie', cookie);
+          responseHeaders.append('Set-Cookie', cookie);
         } catch (error) {
           console.error('[Route Handler] Ошибка при установке cookie:', error, cookie);
         }
       });
-      console.log('[Route Handler] Cookies установлены в ответе через headers.append, всего:', setCookieHeaders.length);
+      console.log('[Route Handler] Cookies установлены в responseHeaders, всего:', setCookieHeaders.length);
     } else {
       console.warn('[Route Handler] Нет Set-Cookie заголовков от backend!');
     }
 
-    return nextResponse;
+    // Возвращаем NextResponse с заголовками
+    return NextResponse.json({
+      success: true,
+      user: data.user,
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    }, { headers: responseHeaders });
 
   } catch (error: any) {
     console.error('[Route Handler] Ошибка при входе:', error);
