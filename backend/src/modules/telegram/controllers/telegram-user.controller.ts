@@ -9,11 +9,13 @@ import {
   Query,
   Logger,
   UnauthorizedException,
+  Delete,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { UserSendMessageDto, UserSendMediaDto } from '../dto/user-send-message.dto';
+import { DeactivateSessionDto, SessionInfoDto } from '../dto/session-management.dto';
 
 @ApiTags('telegram')
 @Controller('telegram/user')
@@ -335,6 +337,130 @@ export class TelegramUserController {
     } catch (error: any) {
       this.logger.error(`Ошибка получения истории сообщений: ${error.message}`, error.stack);
       throw new UnauthorizedException(`Failed to get messages: ${error.message}`);
+    }
+  }
+
+  @Get('sessions')
+  @ApiOperation({
+    summary: 'Получение списка активных сессий пользователя',
+    description: 'Возвращает список всех активных Telegram сессий текущего авторизованного пользователя с информацией о IP адресе, устройстве и датах использования',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Список сессий успешно получен',
+    type: [SessionInfoDto],
+    schema: {
+      example: {
+        success: true,
+        sessions: [
+          {
+            id: '550e8400-e29b-41d4-a716-446655440000',
+            phoneNumber: '+79001234567',
+            ipAddress: '192.168.1.1',
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            isActive: true,
+            lastUsedAt: '2025-12-15T22:00:00.000Z',
+            createdAt: '2025-12-15T20:00:00.000Z',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
+  async getSessions(@Request() req): Promise<{ success: boolean; sessions: SessionInfoDto[] }> {
+    try {
+      const userId = req.user.sub;
+      this.logger.debug(`Получение сессий для пользователя ${userId}`);
+
+      const sessions = await this.telegramUserClientService.getUserSessions(userId);
+
+      const sessionsInfo: SessionInfoDto[] = sessions.map((session) => ({
+        id: session.id,
+        phoneNumber: session.phoneNumber,
+        ipAddress: session.ipAddress,
+        userAgent: session.userAgent,
+        isActive: session.isActive,
+        lastUsedAt: session.lastUsedAt,
+        createdAt: session.createdAt,
+      }));
+
+      return {
+        success: true,
+        sessions: sessionsInfo,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка получения сессий: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Failed to get sessions: ${error.message}`);
+    }
+  }
+
+  @Delete('sessions/:sessionId')
+  @ApiOperation({
+    summary: 'Деактивация конкретной сессии',
+    description: 'Деактивирует указанную Telegram сессию пользователя. После деактивации сессия не может быть использована для отправки сообщений.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    description: 'UUID сессии для деактивации',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Сессия успешно деактивирована',
+    schema: {
+      example: {
+        success: true,
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
+  @ApiResponse({ status: 404, description: 'Сессия не найдена или не принадлежит пользователю' })
+  async deactivateSession(@Param('sessionId') sessionId: string, @Request() req): Promise<{ success: boolean }> {
+    try {
+      const userId = req.user.sub;
+      this.logger.debug(`Деактивация сессии ${sessionId} для пользователя ${userId}`);
+
+      await this.telegramUserClientService.deactivateSession(userId, sessionId);
+
+      return { success: true };
+    } catch (error: any) {
+      this.logger.error(`Ошибка деактивации сессии: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Failed to deactivate session: ${error.message}`);
+    }
+  }
+
+  @Delete('sessions')
+  @ApiOperation({
+    summary: 'Деактивация всех других сессий (кроме текущей)',
+    description: 'Деактивирует все активные Telegram сессии пользователя, кроме указанной (или первой в списке, если не указана). Полезно для безопасности при подозрении на компрометацию.',
+  })
+  @ApiQuery({
+    name: 'keepSessionId',
+    required: false,
+    description: 'UUID сессии, которую нужно сохранить активной. Если не указан, сохраняется первая сессия в списке.',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Все другие сессии успешно деактивированы',
+    schema: {
+      example: {
+        success: true,
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
+  async deactivateOtherSessions(@Request() req, @Query('keepSessionId') keepSessionId?: string): Promise<{ success: boolean }> {
+    try {
+      const userId = req.user.sub;
+      this.logger.debug(`Деактивация всех других сессий для пользователя ${userId}`);
+
+      await this.telegramUserClientService.deactivateOtherSessions(userId, keepSessionId);
+
+      return { success: true };
+    } catch (error: any) {
+      this.logger.error(`Ошибка деактивации других сессий: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Failed to deactivate other sessions: ${error.message}`);
     }
   }
 }

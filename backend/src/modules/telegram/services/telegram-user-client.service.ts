@@ -327,6 +327,62 @@ export class TelegramUserClientService implements OnModuleDestroy {
   }
 
   /**
+   * Получает список всех активных сессий пользователя
+   */
+  async getUserSessions(userId: string): Promise<TelegramUserSession[]> {
+    return await this.sessionRepository.find({
+      where: { userId, isActive: true },
+      order: { lastUsedAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Деактивирует конкретную сессию по ID
+   */
+  async deactivateSession(userId: string, sessionId: string): Promise<void> {
+    const session = await this.sessionRepository.findOne({
+      where: { id: sessionId, userId },
+    });
+
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    // Если это текущая активная сессия, отключаем клиент
+    if (session.isActive) {
+      const client = this.clients.get(userId);
+      if (client) {
+        await client.disconnect();
+        this.clients.delete(userId);
+      }
+    }
+
+    // Деактивируем сессию в БД
+    session.isActive = false;
+    await this.sessionRepository.save(session);
+
+    this.logger.log(`Session ${sessionId} deactivated for user ${userId}`);
+  }
+
+  /**
+   * Деактивирует все сессии пользователя кроме текущей
+   */
+  async deactivateOtherSessions(userId: string, currentSessionId?: string): Promise<void> {
+    const sessions = await this.sessionRepository.find({
+      where: { userId, isActive: true },
+    });
+
+    for (const session of sessions) {
+      if (!currentSessionId || session.id !== currentSessionId) {
+        session.isActive = false;
+        await this.sessionRepository.save(session);
+      }
+    }
+
+    this.logger.log(`All other sessions deactivated for user ${userId}`);
+  }
+
+  /**
    * Отключает все клиенты при остановке модуля
    */
   async onModuleDestroy() {
