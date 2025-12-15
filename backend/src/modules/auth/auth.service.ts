@@ -612,125 +612,111 @@ export class AuthService {
 
       // Проверяем, принят ли токен (polling)
       try {
-        const result = await stored.client.invoke({
-          _: 'auth.exportLoginToken',
-          api_id: this.configService.get<number>('TELEGRAM_API_ID')!,
-          api_hash: this.configService.get<string>('TELEGRAM_API_HASH')!,
-          except_ids: [],
+        const acceptResult = await stored.client.invoke({
+          _: 'auth.acceptLoginToken',
+          token: stored.token,
         });
 
-        // Если токен еще не принят, возвращаем pending
-        if (result._ === 'auth.loginToken') {
-          return { status: 'pending' };
-        }
-      } catch (error: any) {
-        // Если ошибка, возможно токен уже принят, пробуем acceptLoginToken
-        try {
-          const acceptResult = await stored.client.invoke({
-            _: 'auth.acceptLoginToken',
-            token: stored.token,
-          });
+        if ((acceptResult as any)._ === 'auth.loginTokenSuccess') {
+          const authorization = (acceptResult as any).authorization;
+          if (authorization._ === 'auth.authorization' && authorization.user._ === 'user') {
+            const authUser = authorization.user;
 
-          if (acceptResult._ === 'auth.loginTokenSuccess') {
-            const authorization = acceptResult.authorization;
-            if (authorization._ === 'auth.authorization' && authorization.user._ === 'user') {
-              const authUser = authorization.user;
+            // Нормализуем номер телефона
+            const normalizedPhone = authUser.phone
+              ? this.usersService.normalizePhone(authUser.phone)
+              : null;
 
-              // Нормализуем номер телефона
-              const normalizedPhone = authUser.phone
-                ? this.usersService.normalizePhone(authUser.phone)
-                : null;
-
-              // Ищем или создаем пользователя
-              let user: User;
-              if (normalizedPhone) {
-                user = await this.userRepository.findOne({
-                  where: { phone: normalizedPhone },
-                });
-              } else {
-                user = await this.userRepository.findOne({
-                  where: { telegramId: authUser.id.toString() },
-                });
-              }
-
-              if (!user) {
-                // Создаем нового пользователя
-                user = this.userRepository.create({
-                  phone: normalizedPhone,
-                  firstName: authUser.first_name || null,
-                  lastName: authUser.last_name || null,
-                  username: authUser.username || null,
-                  telegramId: authUser.id.toString(),
-                  role: UserRole.CLIENT,
-                  isActive: true,
-                });
-                await this.userRepository.save(user);
-              } else {
-                // Обновляем данные существующего пользователя
-                user.firstName = authUser.first_name || user.firstName;
-                user.lastName = authUser.last_name || user.lastName;
-                user.username = authUser.username || user.username;
-                if (!user.telegramId) {
-                  user.telegramId = authUser.id.toString();
-                }
-                if (normalizedPhone && !user.phone) {
-                  user.phone = normalizedPhone;
-                }
-                await this.userRepository.save(user);
-              }
-
-              // Сохраняем сессию MTProto
-              await this.telegramUserClientService.saveSession(
-                user.id,
-                stored.client,
-                normalizedPhone || '',
-              );
-
-              // Генерируем JWT токены
-              const tokenPair = await this.jwtAuthService.generateTokenPair(
-                user,
-                undefined,
-                undefined,
-                false,
-              );
-
-              // Обновляем статус токена
-              stored.status = 'accepted';
-              stored.user = user;
-              stored.tokens = {
-                accessToken: tokenPair.accessToken,
-                refreshToken: tokenPair.refreshToken,
-              };
-
-              // Логируем авторизацию
-              await this.logAuthAction(user.id, AuthAction.LOGIN);
-
-              this.logger.log(`QR code accepted for user: ${user.id}`);
-
-              return {
-                status: 'accepted',
-                user,
-                tokens: stored.tokens,
-              };
+            // Ищем или создаем пользователя
+            let user: User;
+            if (normalizedPhone) {
+              user = await this.userRepository.findOne({
+                where: { phone: normalizedPhone },
+              });
+            } else {
+              user = await this.userRepository.findOne({
+                where: { telegramId: authUser.id.toString() },
+              });
             }
+
+            if (!user) {
+              // Создаем нового пользователя
+              user = this.userRepository.create({
+                phone: normalizedPhone,
+                firstName: authUser.first_name || null,
+                lastName: authUser.last_name || null,
+                username: authUser.username || null,
+                telegramId: authUser.id.toString(),
+                role: UserRole.CLIENT,
+                isActive: true,
+              });
+              await this.userRepository.save(user);
+            } else {
+              // Обновляем данные существующего пользователя
+              user.firstName = authUser.first_name || user.firstName;
+              user.lastName = authUser.last_name || user.lastName;
+              user.username = authUser.username || user.username;
+              if (!user.telegramId) {
+                user.telegramId = authUser.id.toString();
+              }
+              if (normalizedPhone && !user.phone) {
+                user.phone = normalizedPhone;
+              }
+              await this.userRepository.save(user);
+            }
+
+            // Сохраняем сессию MTProto
+            await this.telegramUserClientService.saveSession(
+              user.id,
+              stored.client,
+              normalizedPhone || '',
+            );
+
+            // Генерируем JWT токены
+            const tokenPair = await this.jwtAuthService.generateTokenPair(
+              user,
+              undefined,
+              undefined,
+              false,
+            );
+
+            // Обновляем статус токена
+            stored.status = 'accepted';
+            stored.user = user;
+            stored.tokens = {
+              accessToken: tokenPair.accessToken,
+              refreshToken: tokenPair.refreshToken,
+            };
+
+            // Логируем авторизацию
+            await this.logAuthAction(user.id, AuthAction.LOGIN);
+
+            this.logger.log(`QR code accepted for user: ${user.id}`);
+
+            return {
+              status: 'accepted',
+              user,
+              tokens: stored.tokens,
+            };
           }
-        } catch (acceptError: any) {
-          // Токен еще не принят или ошибка
-          // Если ошибка "AUTH_TOKEN_INVALID" или "AUTH_TOKEN_EXPIRED", токен истек
-          if (
-            acceptError.message?.includes('AUTH_TOKEN_INVALID') ||
-            acceptError.message?.includes('AUTH_TOKEN_EXPIRED')
-          ) {
-            stored.status = 'expired';
-            this.qrTokenStore.delete(tokenId);
-            stored.client.disconnect().catch((err) => {
-              this.logger.error(`Error disconnecting client: ${err.message}`);
-            });
-            return { status: 'expired' };
-          }
-          // Токен еще не принят
-          return { status: 'pending' };
         }
+      } catch (acceptError: any) {
+        // Токен еще не принят или ошибка
+        // Если ошибка "AUTH_TOKEN_INVALID" или "AUTH_TOKEN_EXPIRED", токен истек
+        if (
+          acceptError.message?.includes('AUTH_TOKEN_INVALID') ||
+          acceptError.message?.includes('AUTH_TOKEN_EXPIRED')
+        ) {
+          stored.status = 'expired';
+          this.qrTokenStore.delete(tokenId);
+          stored.client.disconnect().catch((err) => {
+            this.logger.error(`Error disconnecting client: ${err.message}`);
+          });
+          return { status: 'expired' };
+        }
+        // Токен еще не принят
+        return { status: 'pending' };
+      }
 
       return { status: 'pending' };
     } catch (error: any) {
@@ -803,15 +789,15 @@ export class AuthService {
       }
 
       const srpId = passwordResult.srp_id;
-      const srpB_bytes = srpB.B;
-      const g = srpB.g;
-      const p = srpB.p;
-      const salt1 = srpB.salt1;
-      const salt2 = srpB.salt2;
+      const srpB_bytes = (srpB as any).B;
+      const g = (srpB as any).g;
+      const p = (srpB as any).p;
+      const salt1 = (srpB as any).salt1;
+      const salt2 = (srpB as any).salt2;
 
       // Используем библиотеку tssrp6a для вычисления SRP параметров
       // MTProto использует модифицированный SRP протокол
-      const { Client as SRPClient } = require('tssrp6a');
+      const SRPClient = require('tssrp6a').Client;
       const crypto = require('crypto');
       
       // Преобразуем параметры для SRP
@@ -850,8 +836,8 @@ export class AuthService {
       const M1 = srpClient.computeM1(BBytes);
       
       const check = {
-        A: Array.from(A),
-        M1: Array.from(M1),
+        A: new Uint8Array(Array.from(A)),
+        M1: new Uint8Array(Array.from(M1)),
       };
 
       // Вызываем auth.checkPassword
@@ -863,7 +849,7 @@ export class AuthService {
           A: check.A,
           M1: check.M1,
         },
-      });
+      }) as any;
 
       if (checkPasswordResult._ !== 'auth.authorization') {
         throw new UnauthorizedException('2FA password verification failed');
