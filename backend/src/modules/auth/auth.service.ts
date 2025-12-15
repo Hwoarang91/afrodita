@@ -8,7 +8,7 @@ import { AuthLog, AuthAction } from '../../entities/auth-log.entity';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { JwtAuthService } from './services/jwt.service';
-import { TelegramUserClientService } from '../../telegram/services/telegram-user-client.service';
+import { TelegramUserClientService } from '../telegram/services/telegram-user-client.service';
 import { Client } from '@mtkruto/node';
 
 export interface TelegramAuthData {
