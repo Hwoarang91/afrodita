@@ -332,8 +332,7 @@ export class AuthService {
           _: 'codeSettings',
           allow_flashcall: false,
           current_number: false,
-          allow_app_hash: false,
-        },
+        } as any,
       });
 
       if (result._ !== 'auth.sentCode') {
