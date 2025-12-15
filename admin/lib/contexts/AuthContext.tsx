@@ -318,16 +318,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Это предотвратит ошибки 401 после выхода
     if (typeof window !== 'undefined') {
       const pathname = window.location.pathname;
-      const isLoginPage = pathname === '/admin/login' || pathname === '/login';
-      const isRegisterPage = pathname === '/admin/register' || pathname === '/register';
+      // Учитываем basePath: '/admin'
+      const isLoginPage = pathname === '/admin/login' || pathname === '/login' || pathname.endsWith('/login');
+      const isRegisterPage = pathname === '/admin/register' || pathname === '/register' || pathname.endsWith('/register');
       
       if (!isLoginPage && !isRegisterPage) {
         checkAuth();
       } else {
         // На странице логина просто устанавливаем isLoading = false
+        // и не делаем запросы к /api/auth/me
         setAuthState(prev => ({
           ...prev,
           isLoading: false,
+          isAuthenticated: false,
+          user: null,
         }));
       }
     }
