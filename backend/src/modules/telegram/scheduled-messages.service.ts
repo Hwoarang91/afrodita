@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
 import { ScheduledMessage, ScheduledMessageStatus, ScheduledMessageType } from '../../entities/scheduled-message.entity';
@@ -14,7 +14,7 @@ export class ScheduledMessagesService {
     @InjectRepository(ScheduledMessage)
     private scheduledMessageRepository: Repository<ScheduledMessage>,
     private telegramService: TelegramService,
-    @Inject(forwardRef(() => WebSocketGateway))
+    @Inject(WebSocketGateway)
     private webSocketGateway: WebSocketGateway,
   ) {}
 

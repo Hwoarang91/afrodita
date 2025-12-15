@@ -43,6 +43,7 @@ import { WebSocketModule } from '../websocket/websocket.module';
     forwardRef(() => NotificationsModule),
     ReviewsModule,
     FinancialModule,
+    forwardRef(() => WebSocketModule),
   ],
   controllers: [TelegramController, AutoRepliesController, ScheduledMessagesController, TelegramUserController],
   providers: [
