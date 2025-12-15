@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AuthService, TelegramAuthData } from './auth.service';
@@ -152,7 +153,22 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Получение текущего пользователя' })
   async getMe(@Request() req) {
-    return req.user;
+    if (!req.user) {
+      this.logger.warn('getMe: req.user не установлен');
+      throw new UnauthorizedException('User not authenticated');
+    }
+    
+    this.logger.debug(`getMe: Возвращаем данные пользователя: ${req.user.email || req.user.sub}`);
+    
+    // Возвращаем только необходимые поля пользователя
+    return {
+      id: req.user.sub || req.user.id,
+      email: req.user.email,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      role: req.user.role,
+      bonusPoints: req.user.bonusPoints || 0,
+    };
   }
 
   @Get('check-setup')
