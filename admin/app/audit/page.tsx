@@ -247,13 +247,17 @@ export default function AuditLogPage() {
                           Изменения
                         </summary>
                         <div className="mt-2 p-2 bg-muted rounded text-xs">
-                          {Object.entries(log.changes).map(([key, value]: [string, any]) => (
-                            <div key={key} className="mb-1">
-                              <span className="font-medium">{key}:</span>{' '}
-                              <span className="text-destructive">{JSON.stringify(value.old)}</span> →{' '}
-                              <span className="text-green-600">{JSON.stringify(value.new)}</span>
-                            </div>
-                          ))}
+                          {Object.entries(log.changes).map(([key, value]: [string, any]) => {
+                            const oldVal = value?.old ?? null;
+                            const newVal = value?.new ?? null;
+                            return (
+                              <div key={key} className="mb-1">
+                                <span className="font-medium">{key}:</span>{' '}
+                                <span className="text-destructive">{JSON.stringify(oldVal)}</span> →{' '}
+                                <span className="text-green-600">{JSON.stringify(newVal)}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </details>
                     )}
