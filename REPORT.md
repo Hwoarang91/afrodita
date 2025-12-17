@@ -88,6 +88,16 @@ docker rm n8n
 
 ### Изменения
 
+#### Исправление ошибки 500 на эндпоинте auto-replies (17.12.2025)
+
+**Проблема:** Эндпоинт `GET /api/v1/telegram/auto-replies` возвращал ошибку 500: `column AutoReply.matchType does not exist`.
+
+**Причина:** В entity `AutoReply` использовались имена колонок в camelCase (`matchType`, `caseSensitive`, `isActive`, и т.д.), но в базе данных таблица была создана с именами в snake_case (`match_type`, `case_sensitive`, `is_active`, и т.д.).
+
+**Исправлено:**
+- ✅ Обновлен entity `AutoReply` для использования правильных имен колонок в snake_case через параметр `name` в декораторах `@Column`
+- ✅ Исправлены все колонки: `matchType` → `match_type`, `caseSensitive` → `case_sensitive`, `isActive` → `is_active`, `chatType` → `chat_type`, `chatId` → `chat_id`, `usageCount` → `usage_count`, `lastUsedAt` → `last_used_at`, `createdAt` → `created_at`, `updatedAt` → `updated_at`
+
 #### Улучшение UI компонентов Telegram авторизации (17.12.2025)
 
 **Проблема:** UI компоненты для авторизации через Telegram (телефон и QR-код) не были видны в админ-панели.
