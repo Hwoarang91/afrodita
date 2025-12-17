@@ -335,6 +335,8 @@ export class AuthService {
       // Вызываем auth.sendCode
       const result: any = await client.invoke({
         _: 'auth.sendCode',
+        api_id: apiId,
+        api_hash: apiHash,
         phone_number: phoneNumber,
         settings: {
           _: 'codeSettings',
