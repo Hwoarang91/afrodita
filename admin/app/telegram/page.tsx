@@ -46,7 +46,7 @@ interface TelegramChat {
   chatInfo?: any;
 }
 
-export default function TelegramPage() {
+function TelegramPageContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get('tab');
   
