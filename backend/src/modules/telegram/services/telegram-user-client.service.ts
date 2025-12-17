@@ -227,11 +227,16 @@ export class TelegramUserClientService implements OnModuleDestroy {
     try {
       // Получаем данные сессии из клиента
       // MTKruto хранит сессию в storage, нам нужно получить её
-      const apiId = this.configService.get<number>('TELEGRAM_API_ID');
+      const apiIdStr = this.configService.get<string>('TELEGRAM_API_ID');
       const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
 
-      if (!apiId || !apiHash) {
+      if (!apiIdStr || !apiHash) {
         throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH must be set');
+      }
+
+      const apiId = parseInt(apiIdStr, 10);
+      if (isNaN(apiId)) {
+        throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
       // Создаем Storage адаптер для сохранения
