@@ -42,6 +42,10 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Флаг для отслеживания попытки обновления токена
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (value?: any) => void; reject: (reason?: any) => void }> = [];
+
 // Response interceptor для обработки ошибок авторизации
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
@@ -59,8 +63,12 @@ apiClient.interceptors.response.use(
           localStorage.removeItem('admin-token');
           sessionStorage.removeItem('admin-token');
           sessionStorage.removeItem('autoLogin');
-          // Перенаправляем на страницу логина
-          window.location.href = '/login';
+          // Перенаправляем на страницу логина только если не на публичной странице
+          const pathname = window.location.pathname;
+          const isPublicPage = pathname.includes('/login') || pathname.includes('/register') || pathname.includes('/telegram-auth');
+          if (!isPublicPage) {
+            window.location.href = '/login';
+          }
           return Promise.reject(error);
         }
 
@@ -73,9 +81,22 @@ apiClient.interceptors.response.use(
           return Promise.reject(error);
         }
 
+        // Если уже идет обновление токена, добавляем запрос в очередь
+        if (isRefreshing) {
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          })
+            .then(() => {
+              return apiClient(originalRequest);
+            })
+            .catch((err) => {
+              return Promise.reject(err);
+            });
+        }
+
         // Пытаемся обновить токены через refresh
+        isRefreshing = true;
         try {
-          
           // Получаем CSRF токен
           const csrfToken = document.cookie
             .split('; ')
@@ -95,12 +116,23 @@ apiClient.interceptors.response.use(
           if (refreshResponse.ok) {
             // Помечаем запрос как повторный, чтобы избежать бесконечного цикла
             originalRequest._retry = true;
+            
+            // Обрабатываем очередь ожидающих запросов
+            failedQueue.forEach(({ resolve }) => resolve());
+            failedQueue = [];
+            isRefreshing = false;
+            
             // Повторяем оригинальный запрос с обновленными токенами
             return apiClient(originalRequest);
           } else {
             throw new Error('Refresh failed');
           }
         } catch (refreshError) {
+          // Обрабатываем очередь ожидающих запросов с ошибкой
+          failedQueue.forEach(({ reject }) => reject(refreshError));
+          failedQueue = [];
+          isRefreshing = false;
+          
           // Для Telegram эндпоинтов не делаем редирект на логин при ошибках
           if (originalRequest?.url?.includes('/auth/telegram/')) {
             return Promise.reject(error);
@@ -109,8 +141,12 @@ apiClient.interceptors.response.use(
           localStorage.removeItem('admin-token');
           sessionStorage.removeItem('admin-token');
           sessionStorage.removeItem('autoLogin');
-          // Перенаправляем на страницу логина
-          window.location.href = '/login';
+          // Перенаправляем на страницу логина только если не на публичной странице
+          const pathname = window.location.pathname;
+          const isPublicPage = pathname.includes('/login') || pathname.includes('/register') || pathname.includes('/telegram-auth');
+          if (!isPublicPage) {
+            window.location.href = '/login';
+          }
           return Promise.reject(error);
         }
       }
