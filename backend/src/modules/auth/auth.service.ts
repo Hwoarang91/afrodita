@@ -329,6 +329,9 @@ export class AuthService {
       // Создаем клиент для авторизации
       const client = await this.telegramUserClientService.createClientForAuth(apiId, apiHash);
 
+      // Ждем подключения клиента
+      await client.connect();
+
       // Вызываем auth.sendCode
       const result: any = await client.invoke({
         _: 'auth.sendCode',
