@@ -842,11 +842,15 @@ export class AuthService {
         'sha256',
       );
       
+      // Устанавливаем пароль в SRP клиент
+      srpClient.setPassword(password);
+      
       // Генерируем A (публичный ключ клиента)
       const a = srpClient.generateA();
       const A = srpClient.computeA();
       
       // Вычисляем M1 (доказательство знания пароля)
+      // Передаем B (публичный ключ сервера) для вычисления M1
       const M1 = srpClient.computeM1(BBytes);
       
       const check = {
