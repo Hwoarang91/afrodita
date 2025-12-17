@@ -270,6 +270,58 @@ export class TelegramUserController {
     }
   }
 
+  @Get('contacts')
+  @ApiOperation({ summary: 'Получение списка контактов авторизованного пользователя' })
+  @ApiResponse({ status: 200, description: 'Список контактов получен' })
+  @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
+  async getContacts(@Request() req) {
+    try {
+      const userId = req.user.sub;
+      this.logger.debug(`Получение списка контактов для пользователя ${userId}`);
+
+      // Получаем клиент пользователя
+      const client = await this.telegramUserClientService.getClient(userId);
+      if (!client) {
+        throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
+      }
+
+      // Вызываем contacts.getContacts для получения списка контактов
+      const result = await client.invoke({
+        _: 'contacts.getContacts',
+        hash: BigInt(0),
+      }) as any;
+
+      if (result._ !== 'contacts.contacts') {
+        throw new UnauthorizedException('Failed to get contacts');
+      }
+
+      // Преобразуем результат в удобный формат
+      const contacts = result.users
+        .filter((user: any) => user._ === 'user' && !user.deleted && !user.bot)
+        .map((user: any) => ({
+          id: user.id.toString(),
+          type: 'private',
+          title: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || `User ${user.id}`,
+          username: user.username,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          phone: user.phone,
+          accessHash: user.access_hash?.toString() || null,
+        }));
+
+      this.logger.log(`Получено ${contacts.length} контактов для пользователя ${userId}`);
+
+      return {
+        success: true,
+        contacts,
+        total: contacts.length,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка получения списка контактов: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Failed to get contacts: ${error.message}`);
+    }
+  }
+
   @Get('messages/:chatId')
   @ApiOperation({ summary: 'Получение истории сообщений из чата' })
   @ApiResponse({ status: 200, description: 'История сообщений получена' })

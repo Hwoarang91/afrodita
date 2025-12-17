@@ -15,7 +15,8 @@ export default function LayoutContent({
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
   const isRegisterPage = pathname === '/register';
-  const isAuthPage = isLoginPage || isRegisterPage;
+  const isTelegramAuthPage = pathname === '/telegram-auth';
+  const isAuthPage = isLoginPage || isRegisterPage || isTelegramAuthPage;
 
   return (
     <ErrorBoundary>

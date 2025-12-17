@@ -15,15 +15,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const isLoginPage = pathname === '/login';
     const isRegisterPage = pathname === '/register';
+    const isTelegramAuthPage = pathname === '/telegram-auth';
+    const isPublicPage = isLoginPage || isRegisterPage || isTelegramAuthPage;
 
-    // Если пользователь не аутентифицирован и не на странице логина/регистрации
-    if (!isAuthenticated && !isLoginPage && !isRegisterPage) {
+    // Если пользователь не аутентифицирован и не на странице логина/регистрации/telegram-auth
+    if (!isAuthenticated && !isPublicPage) {
       router.push('/login');
       return;
     }
 
-    // Если пользователь аутентифицирован и на странице логина/регистрации
-    if (isAuthenticated && (isLoginPage || isRegisterPage)) {
+    // Если пользователь аутентифицирован и на странице логина/регистрации/telegram-auth
+    if (isAuthenticated && isPublicPage) {
       router.push('/dashboard');
       return;
     }

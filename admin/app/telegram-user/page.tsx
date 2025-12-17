@@ -49,6 +49,16 @@ export default function TelegramUserPage() {
     retry: false,
   });
 
+  // Получение списка контактов
+  const { data: contactsData, isLoading: isLoadingContacts } = useQuery({
+    queryKey: ['telegram-user-contacts'],
+    queryFn: async () => {
+      const response = await apiClient.get('/telegram/user/contacts');
+      return response.data;
+    },
+    retry: false,
+  });
+
   // Отправка текстового сообщения
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { chatId: string; message: string; parseMode?: string }) => {
@@ -187,27 +197,43 @@ export default function TelegramUserPage() {
           <CardTitle>Выбор получателя</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoadingChats ? (
+          {isLoadingChats || isLoadingContacts ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              <span>Загрузка чатов...</span>
+              <span>Загрузка чатов и контактов...</span>
             </div>
-          ) : chatsData?.chats?.length > 0 ? (
+          ) : (chatsData?.chats?.length > 0 || contactsData?.contacts?.length > 0) ? (
             <Select value={selectedChatId} onValueChange={setSelectedChatId}>
               <SelectTrigger>
-                <SelectValue placeholder="Выберите чат" />
+                <SelectValue placeholder="Выберите чат или контакт" />
               </SelectTrigger>
               <SelectContent>
-                {chatsData.chats.map((chat: any) => (
-                  <SelectItem key={chat.id} value={chat.id}>
-                    {chat.title} ({chat.type})
-                  </SelectItem>
-                ))}
+                {chatsData?.chats?.length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Чаты</div>
+                    {chatsData.chats.map((chat: any) => (
+                      <SelectItem key={chat.id} value={chat.id}>
+                        {chat.title} ({chat.type})
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+                {contactsData?.contacts?.length > 0 && (
+                  <>
+                    {chatsData?.chats?.length > 0 && <div className="my-1 border-t" />}
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Контакты</div>
+                    {contactsData.contacts.map((contact: any) => (
+                      <SelectItem key={contact.id} value={contact.id}>
+                        {contact.title} (контакт)
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Нет доступных чатов. Убедитесь, что вы авторизованы через Telegram.
+              Нет доступных чатов или контактов. Убедитесь, что вы авторизованы через Telegram.
             </p>
           )}
         </CardContent>
