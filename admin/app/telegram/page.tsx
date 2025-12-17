@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import MessageTypeSelector from './MessageTypeSelector';
@@ -9,13 +10,17 @@ import FormattingHelp from './FormattingHelp';
 import MembersManagement from './MembersManagement';
 import AutoRepliesManagement from './AutoRepliesManagement';
 import ScheduledMessagesManagement from './ScheduledMessagesManagement';
+import TelegramAuthTab from './TelegramAuthTab';
+import TelegramUserMessagesTab from './TelegramUserMessagesTab';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Bot, Shield, MessageSquare } from 'lucide-react';
 
 interface ChatInfo {
   id: number;
@@ -42,7 +47,15 @@ interface TelegramChat {
 }
 
 export default function TelegramPage() {
-      const [selectedTab, setSelectedTab] = useState<'send' | 'manage' | 'chats' | 'members' | 'scheduled' | 'settings'>('chats');
+  const searchParams = useSearchParams();
+  const tabParam = searchParams?.get('tab');
+  
+  // Главные табы: Бот, Авторизация, Личные сообщения
+  const [mainTab, setMainTab] = useState<'bot' | 'auth' | 'user'>(
+    (tabParam === 'auth' || tabParam === 'user') ? tabParam : 'bot'
+  );
+  // Подтабы для раздела "Бот"
+  const [botSubTab, setBotSubTab] = useState<'send' | 'manage' | 'chats' | 'members' | 'scheduled' | 'settings'>('chats');
   const [welcomeMessage, setWelcomeMessage] = useState('');
   const [selectedChatId, setSelectedChatId] = useState<string>('');
   const [chatId, setChatId] = useState('');
@@ -134,76 +147,98 @@ export default function TelegramPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold text-foreground mb-6">Управление Telegram ботом</h1>
-
-      {/* Вкладки */}
-      <div className="mb-6 border-b border-border">
-        <nav className="flex space-x-8">
-          <button
-            onClick={() => setSelectedTab('send')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              selectedTab === 'send'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-          >
-            Отправка сообщений
-          </button>
-          <button
-            onClick={() => setSelectedTab('manage')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              selectedTab === 'manage'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-          >
-            Управление чатом
-          </button>
-          <button
-            onClick={() => setSelectedTab('chats')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              selectedTab === 'chats'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-          >
-            Группы и чаты
-          </button>
-          <button
-            onClick={() => setSelectedTab('members')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              selectedTab === 'members'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-          >
-            Участники
-          </button>
-          <button
-            onClick={() => setSelectedTab('scheduled')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              selectedTab === 'scheduled'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-          >
-            Планировщик
-          </button>
-          <button
-            onClick={() => setSelectedTab('settings')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              selectedTab === 'settings'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-          >
-            Настройки
-          </button>
-        </nav>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-foreground mb-2">Управление Telegram</h1>
+        <p className="text-muted-foreground">Работа с ботом, авторизация и отправка личных сообщений</p>
       </div>
 
-      {/* Вкладка: Отправка сообщений */}
-      {selectedTab === 'send' && (
+      {/* Главные табы */}
+      <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as 'bot' | 'auth' | 'user')} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsTrigger value="bot">
+            <Bot className="w-4 h-4 mr-2" />
+            Бот
+          </TabsTrigger>
+          <TabsTrigger value="auth">
+            <Shield className="w-4 h-4 mr-2" />
+            Авторизация
+          </TabsTrigger>
+          <TabsTrigger value="user">
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Личные сообщения
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Таб: Бот */}
+        <TabsContent value="bot" className="space-y-6">
+          {/* Подтабы для бота */}
+          <div className="mb-6 border-b border-border">
+            <nav className="flex space-x-8">
+              <button
+                onClick={() => setBotSubTab('send')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  botSubTab === 'send'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                Отправка сообщений
+              </button>
+              <button
+                onClick={() => setBotSubTab('manage')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  botSubTab === 'manage'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                Управление чатом
+              </button>
+              <button
+                onClick={() => setBotSubTab('chats')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  botSubTab === 'chats'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                Группы и чаты
+              </button>
+              <button
+                onClick={() => setBotSubTab('members')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  botSubTab === 'members'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                Участники
+              </button>
+              <button
+                onClick={() => setBotSubTab('scheduled')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  botSubTab === 'scheduled'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                Планировщик
+              </button>
+              <button
+                onClick={() => setBotSubTab('settings')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  botSubTab === 'settings'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                Настройки
+              </button>
+            </nav>
+          </div>
+
+          {/* Подтаб: Отправка сообщений */}
+          {botSubTab === 'send' && (
         <div className="bg-card rounded-lg shadow p-6 border border-border">
           <h2 className="text-xl font-semibold text-foreground mb-4">Отправка сообщений</h2>
 
@@ -295,36 +330,47 @@ export default function TelegramPage() {
         </div>
       )}
 
-      {/* Вкладка: Управление чатом */}
-      {selectedTab === 'manage' && (
-        <ChatManagement />
-      )}
+          {/* Подтаб: Управление чатом */}
+          {botSubTab === 'manage' && (
+            <ChatManagement />
+          )}
 
+          {/* Подтаб: Группы и чаты */}
+          {botSubTab === 'chats' && (
+            <ChatsList />
+          )}
 
-      {/* Вкладка: Группы и чаты */}
-      {selectedTab === 'chats' && (
-        <ChatsList />
-      )}
+          {/* Подтаб: Участники */}
+          {botSubTab === 'members' && (
+            <MembersManagement />
+          )}
 
-      {/* Вкладка: Участники */}
-      {selectedTab === 'members' && (
-        <MembersManagement />
-      )}
+          {/* Подтаб: Планировщик сообщений */}
+          {botSubTab === 'scheduled' && (
+            <ScheduledMessagesManagement />
+          )}
 
-      {/* Вкладка: Планировщик сообщений */}
-      {selectedTab === 'scheduled' && (
-        <ScheduledMessagesManagement />
-      )}
+          {/* Подтаб: Настройки */}
+          {botSubTab === 'settings' && (
+            <div className="space-y-6">
+              <WelcomeMessageSettings welcomeMessage={welcomeMessage} setWelcomeMessage={setWelcomeMessage} />
+              <StartMessageSettings />
+              <AutoRefreshSettings />
+              <AutoRepliesManagement />
+            </div>
+          )}
+        </TabsContent>
 
-      {/* Вкладка: Настройки */}
-      {selectedTab === 'settings' && (
-        <div className="space-y-6">
-          <WelcomeMessageSettings welcomeMessage={welcomeMessage} setWelcomeMessage={setWelcomeMessage} />
-          <StartMessageSettings />
-          <AutoRefreshSettings />
-          <AutoRepliesManagement />
-        </div>
-      )}
+        {/* Таб: Авторизация */}
+        <TabsContent value="auth">
+          <TelegramAuthTab onAuthSuccess={() => setMainTab('user')} />
+        </TabsContent>
+
+        {/* Таб: Личные сообщения */}
+        <TabsContent value="user">
+          <TelegramUserMessagesTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

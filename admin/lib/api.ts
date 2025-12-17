@@ -65,7 +65,7 @@ apiClient.interceptors.response.use(
           sessionStorage.removeItem('autoLogin');
           // Перенаправляем на страницу логина только если не на публичной странице
           const pathname = window.location.pathname;
-          const isPublicPage = pathname.includes('/login') || pathname.includes('/register') || pathname.includes('/telegram-auth');
+          const isPublicPage = pathname.includes('/login') || pathname.includes('/register');
           if (!isPublicPage) {
             window.location.href = '/login';
           }
@@ -143,7 +143,7 @@ apiClient.interceptors.response.use(
           sessionStorage.removeItem('autoLogin');
           // Перенаправляем на страницу логина только если не на публичной странице
           const pathname = window.location.pathname;
-          const isPublicPage = pathname.includes('/login') || pathname.includes('/register') || pathname.includes('/telegram-auth');
+          const isPublicPage = pathname.includes('/login') || pathname.includes('/register');
           if (!isPublicPage) {
             window.location.href = '/login';
           }

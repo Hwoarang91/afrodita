@@ -15,17 +15,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const isLoginPage = pathname === '/login';
     const isRegisterPage = pathname === '/register';
-    const isTelegramAuthPage = pathname === '/admin/telegram-auth' || pathname === '/telegram-auth';
-    const isPublicPage = isLoginPage || isRegisterPage || isTelegramAuthPage;
+    const isPublicPage = isLoginPage || isRegisterPage;
 
-    // Если пользователь не аутентифицирован и не на странице логина/регистрации/telegram-auth
+    // Если пользователь не аутентифицирован и не на странице логина/регистрации
     if (!isAuthenticated && !isPublicPage) {
       router.push('/login');
       return;
     }
 
     // Если пользователь аутентифицирован и на странице логина/регистрации - редиректим на dashboard
-    // Но для telegram-auth разрешаем доступ даже авторизованным (для авторизации Telegram аккаунта)
     if (isAuthenticated && (isLoginPage || isRegisterPage)) {
       router.push('/dashboard');
       return;

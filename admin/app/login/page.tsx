@@ -158,7 +158,7 @@ export default function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push('/admin/telegram-auth')}
+              onClick={() => router.push('/admin/telegram?tab=auth')}
               className="w-full"
             >
               <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="currentColor">

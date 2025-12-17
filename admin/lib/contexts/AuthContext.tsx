@@ -314,12 +314,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Учитываем basePath: '/admin'
       const isLoginPage = pathname === '/admin/login' || pathname === '/login' || pathname.endsWith('/login');
       const isRegisterPage = pathname === '/admin/register' || pathname === '/register' || pathname.endsWith('/register');
-      const isTelegramAuthPage = pathname.includes('/telegram-auth');
-      
-      if (!isLoginPage && !isRegisterPage && !isTelegramAuthPage) {
+      if (!isLoginPage && !isRegisterPage) {
         checkAuth();
       } else {
-        // На странице логина/регистрации/telegram-auth просто устанавливаем isLoading = false
+        // На странице логина/регистрации просто устанавливаем isLoading = false
         // и не делаем запросы к /api/auth/me
         setAuthState(prev => ({
           ...prev,

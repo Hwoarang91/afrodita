@@ -30,7 +30,7 @@ interface SessionInfo {
   createdAt: string;
 }
 
-export default function TelegramUserPage() {
+export default function TelegramUserMessagesTab() {
   const [selectedTab, setSelectedTab] = useState<'send' | 'sessions'>('send');
   const [selectedChatId, setSelectedChatId] = useState('');
   const [message, setMessage] = useState('');
@@ -43,8 +43,12 @@ export default function TelegramUserPage() {
   const { data: chatsData, isLoading: isLoadingChats } = useQuery({
     queryKey: ['telegram-user-chats'],
     queryFn: async () => {
-      const response = await apiClient.get('/telegram/user/chats?type=all');
-      return response.data;
+      try {
+        const response = await apiClient.get('/telegram/user/chats?type=all');
+        return response.data;
+      } catch (error) {
+        return { chats: [] };
+      }
     },
     retry: false,
   });
@@ -53,8 +57,12 @@ export default function TelegramUserPage() {
   const { data: contactsData, isLoading: isLoadingContacts } = useQuery({
     queryKey: ['telegram-user-contacts'],
     queryFn: async () => {
-      const response = await apiClient.get('/telegram/user/contacts');
-      return response.data;
+      try {
+        const response = await apiClient.get('/telegram/user/contacts');
+        return response.data;
+      } catch (error) {
+        return { contacts: [] };
+      }
     },
     retry: false,
   });
@@ -97,8 +105,12 @@ export default function TelegramUserPage() {
   const { data: sessionsData, isLoading: isLoadingSessions } = useQuery({
     queryKey: ['telegram-user-sessions'],
     queryFn: async () => {
-      const response = await apiClient.get('/telegram/user/sessions');
-      return response.data;
+      try {
+        const response = await apiClient.get('/telegram/user/sessions');
+        return response.data;
+      } catch (error) {
+        return { sessions: [] };
+      }
     },
     retry: false,
   });
@@ -176,11 +188,9 @@ export default function TelegramUserPage() {
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold text-foreground mb-6">Мои сообщения Telegram</h1>
-
+    <div className="space-y-6">
       <Tabs value={selectedTab} onValueChange={(value) => setSelectedTab(value as 'send' | 'sessions')} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="send">
             <Send className="w-4 h-4 mr-2" />
             Отправка сообщений
@@ -192,159 +202,159 @@ export default function TelegramUserPage() {
         </TabsList>
 
         <TabsContent value="send" className="space-y-6">
-          <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Выбор получателя</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoadingChats || isLoadingContacts ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              <span>Загрузка чатов и контактов...</span>
-            </div>
-          ) : (chatsData?.chats?.length > 0 || contactsData?.contacts?.length > 0) ? (
-            <Select value={selectedChatId} onValueChange={setSelectedChatId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Выберите чат или контакт" />
-              </SelectTrigger>
-              <SelectContent>
-                {chatsData?.chats?.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Выбор получателя</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingChats || isLoadingContacts ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  <span>Загрузка чатов и контактов...</span>
+                </div>
+              ) : (chatsData?.chats?.length > 0 || contactsData?.contacts?.length > 0) ? (
+                <Select value={selectedChatId} onValueChange={setSelectedChatId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите чат или контакт" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {chatsData?.chats?.length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Чаты</div>
+                        {chatsData.chats.map((chat: any) => (
+                          <SelectItem key={chat.id} value={chat.id}>
+                            {chat.title} ({chat.type})
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {contactsData?.contacts?.length > 0 && (
+                      <>
+                        {chatsData?.chats?.length > 0 && <div className="my-1 border-t" />}
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Контакты</div>
+                        {contactsData.contacts.map((contact: any) => (
+                          <SelectItem key={contact.id} value={contact.id}>
+                            {contact.title} (контакт)
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Нет доступных чатов или контактов. Убедитесь, что вы авторизованы через Telegram.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Отправка сообщения</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Тип сообщения</Label>
+                <div className="flex space-x-2 mt-2">
+                  <Button
+                    variant={mediaType === 'text' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setMediaType('text')}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Текст
+                  </Button>
+                  <Button
+                    variant={mediaType === 'photo' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setMediaType('photo')}
+                  >
+                    <Image className="w-4 h-4 mr-2" />
+                    Фото
+                  </Button>
+                  <Button
+                    variant={mediaType === 'video' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setMediaType('video')}
+                  >
+                    <Video className="w-4 h-4 mr-2" />
+                    Видео
+                  </Button>
+                  <Button
+                    variant={mediaType === 'document' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setMediaType('document')}
+                  >
+                    <File className="w-4 h-4 mr-2" />
+                    Документ
+                  </Button>
+                </div>
+              </div>
+
+              {mediaType === 'text' ? (
+                <div>
+                  <Label htmlFor="message">Сообщение</Label>
+                  <Textarea
+                    id="message"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    rows={5}
+                    placeholder="Введите текст сообщения..."
+                    className="mt-2"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <Label htmlFor="mediaUrl">URL или file_id медиа</Label>
+                    <Input
+                      id="mediaUrl"
+                      type="text"
+                      value={mediaUrl}
+                      onChange={(e) => setMediaUrl(e.target.value)}
+                      placeholder="https://example.com/image.jpg или file_id"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="caption">Подпись (опционально)</Label>
+                    <Textarea
+                      id="caption"
+                      value={caption}
+                      onChange={(e) => setCaption(e.target.value)}
+                      rows={3}
+                      placeholder="Подпись к медиа..."
+                      className="mt-2"
+                    />
+                  </div>
+                </>
+              )}
+
+              <Button
+                onClick={handleSend}
+                disabled={
+                  sendMessageMutation.isPending ||
+                  sendMediaMutation.isPending ||
+                  !selectedChatId ||
+                  (mediaType === 'text' ? !message : !mediaUrl)
+                }
+                className="w-full"
+              >
+                {(sendMessageMutation.isPending || sendMediaMutation.isPending) ? (
                   <>
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Чаты</div>
-                    {chatsData.chats.map((chat: any) => (
-                      <SelectItem key={chat.id} value={chat.id}>
-                        {chat.title} ({chat.type})
-                      </SelectItem>
-                    ))}
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Отправка...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Отправить
                   </>
                 )}
-                {contactsData?.contacts?.length > 0 && (
-                  <>
-                    {chatsData?.chats?.length > 0 && <div className="my-1 border-t" />}
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Контакты</div>
-                    {contactsData.contacts.map((contact: any) => (
-                      <SelectItem key={contact.id} value={contact.id}>
-                        {contact.title} (контакт)
-                      </SelectItem>
-                    ))}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Нет доступных чатов или контактов. Убедитесь, что вы авторизованы через Telegram.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Отправка сообщения</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label>Тип сообщения</Label>
-            <div className="flex space-x-2 mt-2">
-              <Button
-                variant={mediaType === 'text' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setMediaType('text')}
-              >
-                <MessageSquare className="w-4 h-4 mr-2" />
-                Текст
               </Button>
-              <Button
-                variant={mediaType === 'photo' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setMediaType('photo')}
-              >
-                <Image className="w-4 h-4 mr-2" />
-                Фото
-              </Button>
-              <Button
-                variant={mediaType === 'video' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setMediaType('video')}
-              >
-                <Video className="w-4 h-4 mr-2" />
-                Видео
-              </Button>
-              <Button
-                variant={mediaType === 'document' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setMediaType('document')}
-              >
-                <File className="w-4 h-4 mr-2" />
-                Документ
-              </Button>
-            </div>
-          </div>
-
-          {mediaType === 'text' ? (
-            <div>
-              <Label htmlFor="message">Сообщение</Label>
-              <Textarea
-                id="message"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={5}
-                placeholder="Введите текст сообщения..."
-                className="mt-2"
-              />
-            </div>
-          ) : (
-            <>
-              <div>
-                <Label htmlFor="mediaUrl">URL или file_id медиа</Label>
-                <Input
-                  id="mediaUrl"
-                  type="text"
-                  value={mediaUrl}
-                  onChange={(e) => setMediaUrl(e.target.value)}
-                  placeholder="https://example.com/image.jpg или file_id"
-                  className="mt-2"
-                />
-              </div>
-              <div>
-                <Label htmlFor="caption">Подпись (опционально)</Label>
-                <Textarea
-                  id="caption"
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  rows={3}
-                  placeholder="Подпись к медиа..."
-                  className="mt-2"
-                />
-              </div>
-            </>
-          )}
-
-          <Button
-            onClick={handleSend}
-            disabled={
-              sendMessageMutation.isPending ||
-              sendMediaMutation.isPending ||
-              !selectedChatId ||
-              (mediaType === 'text' ? !message : !mediaUrl)
-            }
-            className="w-full"
-          >
-            {(sendMessageMutation.isPending || sendMediaMutation.isPending) ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Отправка...
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4 mr-2" />
-                Отправить
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="sessions" className="space-y-6">
