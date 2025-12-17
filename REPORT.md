@@ -88,6 +88,16 @@ docker rm n8n
 
 ### Изменения
 
+#### Исправление ошибки 500 на эндпоинте scheduled-messages (17.12.2025)
+
+**Проблема:** Эндпоинт `GET /api/v1/telegram/scheduled-messages` возвращал ошибку 500: `column ScheduledMessage.chatId does not exist`.
+
+**Причина:** В entity `ScheduledMessage` использовались имена колонок в camelCase (`chatId`, `mediaUrl`, `scheduledAt`, и т.д.), но в базе данных таблица была создана с именами в snake_case (`chat_id`, `media_url`, `scheduled_at`, и т.д.).
+
+**Исправлено:**
+- ✅ Обновлен entity `ScheduledMessage` для использования правильных имен колонок в snake_case через параметр `name` в декораторах `@Column`
+- ✅ Исправлены все колонки: `chatId` → `chat_id`, `mediaUrl` → `media_url`, `pollOptions` → `poll_options`, `scheduledAt` → `scheduled_at`, `errorMessage` → `error_message`, `sentAt` → `sent_at`, `isRecurring` → `is_recurring`, `recurringPattern` → `recurring_pattern`, `recurringConfig` → `recurring_config`, `recurringEndDate` → `recurring_end_date`, `sentCount` → `sent_count`, `createdAt` → `created_at`, `updatedAt` → `updated_at`
+
 #### Исправление ошибки 500 на эндпоинте auto-replies (17.12.2025)
 
 **Проблема:** Эндпоинт `GET /api/v1/telegram/auto-replies` возвращал ошибку 500: `column AutoReply.matchType does not exist`.
