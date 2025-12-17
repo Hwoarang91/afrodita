@@ -64,6 +64,13 @@ apiClient.interceptors.response.use(
           return Promise.reject(error);
         }
 
+        // Для Telegram эндпоинтов не делаем редирект на логин при 401
+        // Это может быть связано с отсутствием Telegram сессии, а не с проблемой авторизации
+        if (originalRequest?.url?.includes('/telegram/user/')) {
+          // Просто возвращаем ошибку без редиректа
+          return Promise.reject(error);
+        }
+
         // Пытаемся обновить токены через refresh
         try {
           

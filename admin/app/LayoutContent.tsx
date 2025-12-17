@@ -15,7 +15,7 @@ export default function LayoutContent({
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
   const isRegisterPage = pathname === '/register';
-  const isTelegramAuthPage = pathname === '/telegram-auth';
+  const isTelegramAuthPage = pathname === '/admin/telegram-auth' || pathname === '/telegram-auth';
   const isAuthPage = isLoginPage || isRegisterPage || isTelegramAuthPage;
 
   return (

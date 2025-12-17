@@ -26,6 +26,7 @@ import {
   X,
   FileCode,
   MessageSquare,
+  Shield,
 } from 'lucide-react';
 
 const menuItems = [
@@ -39,6 +40,7 @@ const menuItems = [
   { href: '/mailings', label: 'Рассылки', icon: Mail },
       { href: '/telegram', label: 'Telegram бот', icon: Bot },
       { href: '/telegram-user', label: 'Мои сообщения', icon: MessageSquare },
+      { href: '/telegram-auth', label: 'Telegram авторизация', icon: Shield },
       { href: '/templates', label: 'Шаблоны', icon: FileCode },
   { href: '/audit', label: 'Журнал действий', icon: FileText },
   { href: '/settings', label: 'Настройки', icon: Settings },
