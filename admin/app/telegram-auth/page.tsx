@@ -60,8 +60,8 @@ export default function TelegramAuthPage() {
           setQrStatus(status);
 
           if (status === 'accepted' && response.data.user && response.data.tokens) {
-            toast.success('Авторизация успешна!');
-            router.push('/dashboard');
+            toast.success('Telegram аккаунт успешно подключен!');
+            router.push('/admin/telegram-user');
           } else if (status === 'expired') {
             toast.error('QR-код истек. Генерируем новый...');
             generateQrCode();
@@ -113,8 +113,8 @@ export default function TelegramAuthPage() {
         setRequires2FA(true);
         toast.info('Требуется двухфакторная аутентификация');
       } else {
-        toast.success('Авторизация успешна!');
-        router.push('/dashboard');
+        toast.success('Telegram аккаунт успешно подключен!');
+        router.push('/admin/telegram-user');
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Ошибка проверки кода');
@@ -138,8 +138,8 @@ export default function TelegramAuthPage() {
       });
 
       if (response.data.success) {
-        toast.success('Авторизация успешна!');
-        router.push('/dashboard');
+        toast.success('Telegram аккаунт успешно подключен!');
+        router.push('/admin/telegram-user');
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Ошибка проверки 2FA пароля');
@@ -152,8 +152,8 @@ export default function TelegramAuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold text-primary mb-2">Афродита</CardTitle>
-          <CardDescription>Авторизация через Telegram</CardDescription>
+          <CardTitle className="text-2xl font-bold text-primary mb-2">Подключение Telegram</CardTitle>
+          <CardDescription>Подключите свой Telegram аккаунт для отправки сообщений клиентам от вашего имени</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={authMethod} onValueChange={(value) => setAuthMethod(value as 'phone' | 'qr')}>
