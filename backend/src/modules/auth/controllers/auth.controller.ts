@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Response as ExpressResponse } from 'express';
-import { AuthService } from '../auth.service';
+import { AuthService, TelegramAuthData } from '../auth.service';
 import { JwtAuthService, TokenPair } from '../services/jwt.service';
 import { CsrfService } from '../services/csrf.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -396,22 +396,14 @@ export class AuthController {
         return {
           success: false,
           requires2FA: true,
+          passwordHint: result.passwordHint,
         };
       }
 
-      // Устанавливаем cookies
-      const tokenPair: TokenPair = {
-        accessToken: result.tokens.accessToken,
-        refreshToken: result.tokens.refreshToken,
-        accessTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
-        refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      };
-      this.setAuthCookies(res, tokenPair, false);
+      // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
+      // Только создаем Telegram сессию для работы с Telegram API
 
-      const csrfToken = this.csrfService.generateCsrfToken();
-      this.setCsrfCookie(res, csrfToken);
-
-      this.logger.log(`Успешная авторизация по телефону: ${dto.phoneNumber}`);
+      this.logger.log(`Telegram сессия создана по телефону: ${dto.phoneNumber}`);
 
       return {
         success: true,
@@ -423,7 +415,7 @@ export class AuthController {
           lastName: result.user.lastName,
           username: result.user.username,
         },
-        tokens: result.tokens,
+        tokens: null, // Не возвращаем токены для дашборда
       };
     } catch (error: any) {
       this.logger.error(`Ошибка проверки кода: ${error.message}`);
@@ -466,20 +458,11 @@ export class AuthController {
     try {
       const result = await this.authService.checkQrTokenStatus(tokenId);
 
-      if (result.status === 'accepted' && result.user && result.tokens) {
-        // Устанавливаем cookies
-        const tokenPair: TokenPair = {
-          accessToken: result.tokens.accessToken,
-          refreshToken: result.tokens.refreshToken,
-          accessTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
-          refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        };
-        this.setAuthCookies(res, tokenPair, false);
+      if (result.status === 'accepted' && result.user) {
+        // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
+        // Только создаем Telegram сессию для работы с Telegram API
 
-        const csrfToken = this.csrfService.generateCsrfToken();
-        this.setCsrfCookie(res, csrfToken);
-
-        this.logger.log(`QR токен принят для пользователя: ${result.user.id}`);
+        this.logger.log(`Telegram сессия создана через QR для пользователя: ${result.user.id}`);
       }
 
       return {
@@ -494,9 +477,73 @@ export class AuthController {
             }
           : undefined,
         tokens: result.tokens,
+        expiresAt: result.expiresAt,
+        timeRemaining: result.timeRemaining,
       };
     } catch (error: any) {
       this.logger.error(`Ошибка проверки статуса QR токена: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Post('telegram')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Авторизация через Telegram Mini App' })
+  @ApiResponse({
+    status: 200,
+    description: 'Успешная авторизация через Telegram Mini App',
+  })
+  @ApiResponse({ status: 401, description: 'Неверные данные авторизации' })
+  async telegramAuth(
+    @Body() data: TelegramAuthData,
+    @Request() req,
+    @Response({ passthrough: true }) res: ExpressResponse,
+  ) {
+    this.logger.debug(`Telegram Mini App авторизация: ${data.id}`);
+    try {
+      const user = await this.authService.validateTelegramAuth(data);
+      
+      // Генерируем JWT токены для авторизации в приложении
+      const tokenPair = await this.jwtService.generateTokenPair(
+        user,
+        req.ip,
+        req.get('user-agent'),
+        false,
+      );
+
+      // Устанавливаем cookies
+      this.setAuthCookies(res, tokenPair, false);
+
+      const csrfToken = this.csrfService.generateCsrfToken();
+      this.setCsrfCookie(res, csrfToken);
+
+      // Логируем вход
+      await this.authService.logAuthAction(
+        user.id,
+        await this.getAuthAction('LOGIN'),
+        req.ip,
+        req.get('user-agent'),
+      );
+
+      this.logger.log(`Успешная авторизация через Telegram Mini App: ${data.id}`);
+
+      return {
+        accessToken: tokenPair.accessToken,
+        token: tokenPair.accessToken, // Для совместимости
+        refreshToken: tokenPair.refreshToken,
+        user: {
+          id: user.id,
+          telegramId: user.telegramId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          bonusPoints: user.bonusPoints,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка авторизации через Telegram Mini App: ${error.message}`);
       throw error;
     }
   }
@@ -525,19 +572,10 @@ export class AuthController {
         req.get('user-agent'),
       );
 
-      // Устанавливаем cookies
-      const tokenPair: TokenPair = {
-        accessToken: result.tokens.accessToken,
-        refreshToken: result.tokens.refreshToken,
-        accessTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
-        refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      };
-      this.setAuthCookies(res, tokenPair, false);
+      // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
+      // Только создаем Telegram сессию для работы с Telegram API
 
-      const csrfToken = this.csrfService.generateCsrfToken();
-      this.setCsrfCookie(res, csrfToken);
-
-      this.logger.log(`Успешная авторизация с 2FA: ${dto.phoneNumber}`);
+      this.logger.log(`Telegram сессия создана с 2FA: ${dto.phoneNumber}`);
 
       return {
         success: true,
@@ -549,10 +587,11 @@ export class AuthController {
           lastName: result.user.lastName,
           username: result.user.username,
         },
-        tokens: result.tokens,
+        tokens: null, // Не возвращаем токены для дашборда
       };
     } catch (error: any) {
-      this.logger.error(`Ошибка проверки 2FA: ${error.message}`);
+      this.logger.error(`Ошибка проверки 2FA: ${error.message}`, error.stack);
+      this.logger.error(`Request data: phoneNumber=${dto.phoneNumber}, phoneCodeHash=${dto.phoneCodeHash}`);
       throw error;
     }
   }

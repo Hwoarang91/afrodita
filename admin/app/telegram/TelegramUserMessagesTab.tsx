@@ -40,31 +40,43 @@ export default function TelegramUserMessagesTab() {
   const queryClient = useQueryClient();
 
   // Получение списка чатов
-  const { data: chatsData, isLoading: isLoadingChats } = useQuery({
+  const { data: chatsData, isLoading: isLoadingChats, error: chatsError } = useQuery({
     queryKey: ['telegram-user-chats'],
     queryFn: async () => {
-      try {
-        const response = await apiClient.get('/telegram/user/chats?type=all');
-        return response.data;
-      } catch (error) {
-        return { chats: [] };
-      }
+      const response = await apiClient.get('/telegram/user/chats?type=all');
+      return response.data;
     },
     retry: false,
+    onError: (error: any) => {
+      if (error.response?.status === 401) {
+        if (error.response?.data?.message?.includes('No active Telegram session')) {
+          // Это нормально - просто нет активной Telegram сессии
+          return;
+        }
+        // Другая ошибка 401 - возможно, не авторизован в админ-панели
+        console.warn('Unauthorized access to Telegram chats. User may need to login to admin panel.');
+      }
+    },
   });
 
   // Получение списка контактов
-  const { data: contactsData, isLoading: isLoadingContacts } = useQuery({
+  const { data: contactsData, isLoading: isLoadingContacts, error: contactsError } = useQuery({
     queryKey: ['telegram-user-contacts'],
     queryFn: async () => {
-      try {
-        const response = await apiClient.get('/telegram/user/contacts');
-        return response.data;
-      } catch (error) {
-        return { contacts: [] };
-      }
+      const response = await apiClient.get('/telegram/user/contacts');
+      return response.data;
     },
     retry: false,
+    onError: (error: any) => {
+      if (error.response?.status === 401) {
+        if (error.response?.data?.message?.includes('No active Telegram session')) {
+          // Это нормально - просто нет активной Telegram сессии
+          return;
+        }
+        // Другая ошибка 401 - возможно, не авторизован в админ-панели
+        console.warn('Unauthorized access to Telegram contacts. User may need to login to admin panel.');
+      }
+    },
   });
 
   // Отправка текстового сообщения
@@ -242,9 +254,22 @@ export default function TelegramUserMessagesTab() {
                   </SelectContent>
                 </Select>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  Нет доступных чатов или контактов. Убедитесь, что вы авторизованы через Telegram.
-                </p>
+                <div className="space-y-2">
+                  {chatsError || contactsError ? (
+                    <p className="text-sm text-destructive">
+                      {chatsError?.response?.status === 401 || contactsError?.response?.status === 401
+                        ? chatsError?.response?.data?.message?.includes('No active Telegram session') ||
+                          contactsError?.response?.data?.message?.includes('No active Telegram session')
+                          ? 'Нет активной Telegram сессии. Пожалуйста, авторизуйтесь через Telegram на вкладке "Авторизация".'
+                          : 'Ошибка авторизации. Пожалуйста, войдите в админ-панель.'
+                        : 'Ошибка загрузки чатов и контактов. Попробуйте обновить страницу.'}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Нет доступных чатов или контактов. Убедитесь, что вы авторизованы через Telegram.
+                    </p>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

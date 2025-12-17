@@ -14,6 +14,13 @@ export class TelegramAuthResponseDto {
   requires2FA?: boolean;
 
   @ApiProperty({
+    description: 'Подсказка для пароля 2FA',
+    example: 'my hint',
+    required: false,
+  })
+  passwordHint?: string;
+
+  @ApiProperty({
     description: 'Данные пользователя',
     required: false,
   })

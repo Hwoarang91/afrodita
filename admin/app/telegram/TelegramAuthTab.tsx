@@ -26,7 +26,9 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
   const [qrTokenId, setQrTokenId] = useState('');
   const [qrUrl, setQrUrl] = useState('');
   const [qrExpiresAt, setQrExpiresAt] = useState<number>(0);
+  const [qrTimeRemaining, setQrTimeRemaining] = useState<number>(0);
   const [qrStatus, setQrStatus] = useState<'pending' | 'accepted' | 'expired'>('pending');
+  const [passwordHint, setPasswordHint] = useState<string>('');
   const [requires2FA, setRequires2FA] = useState(false);
   const [twoFAPassword, setTwoFAPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -55,6 +57,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       setQrTokenId(response.data.tokenId);
       setQrUrl(response.data.qrUrl);
       setQrExpiresAt(response.data.expiresAt);
+      setQrTimeRemaining(response.data.expiresAt ? Math.max(0, response.data.expiresAt - Math.floor(Date.now() / 1000)) : 0);
       setQrStatus('pending');
       toast.success('QR-код сгенерирован');
     } catch (error: any) {
@@ -71,28 +74,55 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
     }
   }, [authMethod, qrTokenId, generateQrCode]);
 
-  // Polling статуса QR-кода
+  // Polling статуса QR-кода и обновление таймера
   useEffect(() => {
     if (authMethod === 'qr' && qrTokenId && qrStatus === 'pending') {
+      // Обновляем таймер каждую секунду
+      const timerInterval = setInterval(() => {
+        if (qrExpiresAt > 0) {
+          const remaining = Math.max(0, qrExpiresAt - Math.floor(Date.now() / 1000));
+          setQrTimeRemaining(remaining);
+          if (remaining === 0 && qrStatus === 'pending') {
+            setQrStatus('expired');
+            toast.error('QR-код истек. Генерируем новый...');
+            generateQrCode();
+          }
+        }
+      }, 1000);
+      
+      // Проверяем статус каждые 2 секунды
       const interval = setInterval(async () => {
         try {
           const response = await apiClient.get(`/auth/telegram/qr/status/${qrTokenId}`);
           const status = response.data.status;
           setQrStatus(status);
+          
+          // Обновляем информацию о времени до истечения
+          if (response.data.timeRemaining !== undefined) {
+            setQrTimeRemaining(response.data.timeRemaining);
+          }
+          if (response.data.expiresAt) {
+            setQrExpiresAt(response.data.expiresAt);
+          }
 
-          if (status === 'accepted' && response.data.user && response.data.tokens) {
+          if (status === 'accepted' && response.data.user) {
             toast.success('Telegram аккаунт успешно подключен!');
             refetchSessions();
             // Сброс формы
             setQrTokenId('');
             setQrUrl('');
             setQrStatus('pending');
+            setQrTimeRemaining(0);
             // Вызываем callback для переключения на таб личных сообщений
             if (onAuthSuccess) {
               onAuthSuccess();
             }
           } else if (status === 'expired') {
             toast.error('QR-код истек. Генерируем новый...');
+            setQrTokenId('');
+            setQrUrl('');
+            setQrStatus('pending');
+            setQrTimeRemaining(0);
             generateQrCode();
           }
         } catch (error: any) {
@@ -100,9 +130,12 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         }
       }, 2000);
 
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+        clearInterval(timerInterval);
+      };
     }
-  }, [authMethod, qrTokenId, qrStatus, generateQrCode, refetchSessions]);
+  }, [authMethod, qrTokenId, qrStatus, qrExpiresAt, generateQrCode, refetchSessions]);
 
   const handleRequestCode = async () => {
     if (!phoneNumber) {
@@ -140,7 +173,8 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
 
       if (response.data.requires2FA) {
         setRequires2FA(true);
-        toast.info('Требуется двухфакторная аутентификация');
+        setPasswordHint(response.data.passwordHint || '');
+        toast.info('Требуется двухфакторная аутентификация' + (response.data.passwordHint ? ` (Подсказка: ${response.data.passwordHint})` : ''));
       } else {
         toast.success('Telegram аккаунт успешно подключен!');
         refetchSessions();
@@ -328,6 +362,11 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="2fa-password">Пароль 2FA</Label>
+                      {passwordHint && (
+                        <p className="text-xs text-muted-foreground mb-1">
+                          Подсказка: {passwordHint}
+                        </p>
+                      )}
                       <PasswordInput
                         id="2fa-password"
                         value={twoFAPassword}
@@ -367,9 +406,16 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                     <div className="text-center space-y-2">
                       <p className="text-sm font-medium">Отсканируйте QR-код в приложении Telegram</p>
                       {qrStatus === 'pending' && (
-                        <p className="text-xs text-muted-foreground">
-                          Ожидание сканирования...
-                        </p>
+                        <>
+                          <p className="text-xs text-muted-foreground">
+                            Ожидание сканирования...
+                          </p>
+                          {qrTimeRemaining > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Осталось времени: {Math.floor(qrTimeRemaining / 60)}:{(qrTimeRemaining % 60).toString().padStart(2, '0')}
+                            </p>
+                          )}
+                        </>
                       )}
                       {qrStatus === 'accepted' && (
                         <p className="text-xs text-green-600">QR-код принят!</p>

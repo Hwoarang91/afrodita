@@ -76,7 +76,8 @@ apiClient.interceptors.response.use(
         // Это может быть связано с отсутствием Telegram сессии, а не с проблемой авторизации
         if (originalRequest?.url?.includes('/telegram/user/') || 
             originalRequest?.url?.includes('/auth/telegram/') ||
-            originalRequest?.url?.includes('/telegram/2fa/')) {
+            originalRequest?.url?.includes('/telegram/2fa/') ||
+            originalRequest?.url?.includes('/auth/telegram/2fa/')) {
           // Просто возвращаем ошибку без редиректа
           return Promise.reject(error);
         }

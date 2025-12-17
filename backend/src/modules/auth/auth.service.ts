@@ -56,6 +56,7 @@ export class AuthService {
       client: Client;
       phoneCodeHash: string;
       expiresAt: Date;
+      passwordHint?: string;
     }
   > = new Map();
 
@@ -390,9 +391,11 @@ export class AuthService {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string }; requires2FA: boolean }> {
+  ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null; requires2FA: boolean }> {
     try {
-      this.logger.debug(`Проверка кода для телефона: ${phoneNumber}`);
+      this.logger.debug(`Проверка кода для телефона: ${phoneNumber}, phoneCodeHash: ${phoneCodeHash}`);
+      this.logger.debug(`Current phoneCodeHashStore size: ${this.phoneCodeHashStore.size}`);
+      this.logger.debug(`Stored phones in phoneCodeHashStore: ${Array.from(this.phoneCodeHashStore.keys()).join(', ')}`);
 
       // Получаем сохраненный клиент и hash
       const stored = this.phoneCodeHashStore.get(phoneNumber);
@@ -426,16 +429,38 @@ export class AuthService {
           throw new UnauthorizedException('Verification code expired');
         }
         if (error.message?.includes('SESSION_PASSWORD_NEEDED')) {
-          // Требуется 2FA - сохраняем клиент и phoneCodeHash для последующей проверки пароля
-          this.twoFactorStore.set(phoneNumber, {
+          // Требуется 2FA - получаем подсказку пароля и сохраняем клиент
+          this.logger.debug(`2FA required for phone: ${phoneNumber}, saving phoneCodeHash: ${phoneCodeHash}`);
+          
+          // Получаем подсказку пароля через account.getPassword
+          let passwordHint: string | undefined;
+          try {
+            const passwordResult = await client.invoke({
+              _: 'account.getPassword',
+            });
+            if (passwordResult._ === 'account.password' && (passwordResult as any).hint) {
+              passwordHint = (passwordResult as any).hint;
+              this.logger.debug(`Password hint retrieved: ${passwordHint}`);
+            }
+          } catch (hintError: any) {
+            this.logger.warn(`Failed to get password hint: ${hintError.message}`);
+          }
+          
+          // Нормализуем номер телефона для хранения
+          const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
+          
+          this.twoFactorStore.set(normalizedPhone, {
             client,
             phoneCodeHash,
             expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 минут
+            passwordHint,
           });
+          this.logger.debug(`2FA session saved for normalized phone: ${normalizedPhone}. Store size: ${this.twoFactorStore.size}, expiresAt: ${new Date(Date.now() + 10 * 60 * 1000).toISOString()}, hint: ${passwordHint || 'none'}`);
           return {
             user: null as any,
             tokens: null as any,
             requires2FA: true,
+            passwordHint,
           };
         }
         throw error;
@@ -494,25 +519,14 @@ export class AuthService {
       // Удаляем временные данные
       this.phoneCodeHashStore.delete(phoneNumber);
 
-      // Генерируем JWT токены
-      const tokenPair = await this.jwtAuthService.generateTokenPair(
-        user,
-        ipAddress,
-        userAgent,
-        false,
-      );
+      // НЕ генерируем JWT токены - авторизация Telegram не должна авторизовывать в дашборде
+      // Только сохраняем Telegram сессию для работы с Telegram API
 
-      // Логируем авторизацию
-      await this.logAuthAction(user.id, AuthAction.LOGIN, ipAddress, userAgent);
-
-      this.logger.log(`User authenticated via phone: ${phoneNumber}`);
+      this.logger.log(`Telegram session created via phone: ${phoneNumber}`);
 
       return {
         user,
-        tokens: {
-          accessToken: tokenPair.accessToken,
-          refreshToken: tokenPair.refreshToken,
-        },
+        tokens: null as any, // Не возвращаем токены для дашборда
         requires2FA: false,
       };
     } catch (error: any) {
@@ -595,22 +609,35 @@ export class AuthService {
   async checkQrTokenStatus(tokenId: string): Promise<{
     status: 'pending' | 'accepted' | 'expired';
     user?: User;
-    tokens?: { accessToken: string; refreshToken: string };
+    tokens?: { accessToken: string; refreshToken: string } | null;
+    expiresAt?: number;
+    timeRemaining?: number;
   }> {
     try {
       const stored = this.qrTokenStore.get(tokenId);
       if (!stored) {
-        return { status: 'expired' };
+        return { 
+          status: 'expired',
+          expiresAt: 0,
+          timeRemaining: 0,
+        };
       }
 
       // Проверяем истечение
-      if (stored.expiresAt < new Date()) {
+      const now = new Date();
+      const timeRemaining = Math.max(0, Math.floor((stored.expiresAt.getTime() - now.getTime()) / 1000));
+      
+      if (stored.expiresAt < now) {
         stored.status = 'expired';
         this.qrTokenStore.delete(tokenId);
         stored.client.disconnect().catch((err) => {
           this.logger.error(`Error disconnecting client: ${err.message}`);
         });
-        return { status: 'expired' };
+        return { 
+          status: 'expired',
+          expiresAt: Math.floor(stored.expiresAt.getTime() / 1000),
+          timeRemaining: 0,
+        };
       }
 
       // Если уже принят, возвращаем данные
@@ -619,6 +646,8 @@ export class AuthService {
           status: 'accepted',
           user: stored.user,
           tokens: stored.tokens,
+          expiresAt: Math.floor(stored.expiresAt.getTime() / 1000),
+          timeRemaining: 0,
         };
       }
 
@@ -686,24 +715,13 @@ export class AuthService {
               normalizedPhone || '',
             );
 
-            // Генерируем JWT токены
-            const tokenPair = await this.jwtAuthService.generateTokenPair(
-              user,
-              undefined,
-              undefined,
-              false,
-            );
+            // НЕ генерируем JWT токены - авторизация Telegram не должна авторизовывать в дашборде
+            // Только сохраняем Telegram сессию для работы с Telegram API
 
             // Обновляем статус токена
             stored.status = 'accepted';
             stored.user = user;
-            stored.tokens = {
-              accessToken: tokenPair.accessToken,
-              refreshToken: tokenPair.refreshToken,
-            };
-
-            // Логируем авторизацию
-            await this.logAuthAction(user.id, AuthAction.LOGIN);
+            stored.tokens = null; // Не возвращаем токены для дашборда
 
             this.logger.log(`QR code accepted for user: ${user.id}`);
 
@@ -711,6 +729,8 @@ export class AuthService {
               status: 'accepted',
               user,
               tokens: stored.tokens,
+              expiresAt: Math.floor(stored.expiresAt.getTime() / 1000),
+              timeRemaining: 0,
             };
           }
         }
@@ -726,13 +746,31 @@ export class AuthService {
           stored.client.disconnect().catch((err) => {
             this.logger.error(`Error disconnecting client: ${err.message}`);
           });
-          return { status: 'expired' };
+          const expiresAt = Math.floor(stored.expiresAt.getTime() / 1000);
+          return { 
+            status: 'expired',
+            expiresAt,
+            timeRemaining: 0,
+          };
         }
         // Токен еще не принят
-        return { status: 'pending' };
+        const now = new Date();
+        const timeRemaining = Math.max(0, Math.floor((stored.expiresAt.getTime() - now.getTime()) / 1000));
+        return { 
+          status: 'pending',
+          expiresAt: Math.floor(stored.expiresAt.getTime() / 1000),
+          timeRemaining,
+        };
       }
 
-      return { status: 'pending' };
+      // Возвращаем статус pending с информацией о времени до истечения
+      const now = new Date();
+      const timeRemaining = Math.max(0, Math.floor((stored.expiresAt.getTime() - now.getTime()) / 1000));
+      return { 
+        status: 'pending',
+        expiresAt: Math.floor(stored.expiresAt.getTime() / 1000),
+        timeRemaining,
+      };
     } catch (error: any) {
       this.logger.error(`Error checking QR token status: ${error.message}`, error.stack);
       return { status: 'expired' };
@@ -764,18 +802,59 @@ export class AuthService {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } }> {
+  ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
-      this.logger.debug(`Проверка 2FA пароля для телефона: ${phoneNumber}`);
+      // Нормализуем номер телефона для поиска в хранилище
+      const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
+      
+      this.logger.debug(`Проверка 2FA пароля для телефона: ${phoneNumber} (normalized: ${normalizedPhone}), phoneCodeHash: ${phoneCodeHash}`);
+      this.logger.debug(`Current twoFactorStore size: ${this.twoFactorStore.size}`);
+      this.logger.debug(`Stored phones: ${Array.from(this.twoFactorStore.keys()).join(', ')}`);
+      this.logger.debug(`Password received length: ${password.length}, first char code: ${password.charCodeAt(0)}`);
 
-      // Получаем сохраненные данные
-      const stored = this.twoFactorStore.get(phoneNumber);
-      if (!stored || stored.phoneCodeHash !== phoneCodeHash) {
-        throw new UnauthorizedException('Invalid phone code hash or expired');
+      // Получаем сохраненные данные по нормализованному номеру
+      const stored = this.twoFactorStore.get(normalizedPhone);
+      if (!stored) {
+        this.logger.error(`2FA session not found for phone: ${normalizedPhone}`);
+        // Пробуем найти по исходному номеру (для обратной совместимости)
+        const altStored = this.twoFactorStore.get(phoneNumber);
+        if (altStored) {
+          this.logger.warn(`Found 2FA session by original phone number, migrating to normalized`);
+          this.twoFactorStore.delete(phoneNumber);
+          this.twoFactorStore.set(normalizedPhone, altStored);
+          // Используем найденную сессию
+          const migrated = this.twoFactorStore.get(normalizedPhone);
+          if (migrated) {
+            return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent);
+          }
+        }
+        throw new UnauthorizedException('2FA session not found. Please restart the authorization process.');
       }
+      
+      if (stored.phoneCodeHash !== phoneCodeHash) {
+        this.logger.error(`Phone code hash mismatch for phone: ${normalizedPhone}. Expected: ${stored.phoneCodeHash}, Received: ${phoneCodeHash}`);
+        throw new UnauthorizedException('Invalid phone code hash. Please restart the authorization process.');
+      }
+      
+      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent);
+    } catch (error: any) {
+      this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  private async verify2FAPasswordWithStored(
+    normalizedPhone: string,
+    password: string,
+    phoneCodeHash: string,
+    stored: { client: Client; phoneCodeHash: string; expiresAt: Date; passwordHint?: string },
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
+    try {
 
       if (stored.expiresAt < new Date()) {
-        this.twoFactorStore.delete(phoneNumber);
+        this.twoFactorStore.delete(normalizedPhone);
         stored.client.disconnect().catch((err) => {
           this.logger.error(`Error disconnecting client: ${err.message}`);
         });
@@ -932,25 +1011,14 @@ export class AuthService {
       // Удаляем временные данные
       this.twoFactorStore.delete(phoneNumber);
 
-      // Генерируем JWT токены
-      const tokenPair = await this.jwtAuthService.generateTokenPair(
-        user,
-        ipAddress,
-        userAgent,
-        false,
-      );
+      // НЕ генерируем JWT токены - авторизация Telegram не должна авторизовывать в дашборде
+      // Только сохраняем Telegram сессию для работы с Telegram API
 
-      // Логируем авторизацию
-      await this.logAuthAction(user.id, AuthAction.LOGIN, ipAddress, userAgent);
-
-      this.logger.log(`User authenticated via 2FA: ${phoneNumber}`);
+      this.logger.log(`Telegram session created via 2FA: ${phoneNumber}`);
 
       return {
         user,
-        tokens: {
-          accessToken: tokenPair.accessToken,
-          refreshToken: tokenPair.refreshToken,
-        },
+        tokens: null as any, // Не возвращаем токены для дашборда
       };
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
