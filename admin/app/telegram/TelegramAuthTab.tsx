@@ -14,7 +14,11 @@ import { Loader2, Smartphone, QrCode, Shield, CheckCircle2, XCircle } from 'luci
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 
-export default function TelegramAuthTab() {
+interface TelegramAuthTabProps {
+  onAuthSuccess?: () => void;
+}
+
+export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps) {
   const [authMethod, setAuthMethod] = useState<'phone' | 'qr'>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [code, setCode] = useState('');
