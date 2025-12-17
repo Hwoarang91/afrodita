@@ -314,11 +314,16 @@ export class AuthService {
       }
 
       // Получаем API credentials
-      const apiId = this.configService.get<number>('TELEGRAM_API_ID');
+      const apiIdStr = this.configService.get<string>('TELEGRAM_API_ID');
       const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
 
-      if (!apiId || !apiHash) {
+      if (!apiIdStr || !apiHash) {
         throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in environment variables');
+      }
+
+      const apiId = parseInt(apiIdStr, 10);
+      if (isNaN(apiId)) {
+        throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
       // Создаем клиент для авторизации
@@ -521,11 +526,16 @@ export class AuthService {
       this.logger.debug('Генерация QR-кода для авторизации');
 
       // Получаем API credentials
-      const apiId = this.configService.get<number>('TELEGRAM_API_ID');
+      const apiIdStr = this.configService.get<string>('TELEGRAM_API_ID');
       const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
 
-      if (!apiId || !apiHash) {
+      if (!apiIdStr || !apiHash) {
         throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in environment variables');
+      }
+
+      const apiId = parseInt(apiIdStr, 10);
+      if (isNaN(apiId)) {
+        throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
       // Создаем клиент для авторизации
