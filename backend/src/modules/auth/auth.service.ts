@@ -340,8 +340,6 @@ export class AuthService {
         phone_number: phoneNumber,
         settings: {
           _: 'codeSettings',
-          allow_flashcall: false as const,
-          current_number: false as const,
         },
       } as any);
 
