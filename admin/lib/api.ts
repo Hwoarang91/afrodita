@@ -100,6 +100,10 @@ apiClient.interceptors.response.use(
             throw new Error('Refresh failed');
           }
         } catch (refreshError) {
+          // Для Telegram эндпоинтов не делаем редирект на логин при ошибках
+          if (originalRequest?.url?.includes('/auth/telegram/')) {
+            return Promise.reject(error);
+          }
           // Очищаем локальное состояние
           localStorage.removeItem('admin-token');
           sessionStorage.removeItem('admin-token');
@@ -108,6 +112,13 @@ apiClient.interceptors.response.use(
           window.location.href = '/login';
           return Promise.reject(error);
         }
+      }
+
+      // Обработка других ошибок (не 401)
+      // Для Telegram эндпоинтов не делаем редирект при любых ошибках
+      if (error.config?.url?.includes('/auth/telegram/')) {
+        // Просто возвращаем ошибку без редиректа
+        return Promise.reject(error);
       }
 
       // Обработка сетевых ошибок
