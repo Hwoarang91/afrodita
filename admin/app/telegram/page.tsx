@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import MessageTypeSelector from './MessageTypeSelector';
@@ -46,14 +46,20 @@ interface TelegramChat {
   chatInfo?: any;
 }
 
-function TelegramPageContent() {
+export default function TelegramPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const tabParam = searchParams?.get('tab');
   
   // Главные табы: Бот, Авторизация, Личные сообщения
-  const [mainTab, setMainTab] = useState<'bot' | 'auth' | 'user'>(
-    (tabParam === 'auth' || tabParam === 'user') ? tabParam : 'bot'
-  );
+  const [mainTab, setMainTab] = useState<'bot' | 'auth' | 'user'>('bot');
+  
+  // Читаем параметр tab из URL при монтировании
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab');
+    if (tabParam === 'auth' || tabParam === 'user') {
+      setMainTab(tabParam);
+    }
+  }, [searchParams]);
   // Подтабы для раздела "Бот"
   const [botSubTab, setBotSubTab] = useState<'send' | 'manage' | 'chats' | 'members' | 'scheduled' | 'settings'>('chats');
   const [welcomeMessage, setWelcomeMessage] = useState('');
