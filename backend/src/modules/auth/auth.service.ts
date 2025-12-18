@@ -216,12 +216,17 @@ export class AuthService {
         return false;
       }
 
-      // Создаем копию данных без hash для проверки
-      const { hash, ...userData } = data;
+      // Создаем копию данных без hash и photo_url для проверки
+      // photo_url НЕ включается в data_check_string по документации Telegram
+      const { hash, photo_url, ...userData } = data;
       
       // Преобразуем id в строку, если это число (Telegram может отправлять как число)
-      if (userData.id && typeof userData.id === 'number') {
-        userData.id = userData.id.toString();
+      if (userData.id !== undefined && userData.id !== null) {
+        if (typeof userData.id === 'number') {
+          userData.id = userData.id.toString();
+        } else if (typeof userData.id !== 'string') {
+          userData.id = String(userData.id);
+        }
       }
 
       // Создаем строку для проверки: сортируем ключи и формируем строку
