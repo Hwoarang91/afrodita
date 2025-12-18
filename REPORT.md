@@ -88,6 +88,24 @@ docker rm n8n
 
 ### Изменения
 
+✅ **Настройка nginx для домена realmary.ru и исправление API URL Telegram WebApp (17.12.2025):**
+- Настроен nginx для работы с доменом `realmary.ru` и `www.realmary.ru`
+- Отключена автоматическая генерация самоподписанных SSL сертификатов в docker-entrypoint.sh
+- Добавлено монтирование папки `ssl` с реальными SSL сертификатами в контейнер nginx
+- Обновлены пути к SSL сертификатам в nginx.conf: `certificate.crt`, `certificate.key`, `certificate_ca.crt`
+- Исправлена директива `http2` в nginx.conf (убрана из `listen`, добавлена отдельная директива)
+- Исправлен API URL в Telegram WebApp: заменен `http://localhost:3001/api/v1` на относительный путь `/api/v1`
+- Обновлен `.gitignore` для защиты SSL файлов от попадания в Git
+- Пересобран и перезапущен контейнер app с новым API URL
+- Все контейнеры работают корректно, SSL сертификаты применяются
+
+**Файлы изменены:**
+- `infrastructure/nginx/docker-entrypoint.sh` - отключена автогенерация сертификатов
+- `infrastructure/nginx/nginx.conf` - обновлен домен, пути к сертификатам, директива http2
+- `docker-compose.yml` - добавлено монтирование папки ssl
+- `apps/telegram/src/shared/api/client.ts` - изменен дефолтный API URL на `/api/v1`
+- `.gitignore` - добавлены правила для защиты SSL файлов
+
 ✅ **Деплой на сервер (17.12.2025):**
 - Код обновлен на сервере через git pull
 - Контейнеры backend и admin пересобраны без кеша (docker compose build --no-cache)

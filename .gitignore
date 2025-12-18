@@ -208,8 +208,11 @@ dist/
 *.key
 *.cert
 *.crt
+*.csr
 secrets/
 .secrets/
+ssl/
+ssl/**
 
 # ==========================================
 # Scripts and utilities

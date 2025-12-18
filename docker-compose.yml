@@ -140,6 +140,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
     environment:
       SERVER_IP: ${SERVER_IP:-localhost}
       TZ: Europe/Moscow

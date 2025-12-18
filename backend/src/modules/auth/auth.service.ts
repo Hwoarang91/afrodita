@@ -23,6 +23,7 @@ export interface TelegramAuthData {
   user?: string; // Оригинальная JSON строка из initData (для валидации hash)
   query_id?: string; // query_id из initData (если есть)
   signature?: string; // signature из initData (Bot API 8.0+, не включается в data_check_string)
+  initData?: string; // Оригинальная initData строка для валидации (альтернативный способ)
 }
 
 export interface JwtPayload {
@@ -219,56 +220,95 @@ export class AuthService {
         return false;
       }
 
-      // Создаем копию данных без hash, photo_url и signature для проверки
-      // photo_url и signature НЕ включаются в data_check_string по документации Telegram (Bot API 8.0+)
-      const { hash, photo_url, signature, ...userData } = data;
-      
-      // ВАЖНО: если есть параметр 'user' (оригинальная JSON строка из initData),
-      // используем его вместо распарсенных полей first_name, last_name, username
-      // Telegram формирует hash на основе оригинального параметра 'user', а не распарсенных полей
-      // ВАЖНО: по документации Telegram, photo_url НЕ включается в data_check_string на уровне параметров,
-      // но внутри JSON строки user он может быть. Попробуем использовать оригинальную строку как есть.
-      if ((userData as any).user) {
-        // Используем оригинальный параметр user как строку БЕЗ изменений
-        // Telegram формирует hash на основе оригинальной JSON строки user из initData
-        const originalUserStr = (userData as any).user;
-        console.log(`[TELEGRAM AUTH] Using original user string (length: ${originalUserStr.length}): ${originalUserStr.substring(0, 150)}...`);
-        this.logger.log(`[TELEGRAM AUTH] Using original user string (length: ${originalUserStr.length})`);
+      let dataCheckString: string;
+
+      // ВАЖНО: если есть оригинальная initData строка, используем её для формирования data_check_string
+      // Это самый надежный способ, так как гарантирует использование оригинальных URL-encoded значений
+      if (data.initData) {
+        console.log(`[TELEGRAM AUTH] Using raw initData string for validation`);
+        this.logger.log(`[TELEGRAM AUTH] Using raw initData string for validation`);
         
-        // НЕ изменяем user - используем как есть
-        // (userData as any).user остается оригинальной строкой
-        // Удаляем распарсенные поля, которые не должны быть в data_check_string
-        delete (userData as any).first_name;
-        delete (userData as any).last_name;
-        delete (userData as any).username;
-        delete (userData as any).id; // id тоже не нужен, так как он внутри user
+        // Парсим initData строку и формируем data_check_string из оригинальных значений
+        const urlParams = new URLSearchParams(data.initData);
+        const hash = urlParams.get('hash');
+        urlParams.delete('hash');
+        urlParams.delete('signature'); // signature не включается в data_check_string
+        
+        // Формируем data_check_string из всех параметров, отсортированных по алфавиту
+        dataCheckString = Array.from(urlParams.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .filter(([_, value]) => value !== null && value !== undefined && value !== '')
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\n');
       } else {
-        // Если нет параметра 'user', используем распарсенные поля
-        // Преобразуем id в строку, если это число (Telegram может отправлять как число)
-        if (userData.id !== undefined && userData.id !== null) {
-          if (typeof userData.id === 'number') {
-            (userData as any).id = (userData.id as number).toString();
-          } else if (typeof userData.id !== 'string') {
-            (userData as any).id = String(userData.id);
+        // Fallback: используем распарсенные данные (менее надежно, так как Express может декодировать URL-encoded значения)
+        // Создаем копию данных без hash, photo_url и signature для проверки
+        // photo_url и signature НЕ включаются в data_check_string по документации Telegram (Bot API 8.0+)
+        const { hash, photo_url, signature, ...userData } = data;
+        
+        console.log(`[TELEGRAM AUTH] After destructuring - userData keys:`, Object.keys(userData));
+        console.log(`[TELEGRAM AUTH] userData.user:`, (userData as any).user ? `${(userData as any).user.substring(0, 100)}...` : 'undefined');
+        console.log(`[TELEGRAM AUTH] userData.query_id:`, (userData as any).query_id);
+        console.log(`[TELEGRAM AUTH] userData.auth_date:`, (userData as any).auth_date);
+        this.logger.log(`[TELEGRAM AUTH] After destructuring - userData keys: ${Object.keys(userData).join(', ')}`);
+        
+        // ВАЖНО: если есть параметр 'user' (оригинальная JSON строка из initData),
+        // используем его вместо распарсенных полей first_name, last_name, username
+        // Telegram формирует hash на основе оригинального параметра 'user', а не распарсенных полей
+        if ((userData as any).user) {
+          // Используем оригинальный параметр user как строку БЕЗ изменений
+          // Telegram формирует hash на основе оригинальной JSON строки user из initData
+          const originalUserStr = (userData as any).user;
+          console.log(`[TELEGRAM AUTH] Using original user string (length: ${originalUserStr.length}): ${originalUserStr.substring(0, 150)}...`);
+          console.log(`[TELEGRAM AUTH] user string type: ${typeof originalUserStr}, is URL encoded: ${originalUserStr.includes('%')}`);
+          this.logger.log(`[TELEGRAM AUTH] Using original user string (length: ${originalUserStr.length})`);
+          
+          // НЕ изменяем user - используем как есть
+          // (userData as any).user остается оригинальной строкой
+          // Удаляем распарсенные поля, которые не должны быть в data_check_string
+          delete (userData as any).first_name;
+          delete (userData as any).last_name;
+          delete (userData as any).username;
+          delete (userData as any).id; // id тоже не нужен, так как он внутри user
+        } else {
+          // Если нет параметра 'user', используем распарсенные поля
+          // Преобразуем id в строку, если это число (Telegram может отправлять как число)
+          if (userData.id !== undefined && userData.id !== null) {
+            if (typeof userData.id === 'number') {
+              (userData as any).id = (userData.id as number).toString();
+            } else if (typeof userData.id !== 'string') {
+              (userData as any).id = String(userData.id);
+            }
           }
         }
-      }
 
-      // Создаем строку для проверки: сортируем ключи и формируем строку
-      // ВАЖНО: пустые строки тоже должны быть исключены
-      const dataCheckString = Object.keys(userData)
-        .sort()
-        .filter(key => {
-          const value = userData[key];
-          return value !== undefined && value !== null && value !== '';
-        })
-        .map((key) => `${key}=${userData[key]}`)
-        .join('\n');
+        // Создаем строку для проверки: сортируем ключи и формируем строку
+        // ВАЖНО: пустые строки тоже должны быть исключены
+        dataCheckString = Object.keys(userData)
+          .sort()
+          .filter(key => {
+            const value = userData[key];
+            return value !== undefined && value !== null && value !== '';
+          })
+          .map((key) => {
+            const value = userData[key];
+            // Для числовых значений преобразуем в строку
+            if (typeof value === 'number') {
+              return `${key}=${value}`;
+            }
+            // Для строк используем как есть (уже должны быть в правильном формате)
+            return `${key}=${value}`;
+          })
+          .join('\n');
+      }
 
       console.log(`[TELEGRAM AUTH] Telegram auth dataCheckString:`, dataCheckString);
       console.log(`[TELEGRAM AUTH] Telegram auth received hash:`, hash);
+      console.log(`[TELEGRAM AUTH] userData keys:`, Object.keys(userData).sort());
+      console.log(`[TELEGRAM AUTH] userData values:`, Object.keys(userData).sort().map(key => `${key}=${typeof userData[key] === 'string' ? userData[key].substring(0, 50) + '...' : userData[key]}`));
       this.logger.log(`[TELEGRAM AUTH] Telegram auth dataCheckString: ${dataCheckString}`);
       this.logger.log(`[TELEGRAM AUTH] Telegram auth received hash: ${hash}`);
+      this.logger.log(`[TELEGRAM AUTH] userData keys: ${Object.keys(userData).sort().join(', ')}`);
 
       // Вычисляем секретный ключ из bot token
       // ВАЖНО: по документации Telegram secret_key = HMAC_SHA256(bot_token, "WebAppData")

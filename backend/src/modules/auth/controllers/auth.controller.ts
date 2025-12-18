@@ -341,6 +341,71 @@ export class AuthController {
     res.clearCookie('csrf_token', { path: '/' });
   }
 
+  @Post('telegram')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Авторизация через Telegram Mini App' })
+  @ApiResponse({
+    status: 200,
+    description: 'Успешная авторизация через Telegram Mini App',
+  })
+  @ApiResponse({ status: 401, description: 'Неверные данные авторизации' })
+  async telegramAuth(
+    @Body() data: TelegramAuthData,
+    @Request() req,
+    @Response({ passthrough: true }) res: ExpressResponse,
+  ) {
+    console.log(`[TELEGRAM AUTH] Telegram Mini App авторизация: ${data.id}`);
+    console.log(`[TELEGRAM AUTH] Полученные данные:`, JSON.stringify({ ...data, hash: data.hash ? `${data.hash.substring(0, 20)}...` : 'empty' }, null, 2));
+    this.logger.log(`[TELEGRAM AUTH] Telegram Mini App авторизация: ${data.id}`);
+    this.logger.log(`[TELEGRAM AUTH] Полученные данные: ${JSON.stringify({ ...data, hash: data.hash ? `${data.hash.substring(0, 20)}...` : 'empty' })}`);
+    try {
+      const user = await this.authService.validateTelegramAuth(data);
+      
+      // Генерируем JWT токены для авторизации в приложении
+      const tokenPair = await this.jwtService.generateTokenPair(
+        user,
+        req.ip,
+        req.get('user-agent'),
+        false,
+      );
+
+      // Устанавливаем cookies
+      this.setAuthCookies(res, tokenPair, false);
+
+      const csrfToken = this.csrfService.generateCsrfToken();
+      this.setCsrfCookie(res, csrfToken);
+
+      // Логируем вход
+      await this.authService.logAuthAction(
+        user.id,
+        await this.getAuthAction('LOGIN'),
+        req.ip,
+        req.get('user-agent'),
+      );
+
+      this.logger.log(`Успешная авторизация через Telegram Mini App: ${data.id}`);
+
+      return {
+        accessToken: tokenPair.accessToken,
+        token: tokenPair.accessToken, // Для совместимости
+        refreshToken: tokenPair.refreshToken,
+        user: {
+          id: user.id,
+          telegramId: user.telegramId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          bonusPoints: user.bonusPoints,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка авторизации через Telegram Mini App: ${error.message}`);
+      throw error;
+    }
+  }
+
   @Post('telegram/phone/request')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Запрос кода подтверждения для авторизации по номеру телефона' })
@@ -482,68 +547,6 @@ export class AuthController {
       };
     } catch (error: any) {
       this.logger.error(`Ошибка проверки статуса QR токена: ${error.message}`);
-      throw error;
-    }
-  }
-
-  @Post('telegram')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Авторизация через Telegram Mini App' })
-  @ApiResponse({
-    status: 200,
-    description: 'Успешная авторизация через Telegram Mini App',
-  })
-  @ApiResponse({ status: 401, description: 'Неверные данные авторизации' })
-  async telegramAuth(
-    @Body() data: TelegramAuthData,
-    @Request() req,
-    @Response({ passthrough: true }) res: ExpressResponse,
-  ) {
-    this.logger.debug(`Telegram Mini App авторизация: ${data.id}`);
-    try {
-      const user = await this.authService.validateTelegramAuth(data);
-      
-      // Генерируем JWT токены для авторизации в приложении
-      const tokenPair = await this.jwtService.generateTokenPair(
-        user,
-        req.ip,
-        req.get('user-agent'),
-        false,
-      );
-
-      // Устанавливаем cookies
-      this.setAuthCookies(res, tokenPair, false);
-
-      const csrfToken = this.csrfService.generateCsrfToken();
-      this.setCsrfCookie(res, csrfToken);
-
-      // Логируем вход
-      await this.authService.logAuthAction(
-        user.id,
-        await this.getAuthAction('LOGIN'),
-        req.ip,
-        req.get('user-agent'),
-      );
-
-      this.logger.log(`Успешная авторизация через Telegram Mini App: ${data.id}`);
-
-      return {
-        accessToken: tokenPair.accessToken,
-        token: tokenPair.accessToken, // Для совместимости
-        refreshToken: tokenPair.refreshToken,
-        user: {
-          id: user.id,
-          telegramId: user.telegramId,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          username: user.username,
-          email: user.email,
-          role: user.role,
-          bonusPoints: user.bonusPoints,
-        },
-      };
-    } catch (error: any) {
-      this.logger.error(`Ошибка авторизации через Telegram Mini App: ${error.message}`);
       throw error;
     }
   }

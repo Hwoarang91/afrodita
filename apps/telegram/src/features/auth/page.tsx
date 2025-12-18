@@ -139,13 +139,19 @@ export default function Auth() {
         throw new Error('Invalid Telegram authentication data: user id is missing');
       }
       
-      // Исключаем photo_url из данных перед отправкой
-      // photo_url не включается в data_check_string по документации Telegram
-      // ВАЖНО: если есть параметр 'user' (оригинальная JSON строка), исключаем распарсенные поля
-      // Telegram формирует hash на основе оригинального параметра 'user', а не распарсенных полей
+      // ВАЖНО: отправляем оригинальную initData строку для надежной валидации на backend
+      // Это гарантирует, что data_check_string будет сформирован из оригинальных URL-encoded значений
       let dataToSend: any;
-      if (authData.user) {
-        // Используем оригинальный параметр user - исключаем распарсенные поля
+      if (webApp.initData) {
+        // Отправляем оригинальную initData строку + распарсенные данные для удобства
+        dataToSend = {
+          ...authData,
+          initData: webApp.initData, // Оригинальная initData строка для валидации
+        };
+        // Исключаем photo_url из распарсенных данных (он не нужен, так как есть в initData)
+        delete dataToSend.photo_url;
+      } else if (authData.user) {
+        // Fallback: используем оригинальный параметр user - исключаем распарсенные поля
         const { photo_url, first_name, last_name, username, id, ...rest } = authData;
         dataToSend = rest; // rest содержит: hash, auth_date, query_id, user
       } else {
@@ -155,6 +161,8 @@ export default function Auth() {
       }
       
       console.log('Sending Telegram auth data:', {
+        hasInitData: !!dataToSend.initData,
+        initDataLength: dataToSend.initData?.length || 0,
         id: dataToSend.id,
         first_name: dataToSend.first_name,
         last_name: dataToSend.last_name,
