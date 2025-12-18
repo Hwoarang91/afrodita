@@ -303,12 +303,9 @@ export class AuthService {
       }
 
       console.log(`[TELEGRAM AUTH] Telegram auth dataCheckString:`, dataCheckString);
-      console.log(`[TELEGRAM AUTH] Telegram auth received hash:`, hash);
-      console.log(`[TELEGRAM AUTH] userData keys:`, Object.keys(userData).sort());
-      console.log(`[TELEGRAM AUTH] userData values:`, Object.keys(userData).sort().map(key => `${key}=${typeof userData[key] === 'string' ? userData[key].substring(0, 50) + '...' : userData[key]}`));
+      console.log(`[TELEGRAM AUTH] Telegram auth received hash:`, data.hash);
       this.logger.log(`[TELEGRAM AUTH] Telegram auth dataCheckString: ${dataCheckString}`);
-      this.logger.log(`[TELEGRAM AUTH] Telegram auth received hash: ${hash}`);
-      this.logger.log(`[TELEGRAM AUTH] userData keys: ${Object.keys(userData).sort().join(', ')}`);
+      this.logger.log(`[TELEGRAM AUTH] Telegram auth received hash: ${data.hash}`);
 
       // Вычисляем секретный ключ из bot token
       // ВАЖНО: по документации Telegram secret_key = HMAC_SHA256(bot_token, "WebAppData")
