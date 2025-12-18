@@ -262,9 +262,14 @@ export class AuthService {
       this.logger.log(`[TELEGRAM AUTH] Telegram auth received hash: ${hash}`);
 
       // Вычисляем секретный ключ из bot token
-      const secretKey = crypto.createHash('sha256').update(botToken).digest();
+      // ВАЖНО: по документации Telegram secret_key = HMAC_SHA256(bot_token, "WebAppData")
+      // НЕ просто SHA-256 от bot_token!
+      const secretKey = crypto
+        .createHmac('sha256', 'WebAppData')
+        .update(botToken)
+        .digest();
       
-      // Вычисляем хеш
+      // Вычисляем хеш: HMAC-SHA-256 от data_check_string с секретным ключом
       const calculatedHash = crypto
         .createHmac('sha256', secretKey)
         .update(dataCheckString)
