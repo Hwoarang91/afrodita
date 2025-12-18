@@ -216,9 +216,9 @@ export class AuthService {
         return false;
       }
 
-      // Создаем копию данных без hash и photo_url для проверки
-      // photo_url НЕ включается в data_check_string по документации Telegram
-      const { hash, photo_url, ...userData } = data;
+      // Создаем копию данных без hash, photo_url и signature для проверки
+      // photo_url и signature НЕ включаются в data_check_string по документации Telegram (Bot API 8.0+)
+      const { hash, photo_url, signature, ...userData } = data;
       
       // Преобразуем id в строку, если это число (Telegram может отправлять как число)
       if (userData.id !== undefined && userData.id !== null) {

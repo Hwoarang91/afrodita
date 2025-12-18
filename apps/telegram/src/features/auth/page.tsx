@@ -64,8 +64,9 @@ export default function Auth() {
           result.auth_date = Math.floor(Date.now() / 1000);
         }
         
-        // НЕ добавляем другие параметры - только те, что нужны для валидации
+        // НЕ добавляем signature и другие параметры - только те, что нужны для валидации
         // Telegram требует строго определенный набор полей для проверки hash
+        // signature (Bot API 8.0+) НЕ включается в data_check_string
         
         return result;
       };
