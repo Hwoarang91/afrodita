@@ -324,10 +324,10 @@ export class AuthService {
       console.log(`[TELEGRAM AUTH] Telegram auth calculated hash:`, calculatedHash);
       this.logger.log(`[TELEGRAM AUTH] Telegram auth calculated hash: ${calculatedHash}`);
 
-      const isValid = calculatedHash === hash;
+      const isValid = calculatedHash === data.hash;
       
       if (!isValid) {
-        this.logger.warn(`Telegram auth hash mismatch. Received: ${hash}, Calculated: ${calculatedHash}`);
+        this.logger.warn(`Telegram auth hash mismatch. Received: ${data.hash}, Calculated: ${calculatedHash}`);
       }
 
       return isValid;
