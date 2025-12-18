@@ -240,8 +240,8 @@ export class AuthService {
           const value = valueParts.join('='); // Восстанавливаем значение, если в нем был '='
 
           // Пропускаем hash - он не включается в data_check_string
-          // signature НЕ включается в data_check_string в Bot API 8.0+
-          if (key === 'hash' || key === 'signature') {
+          // signature ВКЛЮЧАЕТСЯ в data_check_string в Bot API 8.0+
+          if (key === 'hash') {
             continue;
           }
 
