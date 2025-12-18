@@ -215,8 +215,9 @@ export class AuthService {
         return false;
       }
 
-      if (!data.hash) {
-        this.logger.error('Hash отсутствует в данных Telegram');
+      // Для Bot API 8.0+ проверяем signature вместо hash
+      if (!data.hash && !data.signature) {
+        this.logger.error('Hash и signature отсутствуют в данных Telegram');
         return false;
       }
 
@@ -328,8 +329,10 @@ export class AuthService {
 
       console.log(`[TELEGRAM AUTH] Telegram auth dataCheckString:`, dataCheckString);
       console.log(`[TELEGRAM AUTH] Telegram auth received hash:`, data.hash);
+      console.log(`[TELEGRAM AUTH] Telegram auth received signature:`, data.signature);
       this.logger.log(`[TELEGRAM AUTH] Telegram auth dataCheckString: ${dataCheckString}`);
       this.logger.log(`[TELEGRAM AUTH] Telegram auth received hash: ${data.hash}`);
+      this.logger.log(`[TELEGRAM AUTH] Telegram auth received signature: ${data.signature}`);
 
       // Вычисляем секретный ключ из bot token
       // ВАЖНО: по документации Telegram secret_key = HMAC_SHA256(bot_token, "WebAppData")
@@ -338,7 +341,7 @@ export class AuthService {
         .createHmac('sha256', 'WebAppData')
         .update(botToken)
         .digest();
-      
+
       // Вычисляем хеш: HMAC-SHA-256 от data_check_string с секретным ключом
       const calculatedHash = crypto
         .createHmac('sha256', secretKey)
@@ -348,7 +351,9 @@ export class AuthService {
       console.log(`[TELEGRAM AUTH] Telegram auth calculated hash:`, calculatedHash);
       this.logger.log(`[TELEGRAM AUTH] Telegram auth calculated hash: ${calculatedHash}`);
 
-      const isValid = calculatedHash === data.hash;
+      // Для Bot API 8.0+ проверяем signature вместо hash
+      const hashToCheck = data.signature || data.hash;
+      const isValid = calculatedHash === hashToCheck;
       
       if (!isValid) {
         this.logger.warn(`Telegram auth hash mismatch. Received: ${data.hash}, Calculated: ${calculatedHash}`);
