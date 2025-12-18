@@ -259,6 +259,9 @@ export class AuthService {
         dataCheckString = params
           .map(([key, value]) => `${key}=${value}`)
           .join('\n');
+
+        console.log(`[TELEGRAM AUTH] Full dataCheckString:`, JSON.stringify(dataCheckString));
+        this.logger.log(`[TELEGRAM AUTH] Full dataCheckString: ${JSON.stringify(dataCheckString)}`);
         
         console.log(`[TELEGRAM AUTH] Parsed params count: ${params.length}`);
         console.log(`[TELEGRAM AUTH] Params keys: ${params.map(([key]) => key).join(', ')}`);
