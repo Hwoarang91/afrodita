@@ -352,8 +352,26 @@ export class AuthService {
       this.logger.log(`[TELEGRAM AUTH] Telegram auth calculated hash: ${calculatedHash}`);
 
       // Для Bot API 8.0+ проверяем signature вместо hash
-      const hashToCheck = data.signature || data.hash;
-      const isValid = calculatedHash === hashToCheck;
+      // signature может быть HMAC-SHA256 от hash с другим ключом
+      let isValid = false;
+
+      if (data.signature) {
+        // Проверяем, является ли signature HMAC-SHA256 от calculatedHash
+        const signatureCheck = crypto
+          .createHmac('sha256', data.hash || '')
+          .update(calculatedHash)
+          .digest('base64url');
+
+        console.log(`[TELEGRAM AUTH] Checking signature: ${data.signature}`);
+        console.log(`[TELEGRAM AUTH] Calculated signature check: ${signatureCheck}`);
+        this.logger.log(`[TELEGRAM AUTH] Checking signature: ${data.signature}`);
+        this.logger.log(`[TELEGRAM AUTH] Calculated signature check: ${signatureCheck}`);
+
+        isValid = signatureCheck === data.signature;
+      } else {
+        // Fallback: проверяем hash как раньше
+        isValid = calculatedHash === data.hash;
+      }
       
       if (!isValid) {
         this.logger.warn(`Telegram auth hash mismatch. Received: ${data.hash}, Calculated: ${calculatedHash}`);
