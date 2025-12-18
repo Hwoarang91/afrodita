@@ -141,7 +141,18 @@ export default function Auth() {
       
       // Исключаем photo_url из данных перед отправкой
       // photo_url не включается в data_check_string по документации Telegram
-      const { photo_url, ...dataToSend } = authData;
+      // ВАЖНО: если есть параметр 'user' (оригинальная JSON строка), исключаем распарсенные поля
+      // Telegram формирует hash на основе оригинального параметра 'user', а не распарсенных полей
+      let dataToSend: any;
+      if (authData.user) {
+        // Используем оригинальный параметр user - исключаем распарсенные поля
+        const { photo_url, first_name, last_name, username, id, ...rest } = authData;
+        dataToSend = rest; // rest содержит: hash, auth_date, query_id, user
+      } else {
+        // Если нет параметра 'user', используем распарсенные поля
+        const { photo_url, ...rest } = authData;
+        dataToSend = rest;
+      }
       
       console.log('Sending Telegram auth data:', {
         id: dataToSend.id,

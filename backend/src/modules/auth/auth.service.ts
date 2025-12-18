@@ -20,6 +20,9 @@ export interface TelegramAuthData {
   phone?: string;
   auth_date: number;
   hash: string;
+  user?: string; // Оригинальная JSON строка из initData (для валидации hash)
+  query_id?: string; // query_id из initData (если есть)
+  signature?: string; // signature из initData (Bot API 8.0+, не включается в data_check_string)
 }
 
 export interface JwtPayload {
@@ -220,19 +223,36 @@ export class AuthService {
       // photo_url и signature НЕ включаются в data_check_string по документации Telegram (Bot API 8.0+)
       const { hash, photo_url, signature, ...userData } = data;
       
-      // Преобразуем id в строку, если это число (Telegram может отправлять как число)
-      if (userData.id !== undefined && userData.id !== null) {
-        if (typeof userData.id === 'number') {
-          userData.id = userData.id.toString();
-        } else if (typeof userData.id !== 'string') {
-          userData.id = String(userData.id);
+      // ВАЖНО: если есть параметр 'user' (оригинальная JSON строка из initData),
+      // используем его вместо распарсенных полей first_name, last_name, username
+      // Telegram формирует hash на основе оригинального параметра 'user', а не распарсенных полей
+      if ((userData as any).user) {
+        // Используем оригинальный параметр user как строку
+        // Удаляем распарсенные поля, которые не должны быть в data_check_string
+        delete (userData as any).first_name;
+        delete (userData as any).last_name;
+        delete (userData as any).username;
+        delete (userData as any).id; // id тоже не нужен, так как он внутри user
+      } else {
+        // Если нет параметра 'user', используем распарсенные поля
+        // Преобразуем id в строку, если это число (Telegram может отправлять как число)
+        if (userData.id !== undefined && userData.id !== null) {
+          if (typeof userData.id === 'number') {
+            (userData as any).id = (userData.id as number).toString();
+          } else if (typeof userData.id !== 'string') {
+            (userData as any).id = String(userData.id);
+          }
         }
       }
 
       // Создаем строку для проверки: сортируем ключи и формируем строку
+      // ВАЖНО: пустые строки тоже должны быть исключены
       const dataCheckString = Object.keys(userData)
         .sort()
-        .filter(key => userData[key] !== undefined && userData[key] !== null)
+        .filter(key => {
+          const value = userData[key];
+          return value !== undefined && value !== null && value !== '';
+        })
         .map((key) => `${key}=${userData[key]}`)
         .join('\n');
 
