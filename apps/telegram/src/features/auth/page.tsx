@@ -20,14 +20,117 @@ export default function Auth() {
     if (!webApp || !tgUser) return;
     
     try {
-      const authData = {
-        id: tgUser.id.toString(),
-        first_name: tgUser.first_name,
-        last_name: tgUser.last_name,
-        username: tgUser.username,
-        auth_date: Math.floor(Date.now() / 1000),
-        hash: webApp.initData,
+      // Парсим initData из Telegram WebApp
+      // initData имеет формат: "query_id=...&user=...&auth_date=...&hash=..."
+      const parseInitData = (initData: string) => {
+        // Проверяем, что initData не является уже объектом
+        if (typeof initData === 'object') {
+          console.warn('initData is already an object, using as is');
+          return initData;
+        }
+        
+        const params = new URLSearchParams(initData);
+        const result: any = {};
+        
+        // Извлекаем hash отдельно - это критически важно!
+        const hashValue = params.get('hash');
+        if (hashValue) {
+          result.hash = hashValue;
+        } else {
+          console.error('Hash not found in initData!');
+          result.hash = '';
+        }
+        
+        // Парсим user объект (JSON строка)
+        const userStr = params.get('user');
+        if (userStr) {
+          try {
+            const user = JSON.parse(decodeURIComponent(userStr));
+            result.id = user.id?.toString() || '';
+            result.first_name = user.first_name || '';
+            result.last_name = user.last_name || '';
+            result.username = user.username || '';
+            result.photo_url = user.photo_url || '';
+          } catch (e) {
+            console.error('Error parsing user data:', e);
+          }
+        }
+        
+        // Извлекаем auth_date
+        const authDateStr = params.get('auth_date');
+        if (authDateStr) {
+          result.auth_date = parseInt(authDateStr, 10);
+        } else {
+          result.auth_date = Math.floor(Date.now() / 1000);
+        }
+        
+        // НЕ добавляем другие параметры - только те, что нужны для валидации
+        // Telegram требует строго определенный набор полей для проверки hash
+        
+        return result;
       };
+
+      // Логируем доступные данные для диагностики
+      console.log('Telegram WebApp data:', {
+        hasInitData: !!webApp.initData,
+        initDataLength: webApp.initData?.length || 0,
+        initDataPreview: webApp.initData ? webApp.initData.substring(0, 100) + '...' : 'empty',
+        hasInitDataUnsafe: !!webApp.initDataUnsafe,
+        tgUser: tgUser ? {
+          id: tgUser.id,
+          first_name: tgUser.first_name,
+          username: tgUser.username,
+        } : null,
+      });
+
+      // Если initData есть, парсим его
+      let authData: any;
+      if (webApp.initData) {
+        console.log('Parsing initData:', webApp.initData);
+        authData = parseInitData(webApp.initData);
+        console.log('Parsed authData:', { ...authData, hash: authData.hash ? `${authData.hash.substring(0, 20)}...` : 'empty' });
+        
+        // Если в initData нет данных пользователя, используем tgUser как fallback
+        if (!authData.id && tgUser) {
+          console.log('Using tgUser as fallback for missing id in initData');
+          authData.id = tgUser.id.toString();
+          authData.first_name = tgUser.first_name || '';
+          authData.last_name = tgUser.last_name || '';
+          authData.username = tgUser.username || '';
+        }
+      } else {
+        // Fallback: используем данные из tgUser и создаем временный hash
+        // ВНИМАНИЕ: это не будет работать для валидации, но для тестирования можно использовать
+        authData = {
+          id: tgUser.id.toString(),
+          first_name: tgUser.first_name,
+          last_name: tgUser.last_name,
+          username: tgUser.username,
+          auth_date: Math.floor(Date.now() / 1000),
+          hash: '', // Без initData hash будет пустым, валидация не пройдет
+        };
+      }
+
+      // Валидация данных перед отправкой
+      if (!authData.hash || authData.hash.length < 32) {
+        console.error('Invalid hash in authData:', authData);
+        throw new Error('Invalid Telegram authentication data: hash is missing or invalid');
+      }
+      
+      if (!authData.id) {
+        console.error('Missing user id in authData:', authData);
+        throw new Error('Invalid Telegram authentication data: user id is missing');
+      }
+      
+      console.log('Sending Telegram auth data:', {
+        id: authData.id,
+        first_name: authData.first_name,
+        last_name: authData.last_name,
+        username: authData.username,
+        auth_date: authData.auth_date,
+        hash: authData.hash ? `${authData.hash.substring(0, 20)}...` : 'empty',
+        hashLength: authData.hash?.length || 0,
+      });
 
       const response = await apiClient.post('/auth/telegram', authData);
       const { user, accessToken, refreshToken } = response.data;
