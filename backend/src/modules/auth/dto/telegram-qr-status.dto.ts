@@ -34,5 +34,19 @@ export class TelegramQrStatusResponseDto {
     accessToken: string;
     refreshToken: string;
   };
+
+  @ApiProperty({
+    description: 'Время истечения QR-кода (Unix timestamp)',
+    example: 1678886400,
+    required: false,
+  })
+  expiresAt?: number;
+
+  @ApiProperty({
+    description: 'Оставшееся время до истечения QR-кода в секундах',
+    example: 300,
+    required: false,
+  })
+  timeRemaining?: number;
 }
 
