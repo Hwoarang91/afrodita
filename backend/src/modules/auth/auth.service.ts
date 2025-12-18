@@ -109,9 +109,17 @@ export class AuthService {
   }
 
   async validateTelegramAuth(data: TelegramAuthData): Promise<User> {
+    console.log(`[TELEGRAM AUTH] validateTelegramAuth called with data:`, JSON.stringify(data, null, 2));
+    this.logger.log(`[TELEGRAM AUTH] validateTelegramAuth called with data: ${JSON.stringify(data)}`);
     // Валидация Telegram auth data
     const botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
-    if (!this.verifyTelegramAuth(data, botToken)) {
+    console.log(`[TELEGRAM AUTH] Bot token exists: ${!!botToken}, length: ${botToken?.length || 0}`);
+    this.logger.log(`[TELEGRAM AUTH] Bot token exists: ${!!botToken}, length: ${botToken?.length || 0}`);
+    const isValid = this.verifyTelegramAuth(data, botToken);
+    console.log(`[TELEGRAM AUTH] verifyTelegramAuth result: ${isValid}`);
+    this.logger.log(`[TELEGRAM AUTH] verifyTelegramAuth result: ${isValid}`);
+    if (!isValid) {
+      this.logger.error(`Telegram auth validation failed for user id: ${data.id}`);
       throw new UnauthorizedException('Invalid Telegram authentication');
     }
 
@@ -195,20 +203,62 @@ export class AuthService {
   }
 
   private verifyTelegramAuth(data: TelegramAuthData, botToken: string): boolean {
-    const crypto = require('crypto');
-    const { hash, ...userData } = data;
-    const dataCheckString = Object.keys(userData)
-      .sort()
-      .map((key) => `${key}=${userData[key]}`)
-      .join('\n');
+    try {
+      const crypto = require('crypto');
+      
+      if (!botToken) {
+        this.logger.error('TELEGRAM_BOT_TOKEN не установлен');
+        return false;
+      }
 
-    const secretKey = crypto.createHash('sha256').update(botToken).digest();
-    const calculatedHash = crypto
-      .createHmac('sha256', secretKey)
-      .update(dataCheckString)
-      .digest('hex');
+      if (!data.hash) {
+        this.logger.error('Hash отсутствует в данных Telegram');
+        return false;
+      }
 
-    return calculatedHash === hash;
+      // Создаем копию данных без hash для проверки
+      const { hash, ...userData } = data;
+      
+      // Преобразуем id в строку, если это число (Telegram может отправлять как число)
+      if (userData.id && typeof userData.id === 'number') {
+        userData.id = userData.id.toString();
+      }
+
+      // Создаем строку для проверки: сортируем ключи и формируем строку
+      const dataCheckString = Object.keys(userData)
+        .sort()
+        .filter(key => userData[key] !== undefined && userData[key] !== null)
+        .map((key) => `${key}=${userData[key]}`)
+        .join('\n');
+
+      console.log(`[TELEGRAM AUTH] Telegram auth dataCheckString:`, dataCheckString);
+      console.log(`[TELEGRAM AUTH] Telegram auth received hash:`, hash);
+      this.logger.log(`[TELEGRAM AUTH] Telegram auth dataCheckString: ${dataCheckString}`);
+      this.logger.log(`[TELEGRAM AUTH] Telegram auth received hash: ${hash}`);
+
+      // Вычисляем секретный ключ из bot token
+      const secretKey = crypto.createHash('sha256').update(botToken).digest();
+      
+      // Вычисляем хеш
+      const calculatedHash = crypto
+        .createHmac('sha256', secretKey)
+        .update(dataCheckString)
+        .digest('hex');
+
+      console.log(`[TELEGRAM AUTH] Telegram auth calculated hash:`, calculatedHash);
+      this.logger.log(`[TELEGRAM AUTH] Telegram auth calculated hash: ${calculatedHash}`);
+
+      const isValid = calculatedHash === hash;
+      
+      if (!isValid) {
+        this.logger.warn(`Telegram auth hash mismatch. Received: ${hash}, Calculated: ${calculatedHash}`);
+      }
+
+      return isValid;
+    } catch (error: any) {
+      this.logger.error(`Ошибка при проверке Telegram auth: ${error.message}`, error.stack);
+      return false;
+    }
   }
 
   async checkHasUsers(): Promise<boolean> {
@@ -391,7 +441,7 @@ export class AuthService {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null; requires2FA: boolean }> {
+  ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null; requires2FA: boolean; passwordHint?: string }> {
     try {
       this.logger.debug(`Проверка кода для телефона: ${phoneNumber}, phoneCodeHash: ${phoneCodeHash}`);
       this.logger.debug(`Current phoneCodeHashStore size: ${this.phoneCodeHashStore.size}`);
@@ -753,9 +803,7 @@ export class AuthService {
             timeRemaining: 0,
           };
         }
-        // Токен еще не принят
-        const now = new Date();
-        const timeRemaining = Math.max(0, Math.floor((stored.expiresAt.getTime() - now.getTime()) / 1000));
+        // Токен еще не принят - используем уже объявленные переменные now и timeRemaining
         return { 
           status: 'pending',
           expiresAt: Math.floor(stored.expiresAt.getTime() / 1000),
@@ -763,9 +811,7 @@ export class AuthService {
         };
       }
 
-      // Возвращаем статус pending с информацией о времени до истечения
-      const now = new Date();
-      const timeRemaining = Math.max(0, Math.floor((stored.expiresAt.getTime() - now.getTime()) / 1000));
+      // Возвращаем статус pending с информацией о времени до истечения - используем уже объявленные переменные
       return { 
         status: 'pending',
         expiresAt: Math.floor(stored.expiresAt.getTime() / 1000),
@@ -968,8 +1014,7 @@ export class AuthService {
         throw new UnauthorizedException('Invalid user data');
       }
 
-      // Нормализуем номер телефона
-      const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
+      // normalizedPhone уже получен из параметров метода
 
       // Ищем или создаем пользователя
       let user = await this.userRepository.findOne({
@@ -1009,12 +1054,12 @@ export class AuthService {
       );
 
       // Удаляем временные данные
-      this.twoFactorStore.delete(phoneNumber);
+      this.twoFactorStore.delete(normalizedPhone);
 
       // НЕ генерируем JWT токены - авторизация Telegram не должна авторизовывать в дашборде
       // Только сохраняем Telegram сессию для работы с Telegram API
 
-      this.logger.log(`Telegram session created via 2FA: ${phoneNumber}`);
+      this.logger.log(`Telegram session created via 2FA: ${normalizedPhone}`);
 
       return {
         user,
