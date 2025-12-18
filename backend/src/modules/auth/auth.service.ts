@@ -226,19 +226,17 @@ export class AuthService {
       // ВАЖНО: если есть параметр 'user' (оригинальная JSON строка из initData),
       // используем его вместо распарсенных полей first_name, last_name, username
       // Telegram формирует hash на основе оригинального параметра 'user', а не распарсенных полей
-      // НО: photo_url должен быть удален из JSON строки user перед формированием data_check_string
+      // ВАЖНО: по документации Telegram, photo_url НЕ включается в data_check_string на уровне параметров,
+      // но внутри JSON строки user он может быть. Попробуем использовать оригинальную строку как есть.
       if ((userData as any).user) {
-        try {
-          // Парсим JSON строку user
-          const userObj = JSON.parse((userData as any).user);
-          // Удаляем photo_url из объекта user (по документации Telegram, photo_url не включается в data_check_string)
-          delete userObj.photo_url;
-          // Сериализуем обратно в JSON строку (без photo_url)
-          (userData as any).user = JSON.stringify(userObj);
-        } catch (e) {
-          this.logger.warn(`Ошибка парсинга user JSON: ${e.message}`);
-          // Если не удалось распарсить, оставляем как есть
-        }
+        // Используем оригинальный параметр user как строку БЕЗ изменений
+        // Telegram формирует hash на основе оригинальной JSON строки user из initData
+        const originalUserStr = (userData as any).user;
+        console.log(`[TELEGRAM AUTH] Using original user string (length: ${originalUserStr.length}): ${originalUserStr.substring(0, 150)}...`);
+        this.logger.log(`[TELEGRAM AUTH] Using original user string (length: ${originalUserStr.length})`);
+        
+        // НЕ изменяем user - используем как есть
+        // (userData as any).user остается оригинальной строкой
         // Удаляем распарсенные поля, которые не должны быть в data_check_string
         delete (userData as any).first_name;
         delete (userData as any).last_name;
