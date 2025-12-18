@@ -123,17 +123,21 @@ export default function Auth() {
         throw new Error('Invalid Telegram authentication data: user id is missing');
       }
       
+      // Исключаем photo_url из данных перед отправкой
+      // photo_url не включается в data_check_string по документации Telegram
+      const { photo_url, ...dataToSend } = authData;
+      
       console.log('Sending Telegram auth data:', {
-        id: authData.id,
-        first_name: authData.first_name,
-        last_name: authData.last_name,
-        username: authData.username,
-        auth_date: authData.auth_date,
-        hash: authData.hash ? `${authData.hash.substring(0, 20)}...` : 'empty',
-        hashLength: authData.hash?.length || 0,
+        id: dataToSend.id,
+        first_name: dataToSend.first_name,
+        last_name: dataToSend.last_name,
+        username: dataToSend.username,
+        auth_date: dataToSend.auth_date,
+        hash: dataToSend.hash ? `${dataToSend.hash.substring(0, 20)}...` : 'empty',
+        hashLength: dataToSend.hash?.length || 0,
       });
 
-      const response = await apiClient.post('/auth/telegram', authData);
+      const response = await apiClient.post('/auth/telegram', dataToSend);
       const { user, accessToken, refreshToken } = response.data;
 
       setAuth(user, accessToken, refreshToken);

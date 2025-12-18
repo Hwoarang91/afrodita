@@ -3,7 +3,16 @@ import { useAuthStore } from '../../store/authStore';
 
 // API URL загружается из переменных окружения
 // Vite автоматически подхватывает переменные с префиксом VITE_
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+// В продакшене используем относительный путь, чтобы nginx проксировал запросы
+// В development можно использовать VITE_API_URL для указания полного URL
+// ВАЖНО: в production НЕ должно быть VITE_API_URL, чтобы использовался относительный путь
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+
+// Логируем для отладки (только в development)
+if (import.meta.env.DEV) {
+  console.log('[API Client] API_URL:', API_URL);
+  console.log('[API Client] VITE_API_URL:', import.meta.env.VITE_API_URL);
+}
 
 export const apiClient = axios.create({
   baseURL: API_URL,
