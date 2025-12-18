@@ -351,10 +351,8 @@ export class AuthService {
       console.log(`[TELEGRAM AUTH] Telegram auth calculated hash:`, calculatedHash);
       this.logger.log(`[TELEGRAM AUTH] Telegram auth calculated hash: ${calculatedHash}`);
 
-      // Для Bot API 8.0+ проверяем signature вместо hash
-      // Возможно, signature - это основной hash для проверки
-      const hashToCheck = data.signature || data.hash;
-      const isValid = calculatedHash === hashToCheck;
+      // Проверяем hash (signature используется для других целей в Bot API 8.0+)
+      const isValid = calculatedHash === data.hash;
       
       if (!isValid) {
         this.logger.warn(`Telegram auth hash mismatch. Received: ${data.hash}, Calculated: ${calculatedHash}`);
