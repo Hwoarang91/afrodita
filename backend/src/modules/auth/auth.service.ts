@@ -228,18 +228,41 @@ export class AuthService {
         console.log(`[TELEGRAM AUTH] Using raw initData string for validation`);
         this.logger.log(`[TELEGRAM AUTH] Using raw initData string for validation`);
         
-        // Парсим initData строку и формируем data_check_string из оригинальных значений
-        const urlParams = new URLSearchParams(data.initData);
-        const hash = urlParams.get('hash');
-        urlParams.delete('hash');
-        urlParams.delete('signature'); // signature не включается в data_check_string
+        // Парсим initData строку вручную, сохраняя оригинальные URL-encoded значения
+        // ВАЖНО: НЕ используем URLSearchParams, так как он декодирует значения
+        // Telegram формирует hash на основе оригинальных URL-encoded значений
+        const params: Array<[string, string]> = [];
+        const parts = data.initData.split('&');
         
-        // Формируем data_check_string из всех параметров, отсортированных по алфавиту
-        dataCheckString = Array.from(urlParams.entries())
-          .sort(([a], [b]) => a.localeCompare(b))
-          .filter(([_, value]) => value !== null && value !== undefined && value !== '')
+        for (const part of parts) {
+          const [key, ...valueParts] = part.split('=');
+          const value = valueParts.join('='); // Восстанавливаем значение, если в нем был '='
+          
+          // Пропускаем hash и signature - они не включаются в data_check_string
+          if (key === 'hash' || key === 'signature') {
+            continue;
+          }
+          
+          // Пропускаем пустые значения
+          if (!value || value === '') {
+            continue;
+          }
+          
+          // Сохраняем оригинальное URL-encoded значение
+          params.push([key, value]);
+        }
+        
+        // Сортируем по ключам в алфавитном порядке
+        params.sort(([a], [b]) => a.localeCompare(b));
+        
+        // Формируем data_check_string из оригинальных URL-encoded значений
+        dataCheckString = params
           .map(([key, value]) => `${key}=${value}`)
           .join('\n');
+        
+        console.log(`[TELEGRAM AUTH] Parsed params count: ${params.length}`);
+        console.log(`[TELEGRAM AUTH] Params keys: ${params.map(([key]) => key).join(', ')}`);
+        this.logger.log(`[TELEGRAM AUTH] Parsed params count: ${params.length}, keys: ${params.map(([key]) => key).join(', ')}`);
       } else {
         // Fallback: используем распарсенные данные (менее надежно, так как Express может декодировать URL-encoded значения)
         // Создаем копию данных без hash, photo_url и signature для проверки
