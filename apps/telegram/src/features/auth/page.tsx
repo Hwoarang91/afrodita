@@ -22,6 +22,8 @@ export default function Auth() {
     try {
       // Парсим initData из Telegram WebApp
       // initData имеет формат: "query_id=...&user=...&auth_date=...&hash=..."
+      // ВАЖНО: для валидации hash нужно использовать оригинальные параметры из initData,
+      // а не распарсенные данные, так как Telegram формирует hash на основе оригинальных параметров
       const parseInitData = (initData: string) => {
         // Проверяем, что initData не является уже объектом
         if (typeof initData === 'object') {
@@ -41,9 +43,31 @@ export default function Auth() {
           result.hash = '';
         }
         
-        // Парсим user объект (JSON строка)
+        // ВАЖНО: для валидации hash нужно передать оригинальные параметры из initData
+        // Telegram формирует hash на основе параметров initData, а не распарсенных данных
+        // Поэтому передаем все параметры кроме hash, photo_url и signature
+        
+        // Извлекаем auth_date
+        const authDateStr = params.get('auth_date');
+        if (authDateStr) {
+          result.auth_date = parseInt(authDateStr, 10);
+        } else {
+          result.auth_date = Math.floor(Date.now() / 1000);
+        }
+        
+        // Извлекаем query_id (если есть)
+        const queryId = params.get('query_id');
+        if (queryId) {
+          result.query_id = queryId;
+        }
+        
+        // Извлекаем user как строку (не парсим!) - это важно для валидации
         const userStr = params.get('user');
         if (userStr) {
+          // Сохраняем оригинальную строку user для валидации
+          result.user = userStr;
+          
+          // Также парсим для удобства использования данных
           try {
             const user = JSON.parse(decodeURIComponent(userStr));
             result.id = user.id?.toString() || '';
@@ -54,14 +78,6 @@ export default function Auth() {
           } catch (e) {
             console.error('Error parsing user data:', e);
           }
-        }
-        
-        // Извлекаем auth_date
-        const authDateStr = params.get('auth_date');
-        if (authDateStr) {
-          result.auth_date = parseInt(authDateStr, 10);
-        } else {
-          result.auth_date = Math.floor(Date.now() / 1000);
         }
         
         // НЕ добавляем signature и другие параметры - только те, что нужны для валидации
