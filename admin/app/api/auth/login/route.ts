@@ -38,8 +38,9 @@ export async function POST(request: NextRequest) {
 
     // Перенаправляем на новый API endpoint, который устанавливает httpOnly cookies
     const cookieHeader = request.headers.get('cookie') || '';
-    // API_URL может уже содержать /api/v1, поэтому проверяем
-    const backendUrl = API_URL.endsWith('/api/v1') ? API_URL : `${API_URL}/api/v1`;
+    // API_URL уже содержит /api/v1 (из env: http://backend:3001/api/v1)
+    // Просто добавляем путь к endpoint
+    const backendUrl = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
     const response = await fetch(`${backendUrl}/auth/login`, {
       method: 'POST',
       headers: {
