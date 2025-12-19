@@ -17,15 +17,10 @@ const API_URL = getApiUrl();
 
 export async function GET(request: NextRequest) {
   try {
-    // API_URL может уже содержать /api/v1, поэтому проверяем
-    let backendUrl = API_URL;
-    if (!backendUrl.endsWith('/api/v1')) {
-      // Если API_URL не заканчивается на /api/v1, добавляем его
-      backendUrl = backendUrl.endsWith('/') ? `${backendUrl}api/v1` : `${backendUrl}/api/v1`;
-    }
-    // Убираем /api/v1 из конца, если он есть, чтобы добавить /auth/csrf-token
-    const baseUrl = backendUrl.replace(/\/api\/v1$/, '');
-    const response = await fetch(`${baseUrl}/api/v1/auth/csrf-token`, {
+    // API_URL уже содержит /api/v1 (из env: http://backend:3001/api/v1)
+    // Просто добавляем путь к endpoint
+    const backendUrl = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
+    const response = await fetch(`${backendUrl}/auth/csrf-token`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
