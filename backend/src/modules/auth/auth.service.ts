@@ -1126,11 +1126,11 @@ export class AuthService {
       const AHex = ABigInt.toString(16).padStart(512, '0');
       const ABuffer = Buffer.from(AHex, 'hex');
       
-      // Вычисляем u = H(A || B)
-      const uBigInt = routines.computeU(ABuffer, BBytes, pBigInt);
+      // Вычисляем u = H(A || B) - computeU принимает только 2 параметра (BigInt) и асинхронный
+      const uBigInt = await routines.computeU(ABigInt, BBigInt);
       
-      // Вычисляем k = H(p || g)
-      const kBigInt = routines.computeK(gBigInt, pBigInt);
+      // Вычисляем k = H(p || g) - computeK не принимает параметры, использует внутренние параметры
+      const kBigInt = await routines.computeK();
       
       // Вычисляем S используя computeClientSessionKey(k, x, u, a, B)
       // Формула: S = (B - k * g^x)^(a + u * x) mod p
