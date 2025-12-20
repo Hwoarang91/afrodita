@@ -970,16 +970,34 @@ export class AuthService {
       }
 
       const srpId = passwordResult.srp_id;
-      // В MTProto структура passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow содержит srp_B (bytes)
-      const srpB_bytes = (srpB as any).srp_B || (srpB as any).B;
+      
+      // В MTProto структура account.password содержит srp_B (публичный ключ сервера)
+      // Это отдельное поле в passwordResult, а не в current_algo
+      const srpB_bytes = (passwordResult as any).srp_B || (passwordResult as any).B;
+      
+      // Параметры алгоритма находятся в current_algo
       const g = (srpB as any).g;
       const p = (srpB as any).p;
       const salt1 = (srpB as any).salt1;
       const salt2 = (srpB as any).salt2;
       
+      // Логируем структуру для отладки
+      this.logger.debug('SRP parameters extraction', {
+        hasSrpB: !!srpB_bytes,
+        hasG: !!g,
+        hasP: !!p,
+        hasSalt1: !!salt1,
+        hasSalt2: !!salt2,
+        passwordResultKeys: Object.keys(passwordResult),
+        srpBKeys: Object.keys(srpB),
+      });
+      
       // Проверяем, что все необходимые параметры присутствуют
       if (!srpB_bytes) {
-        this.logger.error('Missing srp_B in password result', { srpB: JSON.stringify(srpB) });
+        this.logger.error('Missing srp_B in password result', { 
+          passwordResult: JSON.stringify(passwordResult, null, 2),
+          srpB: JSON.stringify(srpB, null, 2),
+        });
         throw new UnauthorizedException('Failed to get SRP parameters: missing srp_B');
       }
       if (!g || !p || !salt1 || !salt2) {
