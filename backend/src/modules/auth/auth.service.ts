@@ -1099,17 +1099,25 @@ export class AuthService {
       const pBigInt = BigInt('0x' + pBuffer.toString('hex'));
       const BBytes = Buffer.from(srpB_bytes);
       
-      // Создаем SRP routines для вычисления параметров
-      const routines = new SRPRoutines('sha256');
-      
       // Преобразуем x из Buffer в BigInt
       const xBigInt = BigInt('0x' + xBytes.toString('hex'));
       
       // Преобразуем B из Buffer в BigInt
       const BBigInt = BigInt('0x' + BBytes.toString('hex'));
       
-      // Генерируем приватное значение a (случайное число)
-      const aBigInt = routines.generatePrivateValue(pBigInt);
+      // Генерируем приватное значение a вручную (случайное число меньше p)
+      // Используем crypto для генерации случайного числа
+      const aBytes = crypto.randomBytes(256);
+      let aBigInt = BigInt('0x' + aBytes.toString('hex')) % pBigInt;
+      if (aBigInt === BigInt(0)) {
+        aBigInt = BigInt(1); // Убеждаемся, что a не равно 0
+      }
+      
+      // Создаем SRP routines для вычисления параметров
+      // Для MTProto используем кастомные параметры через SRPParameters
+      const { SRPParameters } = require('tssrp6a');
+      const customParams = new SRPParameters({ N: pBigInt, g: gBigInt }, 'sha256');
+      const routines = new SRPRoutines(customParams);
       
       // Вычисляем A = g^a mod p (публичный ключ клиента)
       const ABigInt = routines.computeClientPublicValue(gBigInt, pBigInt, aBigInt);
