@@ -91,7 +91,7 @@ async function bootstrap() {
     // Увеличиваем лимит размера тела запроса для загрузки изображений (base64)
     logger.log('Создание NestFactory...');
     const app = await NestFactory.create(AppModule, {
-      bodyParser: true,
+      bodyParser: false, // Отключаем встроенный body parser, чтобы настроить свой
       rawBody: false,
       logger: ['error', 'warn', 'log', 'debug', 'verbose'],
       forceCloseConnections: true, // Принудительно закрывать соединения при завершении
