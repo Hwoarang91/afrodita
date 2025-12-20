@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -47,7 +47,12 @@ export default function TelegramUserMessagesTab() {
       return response.data;
     },
     retry: false,
-    onError: (error: any) => {
+  });
+
+  // Обработка ошибок чатов
+  useEffect(() => {
+    if (chatsError) {
+      const error: any = chatsError;
       if (error.response?.status === 401) {
         if (error.response?.data?.message?.includes('No active Telegram session')) {
           // Это нормально - просто нет активной Telegram сессии
@@ -56,8 +61,8 @@ export default function TelegramUserMessagesTab() {
         // Другая ошибка 401 - возможно, не авторизован в админ-панели
         console.warn('Unauthorized access to Telegram chats. User may need to login to admin panel.');
       }
-    },
-  });
+    }
+  }, [chatsError]);
 
   // Получение списка контактов
   const { data: contactsData, isLoading: isLoadingContacts, error: contactsError } = useQuery({
