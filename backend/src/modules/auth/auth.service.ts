@@ -1076,7 +1076,7 @@ export class AuthService {
 
       // Используем библиотеку tssrp6a для вычисления SRP параметров
       // MTProto использует модифицированный SRP протокол
-      const SRPClient = require('tssrp6a').Client;
+      const { SRPRoutines } = require('tssrp6a');
       const crypto = require('crypto');
       
       // Преобразуем параметры для SRP
@@ -1084,6 +1084,7 @@ export class AuthService {
       const passwordBytes = Buffer.from(password, 'utf8');
       
       // Вычисляем x = PBKDF2(salt1 + password + salt2, salt1, 100000, 256, 'sha256')
+      // Это специфичный для MTProto способ вычисления x
       const xBytes = crypto.pbkdf2Sync(
         Buffer.concat([salt1, passwordBytes, salt2]),
         salt1,
@@ -1098,28 +1099,44 @@ export class AuthService {
       const pBigInt = BigInt('0x' + pBuffer.toString('hex'));
       const BBytes = Buffer.from(srpB_bytes);
       
-      // Создаем SRP клиент с параметрами MTProto
-      const srpClient = new SRPClient(
-        Buffer.from(salt1),
-        Buffer.from(salt2),
-        gBigInt,
-        pBigInt,
-        'sha256',
-      );
+      // Создаем SRP routines для вычисления параметров
+      const routines = new SRPRoutines('sha256');
       
-      // Устанавливаем пароль в SRP клиент
-      // Пароль должен быть строкой в UTF-8 кодировке
-      const passwordString = typeof password === 'string' ? password : String(password);
-      this.logger.debug(`Setting password for SRP: length=${passwordString.length}, firstChar=${passwordString.charCodeAt(0)}`);
-      srpClient.setPassword(passwordString);
+      // Преобразуем x из Buffer в BigInt
+      const xBigInt = BigInt('0x' + xBytes.toString('hex'));
       
-      // Генерируем A (публичный ключ клиента)
-      const a = srpClient.generateA();
-      const A = srpClient.computeA();
+      // Преобразуем B из Buffer в BigInt
+      const BBigInt = BigInt('0x' + BBytes.toString('hex'));
       
-      // Вычисляем M1 (доказательство знания пароля)
-      // Передаем B (публичный ключ сервера) для вычисления M1
-      const M1 = srpClient.computeM1(BBytes);
+      // Генерируем приватное значение a (случайное число)
+      const aBigInt = routines.generatePrivateValue(pBigInt);
+      
+      // Вычисляем A = g^a mod p (публичный ключ клиента)
+      const ABigInt = routines.computeClientPublicValue(gBigInt, pBigInt, aBigInt);
+      
+      // Преобразуем A в Buffer (256 байт, дополняем нулями слева)
+      const AHex = ABigInt.toString(16).padStart(512, '0');
+      const ABuffer = Buffer.from(AHex, 'hex');
+      
+      // Вычисляем u = H(A || B)
+      const uBigInt = routines.computeU(ABuffer, BBytes, pBigInt);
+      
+      // Вычисляем k = H(p || g)
+      const kBigInt = routines.computeK(gBigInt, pBigInt);
+      
+      // Вычисляем S используя computeClientSessionKey(k, x, u, a, B)
+      // Формула: S = (B - k * g^x)^(a + u * x) mod p
+      const SBigInt = routines.computeClientSessionKey(kBigInt, xBigInt, uBigInt, aBigInt, BBigInt);
+      
+      // Преобразуем S в Buffer (256 байт)
+      const SHex = SBigInt.toString(16).padStart(512, '0');
+      const SBuffer = Buffer.from(SHex, 'hex');
+      
+      // Вычисляем M1 = H(A || B || S)
+      const M1Buffer = routines.computeClientEvidence(ABuffer, BBytes, SBuffer);
+      
+      const A = new Uint8Array(Array.from(ABuffer));
+      const M1 = new Uint8Array(Array.from(M1Buffer));
       
       const check = {
         A: new Uint8Array(Array.from(A)),
