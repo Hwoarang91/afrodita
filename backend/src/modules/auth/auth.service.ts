@@ -986,6 +986,9 @@ export class AuthService {
           if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
             return `[Buffer: ${value.length} bytes]`;
           }
+          if (typeof value === 'bigint') {
+            return `[BigInt: ${value.toString()}]`;
+          }
           return value;
         }, 2),
       });
@@ -1048,11 +1051,17 @@ export class AuthService {
             if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
               return `[Buffer: ${value.length} bytes]`;
             }
+            if (typeof value === 'bigint') {
+              return `[BigInt: ${value.toString()}]`;
+            }
             return value;
           }, 2),
           srpB: JSON.stringify(srpB, (key, value) => {
             if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
               return `[Buffer: ${value.length} bytes]`;
+            }
+            if (typeof value === 'bigint') {
+              return `[BigInt: ${value.toString()}]`;
             }
             return value;
           }, 2),
