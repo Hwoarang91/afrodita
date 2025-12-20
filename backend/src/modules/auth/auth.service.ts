@@ -960,6 +960,16 @@ export class AuthService {
         throw new UnauthorizedException('Failed to get password parameters');
       }
 
+      // Логируем полную структуру passwordResult для отладки
+      this.logger.debug('Full passwordResult structure', {
+        keys: Object.keys(passwordResult),
+        hasCurrentAlgo: !!(passwordResult as any).current_algo,
+        hasSrpId: !!(passwordResult as any).srp_id,
+        hasSrpB: !!(passwordResult as any).srp_B,
+        hasB: !!(passwordResult as any).B,
+        passwordResultType: passwordResult._,
+      });
+
       // MTKruto имеет встроенную поддержку SRP через client.computeCheck
       // Используем встроенную функцию для вычисления SRP проверки
 
@@ -972,16 +982,23 @@ export class AuthService {
       const srpId = passwordResult.srp_id;
       
       // В MTProto структура account.password содержит srp_B (публичный ключ сервера)
-      // Проверяем все возможные варианты расположения srp_B
+      // Согласно документации MTProto, srp_B находится на верхнем уровне passwordResult
+      // Но возможно, что в MTKruto это поле называется по-другому или находится в другом месте
+      // Проверяем все возможные варианты
       const srpB_bytes = 
         (passwordResult as any).srp_B || 
         (passwordResult as any).B || 
         (passwordResult as any).srpB ||
         (passwordResult as any).b ||
+        (passwordResult as any).srp_b ||
         (srpB as any).srp_B || 
         (srpB as any).B ||
         (srpB as any).srpB ||
         (srpB as any).b;
+      
+      // Если srp_B не найден, возможно, нужно получить его из другого источника
+      // В некоторых версиях MTProto srp_B может быть получен через отдельный запрос
+      // или вычислен из других параметров
       
       // Параметры алгоритма находятся в current_algo
       const g = (srpB as any).g;
