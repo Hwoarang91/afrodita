@@ -99,9 +99,10 @@ async function bootstrap() {
     logger.log('NestFactory создан');
     
     // Увеличиваем лимит для JSON body parser (по умолчанию 100kb, увеличиваем до 50MB для base64 изображений)
-    // В NestJS нужно настроить express.json() с увеличенным лимитом
-    app.use(express.json({ limit: '50mb' }));
-    app.use(express.urlencoded({ limit: '50mb', extended: true }));
+    // В NestJS нужно получить экземпляр Express и настроить body parser
+    const expressApp = app.getHttpAdapter().getInstance();
+    expressApp.use(express.json({ limit: '50mb' }));
+    expressApp.use(express.urlencoded({ limit: '50mb', extended: true }));
     logger.log('Body parser настроен с лимитом 50MB');
     
     // Проверяем подключение TypeORM перед запуском сервера
