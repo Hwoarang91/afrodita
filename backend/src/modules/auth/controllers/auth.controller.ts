@@ -585,7 +585,8 @@ export class AuthController {
     @Request() req,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramAuthResponseDto> {
-    this.logger.debug(`Проверка 2FA для телефона: ${dto.phoneNumber}`);
+    this.logger.log(`[2FA] Запрос на проверку 2FA для телефона: ${dto.phoneNumber}, phoneCodeHash: ${dto.phoneCodeHash}`);
+    this.logger.log(`[2FA] Пароль получен: ${dto.password ? 'да' : 'нет'}, длина: ${dto.password?.length || 0}`);
     try {
       const result = await this.authService.verify2FAPassword(
         dto.phoneNumber,

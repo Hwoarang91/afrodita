@@ -892,10 +892,10 @@ export class AuthService {
       // Нормализуем номер телефона для поиска в хранилище
       const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
       
-      this.logger.debug(`Проверка 2FA пароля для телефона: ${phoneNumber} (normalized: ${normalizedPhone}), phoneCodeHash: ${phoneCodeHash}`);
-      this.logger.debug(`Current twoFactorStore size: ${this.twoFactorStore.size}`);
-      this.logger.debug(`Stored phones: ${Array.from(this.twoFactorStore.keys()).join(', ')}`);
-      this.logger.debug(`Password received: length=${password?.length || 0}, type=${typeof password}, isEmpty=${!password || password.length === 0}`);
+      this.logger.log(`[2FA] Проверка 2FA пароля для телефона: ${phoneNumber} (normalized: ${normalizedPhone}), phoneCodeHash: ${phoneCodeHash}`);
+      this.logger.log(`[2FA] Current twoFactorStore size: ${this.twoFactorStore.size}`);
+      this.logger.log(`[2FA] Stored phones: ${Array.from(this.twoFactorStore.keys()).join(', ')}`);
+      this.logger.log(`[2FA] Password received: length=${password?.length || 0}, type=${typeof password}, isEmpty=${!password || password.length === 0}`);
       if (password && password.length > 0) {
         this.logger.debug(`Password first char: code=${password.charCodeAt(0)}, char="${password[0]}"`);
       }
