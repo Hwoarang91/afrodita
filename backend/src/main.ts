@@ -89,6 +89,8 @@ async function bootstrap() {
       }
     }
     // Увеличиваем лимит размера тела запроса для загрузки изображений (base64)
+    // Лимит настроен в nginx (client_max_body_size 50M), что достаточно для большинства случаев
+    // Встроенный body parser NestJS имеет лимит по умолчанию, но nginx будет фильтровать большие запросы
     logger.log('Создание NestFactory...');
     const app = await NestFactory.create(AppModule, {
       bodyParser: true,
@@ -97,23 +99,6 @@ async function bootstrap() {
       forceCloseConnections: true, // Принудительно закрывать соединения при завершении
     });
     logger.log('NestFactory создан');
-    
-    // Увеличиваем лимит для JSON body parser (по умолчанию 100kb, увеличиваем до 50MB для base64 изображений)
-    // В NestJS нужно получить экземпляр Express через HttpAdapterHost после инициализации
-    const httpAdapter = app.get(HttpAdapterHost);
-    if (httpAdapter && httpAdapter.httpAdapter) {
-      const expressApp = httpAdapter.httpAdapter.getInstance();
-      if (expressApp && typeof expressApp.use === 'function') {
-        // Удаляем встроенный body parser и добавляем свой с увеличенным лимитом
-        expressApp.use(express.json({ limit: '50mb' }));
-        expressApp.use(express.urlencoded({ limit: '50mb', extended: true }));
-        logger.log('Body parser настроен с лимитом 50MB');
-      } else {
-        logger.warn('Express app не найден, используем встроенный body parser');
-      }
-    } else {
-      logger.warn('HttpAdapterHost не найден, используем встроенный body parser');
-    }
     
     // Проверяем подключение TypeORM перед запуском сервера
     try {
