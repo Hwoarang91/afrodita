@@ -201,11 +201,24 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       return;
     }
 
+    if (!phoneNumber) {
+      toast.error('Номер телефона не указан');
+      return;
+    }
+
     try {
       setIsLoading(true);
+      // Убеждаемся, что пароль передается как строка
+      const passwordToSend = String(twoFAPassword).trim();
+      if (!passwordToSend) {
+        toast.error('Пароль не может быть пустым');
+        setIsLoading(false);
+        return;
+      }
+
       const response = await apiClient.post('/auth/telegram/2fa/verify', {
-        phoneNumber,
-        password: twoFAPassword,
+        phoneNumber: phoneNumber.trim(),
+        password: passwordToSend,
         phoneCodeHash,
       });
 
@@ -355,7 +368,13 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                     )}
                   </>
                 ) : (
-                  <div className="space-y-4">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleVerify2FA();
+                    }}
+                    className="space-y-4"
+                  >
                     <div className="flex items-center space-x-2 text-muted-foreground">
                       <Shield className="w-5 h-5" />
                       <p className="text-sm">Требуется двухфакторная аутентификация</p>
@@ -369,14 +388,17 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                       )}
                       <PasswordInput
                         id="2fa-password"
+                        name="2fa-password"
                         value={twoFAPassword}
                         onChange={(e) => setTwoFAPassword(e.target.value)}
                         placeholder="Введите пароль 2FA"
+                        autoComplete="current-password"
+                        required
                       />
                     </div>
                     <Button
-                      onClick={handleVerify2FA}
-                      disabled={isLoading}
+                      type="submit"
+                      disabled={isLoading || !twoFAPassword}
                       className="w-full"
                     >
                       {isLoading ? (
@@ -388,7 +410,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                         'Подтвердить'
                       )}
                     </Button>
-                  </div>
+                  </form>
                 )}
               </TabsContent>
 

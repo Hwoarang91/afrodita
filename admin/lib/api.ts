@@ -126,7 +126,11 @@ apiClient.interceptors.response.use(
             // Повторяем оригинальный запрос с обновленными токенами
             return apiClient(originalRequest);
           } else {
-            throw new Error('Refresh failed');
+            // Если refresh token истек или недействителен, получаем детали ошибки
+            const errorData = await refreshResponse.json().catch(() => ({ 
+              message: 'Refresh token expired or invalid' 
+            }));
+            throw new Error(errorData.message || errorData.error || 'Refresh failed');
           }
         } catch (refreshError) {
           // Обрабатываем очередь ожидающих запросов с ошибкой
@@ -135,18 +139,28 @@ apiClient.interceptors.response.use(
           isRefreshing = false;
           
           // Для Telegram эндпоинтов не делаем редирект на логин при ошибках
-          if (originalRequest?.url?.includes('/auth/telegram/')) {
+          if (originalRequest?.url?.includes('/auth/telegram/') || 
+              originalRequest?.url?.includes('/telegram/user/') ||
+              originalRequest?.url?.includes('/telegram/2fa/')) {
             return Promise.reject(error);
           }
+          
+          // Логируем ошибку для отладки
+          console.error('Token refresh failed:', refreshError);
+          
           // Очищаем локальное состояние
           localStorage.removeItem('admin-token');
           sessionStorage.removeItem('admin-token');
           sessionStorage.removeItem('autoLogin');
+          
           // Перенаправляем на страницу логина только если не на публичной странице
           const pathname = window.location.pathname;
           const isPublicPage = pathname.includes('/login') || pathname.includes('/register');
           if (!isPublicPage) {
-            window.location.href = '/login';
+            // Небольшая задержка перед редиректом, чтобы избежать множественных редиректов
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 100);
           }
           return Promise.reject(error);
         }

@@ -895,7 +895,10 @@ export class AuthService {
       this.logger.debug(`Проверка 2FA пароля для телефона: ${phoneNumber} (normalized: ${normalizedPhone}), phoneCodeHash: ${phoneCodeHash}`);
       this.logger.debug(`Current twoFactorStore size: ${this.twoFactorStore.size}`);
       this.logger.debug(`Stored phones: ${Array.from(this.twoFactorStore.keys()).join(', ')}`);
-      this.logger.debug(`Password received length: ${password.length}, first char code: ${password.charCodeAt(0)}`);
+      this.logger.debug(`Password received: length=${password?.length || 0}, type=${typeof password}, isEmpty=${!password || password.length === 0}`);
+      if (password && password.length > 0) {
+        this.logger.debug(`Password first char: code=${password.charCodeAt(0)}, char="${password[0]}"`);
+      }
 
       // Получаем сохраненные данные по нормализованному номеру
       const stored = this.twoFactorStore.get(normalizedPhone);
@@ -1018,7 +1021,10 @@ export class AuthService {
       );
       
       // Устанавливаем пароль в SRP клиент
-      srpClient.setPassword(password);
+      // Пароль должен быть строкой в UTF-8 кодировке
+      const passwordString = typeof password === 'string' ? password : String(password);
+      this.logger.debug(`Setting password for SRP: length=${passwordString.length}, firstChar=${passwordString.charCodeAt(0)}`);
+      srpClient.setPassword(passwordString);
       
       // Генерируем A (публичный ключ клиента)
       const a = srpClient.generateA();

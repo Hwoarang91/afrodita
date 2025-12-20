@@ -247,43 +247,64 @@ export class SettingsController {
   @Put('telegram-admin-user')
   @ApiOperation({ summary: 'Установить администратора Telegram бота и веб-приложения' })
   async setTelegramAdminUser(@Request() req, @Body() body: { userId: string | null }) {
-    if (body.userId) {
-      // Проверяем, что пользователь существует и имеет telegramId
-      const user = await this.usersService.findById(body.userId);
+    try {
+      let user = null;
       
-      if (!user.telegramId) {
-        throw new BadRequestException('Пользователь не прошел верификацию через Telegram бота');
+      if (body.userId) {
+        // Проверяем, что пользователь существует и имеет telegramId
+        try {
+          user = await this.usersService.findById(body.userId);
+        } catch (error: any) {
+          this.logger.error(`Пользователь не найден: ${body.userId}`, error.stack);
+          throw new BadRequestException('Пользователь не найден');
+        }
+        
+        if (!user.telegramId) {
+          throw new BadRequestException('Пользователь не прошел верификацию через Telegram бота');
+        }
       }
-    }
 
-    const oldUserId = await this.settingsService.getTelegramAdminUserId();
-    await this.settingsService.setTelegramAdminUserId(body.userId);
-    
-    await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
-      entityType: 'settings',
-      entityId: 'telegramAdminUserId',
-      description: 'Обновлен администратор Telegram бота и веб-приложения',
-      changes: { old: oldUserId, new: body.userId },
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent'),
-    });
-    
-    if (body.userId) {
-      const user = await this.usersService.findById(body.userId);
-      return {
-        success: true,
-        value: {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          username: user.username,
-          phone: user.phone,
-          telegramId: user.telegramId,
-        },
-      };
-    }
+      const oldUserId = await this.settingsService.getTelegramAdminUserId();
+      await this.settingsService.setTelegramAdminUserId(body.userId);
+      
+      // Логируем действие только если есть пользователь в req.user
+      if (req.user?.sub) {
+        try {
+          await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+            entityType: 'settings',
+            entityId: 'telegramAdminUserId',
+            description: 'Обновлен администратор Telegram бота и веб-приложения',
+            changes: { old: oldUserId, new: body.userId },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+          });
+        } catch (auditError: any) {
+          // Логируем ошибку аудита, но не прерываем выполнение
+          this.logger.error(`Ошибка логирования аудита: ${auditError.message}`, auditError.stack);
+        }
+      } else {
+        this.logger.warn('req.user.sub отсутствует, пропускаем логирование аудита');
+      }
+      
+      if (body.userId && user) {
+        return {
+          success: true,
+          value: {
+            id: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username,
+            phone: user.phone,
+            telegramId: user.telegramId,
+          },
+        };
+      }
 
-    return { success: true, value: null };
+      return { success: true, value: null };
+    } catch (error: any) {
+      this.logger.error(`Ошибка при установке администратора Telegram: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 }
 

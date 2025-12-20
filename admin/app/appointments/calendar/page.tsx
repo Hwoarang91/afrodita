@@ -473,12 +473,17 @@ export default function CalendarPage() {
                           handleEventDrop(event, newStart);
                         }
                       }}
+                      // Примечание: onDragOver не может быть passive, так как требуется preventDefault()
+                      // для разрешения drop операции. Это вызывает предупреждение в консоли, но необходимо для функциональности.
                       onDragOver={(e) => e.preventDefault()}
                     >
                       {dayEvents.map((event) => (
                         <div
                           key={event.id}
                           draggable
+                          // Примечание: draggable атрибут необходим для drag-and-drop функциональности.
+                          // Предупреждение о non-passive touchstart listener связано с нативным поведением браузера
+                          // для drag-and-drop и не может быть исправлено без потери функциональности.
                           onDragStart={(e) => {
                             e.dataTransfer.setData('eventId', event.id);
                           }}

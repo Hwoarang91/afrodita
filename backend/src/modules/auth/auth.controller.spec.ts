@@ -24,6 +24,7 @@ describe('AuthController', () => {
 
   const mockJwtAuthService = {
     generateTokenPair: jest.fn(),
+    logout: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -217,16 +218,21 @@ describe('AuthController', () => {
   describe('logout', () => {
     it('должен выйти из системы', async () => {
       const req = {
-        body: { refreshToken: 'refresh-token' },
+        user: { sub: 'user-1', email: 'test@example.com' },
         ip: '127.0.0.1',
         get: jest.fn().mockReturnValue('Mozilla/5.0'),
       };
+      const res = {
+        clearCookie: jest.fn(),
+      } as any;
 
-      mockAuthService.logout.mockResolvedValue(undefined);
+      mockJwtAuthService.logout.mockResolvedValue(undefined);
+      mockAuthService.logAuthAction.mockResolvedValue(undefined);
 
-      await controller.logout('refresh-token', req);
+      await controller.logout(req, res);
 
-      expect(mockAuthService.logout).toHaveBeenCalledWith('refresh-token', req.ip, req.get('user-agent'));
+      expect(mockJwtAuthService.logout).toHaveBeenCalledWith('user-1');
+      expect(res.clearCookie).toHaveBeenCalled();
     });
   });
 

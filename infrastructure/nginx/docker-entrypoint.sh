@@ -12,8 +12,13 @@ if [ ! -f /etc/nginx/ssl/certificate.crt ] || [ ! -f /etc/nginx/ssl/certificate.
     exit 1
 else
     echo "SSL сертификаты найдены, проверяем права доступа..."
-    chmod 644 /etc/nginx/ssl/certificate.crt
-    chmod 600 /etc/nginx/ssl/certificate.key
+    # Проверяем права доступа без изменения (для read-only volumes)
+    if [ -r /etc/nginx/ssl/certificate.crt ] && [ -r /etc/nginx/ssl/certificate.key ]; then
+        echo "SSL сертификаты доступны для чтения"
+    else
+        echo "ОШИБКА: SSL сертификаты не доступны для чтения!"
+        exit 1
+    fi
     echo "SSL сертификаты готовы к использованию"
 fi
 

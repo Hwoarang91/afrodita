@@ -127,8 +127,13 @@ export class AuthController {
       // Получаем refresh token из body или из cookies (приоритет cookies, так как они httpOnly)
       const refreshToken = req.cookies?.refresh_token || refreshDto.refreshToken;
       
+      this.logger.debug(`Refresh request: hasCookie=${!!req.cookies?.refresh_token}, hasBody=${!!refreshDto.refreshToken}, ip=${req.ip}`);
+      
       if (!refreshToken) {
-        this.logger.warn('Refresh token отсутствует в cookies и body');
+        this.logger.warn('Refresh token отсутствует в cookies и body', {
+          cookies: Object.keys(req.cookies || {}),
+          hasBody: !!refreshDto.refreshToken,
+        });
         throw new UnauthorizedException('Refresh token is required');
       }
 
@@ -161,7 +166,14 @@ export class AuthController {
         refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt,
       };
     } catch (error: any) {
-      this.logger.error(`Ошибка обновления токенов: ${error.message}`);
+      this.logger.error(`Ошибка обновления токенов: ${error.message}`, error.stack);
+      // Если это ошибка валидации токена, возвращаем более информативное сообщение
+      if (error.message?.includes('expired')) {
+        throw new UnauthorizedException('Refresh token expired');
+      }
+      if (error.message?.includes('not found') || error.message?.includes('Invalid')) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
