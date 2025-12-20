@@ -124,9 +124,17 @@ export class AuthController {
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<RefreshResponseDto> {
     try {
+      // Получаем refresh token из body или из cookies (приоритет cookies, так как они httpOnly)
+      const refreshToken = req.cookies?.refresh_token || refreshDto.refreshToken;
+      
+      if (!refreshToken) {
+        this.logger.warn('Refresh token отсутствует в cookies и body');
+        throw new UnauthorizedException('Refresh token is required');
+      }
+
       // Обновляем токены
       const tokenPair = await this.jwtService.refreshTokens(
-        refreshDto.refreshToken,
+        refreshToken,
         req.ip,
         req.get('user-agent'),
       );
