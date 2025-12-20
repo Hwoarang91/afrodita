@@ -972,8 +972,16 @@ export class AuthService {
       const srpId = passwordResult.srp_id;
       
       // В MTProto структура account.password содержит srp_B (публичный ключ сервера)
-      // Это отдельное поле в passwordResult, а не в current_algo
-      const srpB_bytes = (passwordResult as any).srp_B || (passwordResult as any).B;
+      // Проверяем все возможные варианты расположения srp_B
+      const srpB_bytes = 
+        (passwordResult as any).srp_B || 
+        (passwordResult as any).B || 
+        (passwordResult as any).srpB ||
+        (passwordResult as any).b ||
+        (srpB as any).srp_B || 
+        (srpB as any).B ||
+        (srpB as any).srpB ||
+        (srpB as any).b;
       
       // Параметры алгоритма находятся в current_algo
       const g = (srpB as any).g;
@@ -990,14 +998,29 @@ export class AuthService {
         hasSalt2: !!salt2,
         passwordResultKeys: Object.keys(passwordResult),
         srpBKeys: Object.keys(srpB),
+        passwordResultType: passwordResult._,
+        srpBType: srpB._,
       });
       
       // Проверяем, что все необходимые параметры присутствуют
       if (!srpB_bytes) {
-        this.logger.error('Missing srp_B in password result', { 
-          passwordResult: JSON.stringify(passwordResult, null, 2),
-          srpB: JSON.stringify(srpB, null, 2),
-        });
+        // Логируем полную структуру для отладки
+        const debugInfo = {
+          passwordResult: JSON.stringify(passwordResult, (key, value) => {
+            // Преобразуем Buffer в строку для логирования
+            if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
+              return `[Buffer: ${value.length} bytes]`;
+            }
+            return value;
+          }, 2),
+          srpB: JSON.stringify(srpB, (key, value) => {
+            if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
+              return `[Buffer: ${value.length} bytes]`;
+            }
+            return value;
+          }, 2),
+        };
+        this.logger.error('Missing srp_B in password result', debugInfo);
         throw new UnauthorizedException('Failed to get SRP parameters: missing srp_B');
       }
       if (!g || !p || !salt1 || !salt2) {
