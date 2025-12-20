@@ -961,13 +961,33 @@ export class AuthService {
       }
 
       // Логируем полную структуру passwordResult для отладки
-      this.logger.debug('Full passwordResult structure', {
-        keys: Object.keys(passwordResult),
+      const passwordResultKeys = Object.keys(passwordResult);
+      const passwordResultValues: any = {};
+      passwordResultKeys.forEach(key => {
+        const value = (passwordResult as any)[key];
+        if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
+          passwordResultValues[key] = `[Buffer: ${value.length} bytes]`;
+        } else if (typeof value === 'object' && value !== null) {
+          passwordResultValues[key] = `[Object: ${Object.keys(value).length} keys]`;
+        } else {
+          passwordResultValues[key] = value;
+        }
+      });
+      
+      this.logger.error('Full passwordResult structure', {
+        keys: passwordResultKeys,
+        values: passwordResultValues,
         hasCurrentAlgo: !!(passwordResult as any).current_algo,
         hasSrpId: !!(passwordResult as any).srp_id,
         hasSrpB: !!(passwordResult as any).srp_B,
         hasB: !!(passwordResult as any).B,
         passwordResultType: passwordResult._,
+        fullPasswordResult: JSON.stringify(passwordResult, (key, value) => {
+          if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
+            return `[Buffer: ${value.length} bytes]`;
+          }
+          return value;
+        }, 2),
       });
 
       // MTKruto имеет встроенную поддержку SRP через client.computeCheck
