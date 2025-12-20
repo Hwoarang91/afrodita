@@ -267,9 +267,9 @@ export default function TelegramUserMessagesTab() {
                 <div className="space-y-2">
                   {chatsError || contactsError ? (
                     <p className="text-sm text-destructive">
-                      {chatsError?.response?.status === 401 || contactsError?.response?.status === 401
-                        ? chatsError?.response?.data?.message?.includes('No active Telegram session') ||
-                          contactsError?.response?.data?.message?.includes('No active Telegram session')
+                      {(chatsError as any)?.response?.status === 401 || (contactsError as any)?.response?.status === 401
+                        ? (chatsError as any)?.response?.data?.message?.includes('No active Telegram session') ||
+                          (contactsError as any)?.response?.data?.message?.includes('No active Telegram session')
                           ? 'Нет активной Telegram сессии. Пожалуйста, авторизуйтесь через Telegram на вкладке "Авторизация".'
                           : 'Ошибка авторизации. Пожалуйста, войдите в админ-панель.'
                         : 'Ошибка загрузки чатов и контактов. Попробуйте обновить страницу.'}
