@@ -1128,12 +1128,24 @@ export class AuthService {
       // Формула: S = (B - k * g^x)^(a + u * x) mod p
       const SBigInt = routines.computeClientSessionKey(kBigInt, xBigInt, uBigInt, aBigInt, BBigInt);
       
-      // Преобразуем S в Buffer (256 байт)
-      const SHex = SBigInt.toString(16).padStart(512, '0');
-      const SBuffer = Buffer.from(SHex, 'hex');
+      // Преобразуем A, B, S в BigInt для computeClientEvidence
+      const ABigIntForM1 = BigInt('0x' + ABuffer.toString('hex'));
+      const BBigIntForM1 = BigInt('0x' + BBytes.toString('hex'));
       
-      // Вычисляем M1 = H(A || B || S)
-      const M1Buffer = routines.computeClientEvidence(ABuffer, BBytes, SBuffer);
+      // Вычисляем M1 = H(A || B || S) - асинхронный метод
+      // computeClientEvidence(_I, _s, A, B, S) где _I и _s не используются для M1
+      // Для MTProto используем пустые значения для _I и _s
+      const M1BigInt = await routines.computeClientEvidence(
+        '', // _I - identity, не используется для M1
+        Buffer.alloc(0), // _s - salt, не используется для M1
+        ABigIntForM1,
+        BBigIntForM1,
+        SBigInt,
+      );
+      
+      // Преобразуем M1 из BigInt в Buffer (256 байт)
+      const M1Hex = M1BigInt.toString(16).padStart(512, '0');
+      const M1Buffer = Buffer.from(M1Hex, 'hex');
       
       const A = new Uint8Array(Array.from(ABuffer));
       const M1 = new Uint8Array(Array.from(M1Buffer));
