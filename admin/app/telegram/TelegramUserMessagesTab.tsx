@@ -72,7 +72,12 @@ export default function TelegramUserMessagesTab() {
       return response.data;
     },
     retry: false,
-    onError: (error: any) => {
+  });
+
+  // Обработка ошибок контактов
+  useEffect(() => {
+    if (contactsError) {
+      const error: any = contactsError;
       if (error.response?.status === 401) {
         if (error.response?.data?.message?.includes('No active Telegram session')) {
           // Это нормально - просто нет активной Telegram сессии
@@ -81,8 +86,8 @@ export default function TelegramUserMessagesTab() {
         // Другая ошибка 401 - возможно, не авторизован в админ-панели
         console.warn('Unauthorized access to Telegram contacts. User may need to login to admin panel.');
       }
-    },
-  });
+    }
+  }, [contactsError]);
 
   // Отправка текстового сообщения
   const sendMessageMutation = useMutation({
