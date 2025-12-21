@@ -439,7 +439,6 @@ export class AuthController {
 
   @Post('telegram/phone/request')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(OptionalJwtAuthGuard) // Используем OptionalJwtAuthGuard
   @ApiOperation({ summary: 'Запрос кода подтверждения для авторизации по номеру телефона' })
   @ApiResponse({
     status: 200,
@@ -456,16 +455,7 @@ export class AuthController {
     @Body() dto: TelegramPhoneRequestDto,
     @Request() req,
   ): Promise<{ phoneCodeHash: string }> {
-    this.logger.log(`[Phone Request] Запрос кода для телефона: ${dto.phoneNumber}`);
-    this.logger.log(`[Phone Request] userId из JWT: ${req.user?.sub || 'не авторизован'}`);
-    
-    // ВАЖНО: Telegram авторизация доступна только для авторизованных админов
-    // Если нет JWT - выбрасываем ошибку
-    if (!req.user?.sub) {
-      this.logger.warn('[Phone Request] Попытка запроса кода без JWT токена');
-      throw new UnauthorizedException('Telegram авторизация доступна только для авторизованных пользователей админ-панели');
-    }
-    
+    this.logger.debug(`Запрос кода для телефона: ${dto.phoneNumber}`);
     try {
       return await this.authService.requestPhoneCode(dto.phoneNumber);
     } catch (error: any) {
@@ -476,8 +466,6 @@ export class AuthController {
 
   @Post('telegram/phone/verify')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(OptionalJwtAuthGuard) // Опциональный guard - если токен есть, req.user будет доступен
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Проверка кода подтверждения и авторизация по номеру телефона' })
   @ApiResponse({
     status: 200,
@@ -491,27 +479,14 @@ export class AuthController {
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramAuthResponseDto> {
     this.logger.debug(`Проверка кода для телефона: ${dto.phoneNumber}`);
-    this.logger.log(`[Phone] userId из DTO: ${dto.userId || 'не указан'}, userId из JWT: ${req.user?.sub || 'не авторизован'}`);
-    
-    // ВАЖНО: Telegram авторизация доступна только для авторизованных админов
-    // Если нет JWT и нет userId в DTO - выбрасываем ошибку
-    if (!req.user?.sub && !dto.userId) {
-      this.logger.warn('[Phone] Попытка авторизации Telegram без JWT токена и без userId в DTO');
-      throw new UnauthorizedException('Telegram авторизация доступна только для авторизованных пользователей админ-панели');
-    }
-    
     try {
-      // Используем userId из DTO (если передан админом) или из JWT (если админ авторизован)
-      const userId = dto.userId || req.user?.sub;
-      this.logger.log(`[Phone] Используемый userId для сохранения сессии: ${userId}`);
-      
+      // Сессия сохраняется для пользователя, найденного/созданного по телефону
       const result = await this.authService.verifyPhoneCode(
         dto.phoneNumber,
         dto.code,
         dto.phoneCodeHash,
         req.ip,
         req.get('user-agent'),
-        userId, // Передаем userId если админ авторизован
       );
 
       if (result.requires2FA) {
@@ -622,8 +597,6 @@ export class AuthController {
 
   @Post('telegram/2fa/verify')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(OptionalJwtAuthGuard) // Опциональный guard - если токен есть, req.user будет доступен
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Проверка 2FA пароля и завершение авторизации' })
   @ApiResponse({
     status: 200,
@@ -638,27 +611,14 @@ export class AuthController {
   ): Promise<TelegramAuthResponseDto> {
     this.logger.log(`[2FA] Запрос на проверку 2FA для телефона: ${dto.phoneNumber}, phoneCodeHash: ${dto.phoneCodeHash}`);
     this.logger.log(`[2FA] Пароль получен: ${dto.password ? 'да' : 'нет'}, длина: ${dto.password?.length || 0}`);
-    this.logger.log(`[2FA] userId из DTO: ${dto.userId || 'не указан'}, userId из JWT: ${req.user?.sub || 'не авторизован'}`);
-    
-    // ВАЖНО: Telegram авторизация доступна только для авторизованных админов
-    // Если нет JWT и нет userId в DTO - выбрасываем ошибку
-    if (!req.user?.sub && !dto.userId) {
-      this.logger.warn('[2FA] Попытка авторизации Telegram без JWT токена и без userId в DTO');
-      throw new UnauthorizedException('Telegram авторизация доступна только для авторизованных пользователей админ-панели');
-    }
-    
     try {
-      // Используем userId из DTO (если передан админом) или из JWT (если админ авторизован)
-      const userId = dto.userId || req.user?.sub;
-      this.logger.log(`[2FA] Используемый userId для сохранения сессии: ${userId}`);
-      
+      // Сессия сохраняется для пользователя, найденного/созданного по телефону
       const result = await this.authService.verify2FAPassword(
         dto.phoneNumber,
         dto.password,
         dto.phoneCodeHash,
         req.ip,
         req.get('user-agent'),
-        userId, // Передаем userId если админ авторизован
       );
 
       // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде

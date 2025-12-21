@@ -480,7 +480,6 @@ export class AuthService {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
-    userId?: string, // Опциональный userId для админа
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null; requires2FA: boolean; passwordHint?: string }> {
     try {
       this.logger.debug(`Проверка кода для телефона: ${phoneNumber}, phoneCodeHash: ${phoneCodeHash}`);
@@ -569,64 +568,40 @@ export class AuthService {
       // Нормализуем номер телефона
       const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
 
-      // Если передан userId (админ создает сессию), используем его
-      // Иначе ищем или создаем пользователя по телефону
-      let user: User;
-      if (userId) {
-        // Используем переданный userId (для админа)
-        user = await this.userRepository.findOne({
-          where: { id: userId },
+      // Ищем или создаем пользователя по телефону
+      let user: User = await this.userRepository.findOne({
+        where: { phone: normalizedPhone },
+      });
+
+      if (!user) {
+        // Создаем нового пользователя
+        user = this.userRepository.create({
+          phone: normalizedPhone,
+          firstName: authUser.first_name || null,
+          lastName: authUser.last_name || null,
+          username: authUser.username || null,
+          telegramId: authUser.id.toString(),
+          role: UserRole.CLIENT,
+          isActive: true,
         });
-        if (!user) {
-          throw new UnauthorizedException('User not found');
-        }
-        // Обновляем данные пользователя из Telegram
+        await this.userRepository.save(user);
+        this.logger.log(`Created new user for Telegram auth: ${user.id}, phone: ${normalizedPhone}`);
+      } else {
+        // Обновляем данные существующего пользователя
         user.firstName = authUser.first_name || user.firstName;
         user.lastName = authUser.last_name || user.lastName;
         user.username = authUser.username || user.username;
         if (!user.telegramId) {
           user.telegramId = authUser.id.toString();
         }
-        if (normalizedPhone && !user.phone) {
-          user.phone = normalizedPhone;
-        }
         await this.userRepository.save(user);
-      } else {
-        // Ищем или создаем пользователя по телефону
-        user = await this.userRepository.findOne({
-          where: { phone: normalizedPhone },
-        });
-
-        if (!user) {
-          // Создаем нового пользователя
-          user = this.userRepository.create({
-            phone: normalizedPhone,
-            firstName: authUser.first_name || null,
-            lastName: authUser.last_name || null,
-            username: authUser.username || null,
-            telegramId: authUser.id.toString(),
-            role: UserRole.CLIENT,
-            isActive: true,
-          });
-          await this.userRepository.save(user);
-        } else {
-          // Обновляем данные существующего пользователя
-          user.firstName = authUser.first_name || user.firstName;
-          user.lastName = authUser.last_name || user.lastName;
-          user.username = authUser.username || user.username;
-          if (!user.telegramId) {
-            user.telegramId = authUser.id.toString();
-          }
-          await this.userRepository.save(user);
-        }
+        this.logger.log(`Updated existing user for Telegram auth: ${user.id}, phone: ${normalizedPhone}`);
       }
 
-      // Сохраняем сессию MTProto
-      // ВАЖНО: Если передан userId (админ создает сессию), сохраняем для него, а не для найденного пользователя
-      const sessionUserId = userId || user.id;
-      this.logger.log(`Saving Telegram session for user ${sessionUserId} (role: ${user.role}, phone: ${normalizedPhone}, userId provided: ${userId ? 'yes' : 'no'})`);
+      // Сохраняем сессию MTProto для пользователя, найденного/созданного по телефону
+      this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId})`);
       await this.telegramUserClientService.saveSession(
-        sessionUserId,
+        user.id,
         client,
         normalizedPhone,
         ipAddress,
@@ -943,7 +918,6 @@ export class AuthService {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
-    userId?: string, // Опциональный userId для админа
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
       // Нормализуем номер телефона для поиска в хранилище
@@ -970,7 +944,7 @@ export class AuthService {
           // Используем найденную сессию
           const migrated = this.twoFactorStore.get(normalizedPhone);
           if (migrated) {
-            return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent, userId);
+            return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent);
           }
         }
         throw new UnauthorizedException('2FA session not found. Please restart the authorization process.');
@@ -981,7 +955,7 @@ export class AuthService {
         throw new UnauthorizedException('Invalid phone code hash. Please restart the authorization process.');
       }
       
-      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent, userId);
+      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent);
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
       throw error;
@@ -995,7 +969,6 @@ export class AuthService {
     stored: { client: Client; phoneCodeHash: string; expiresAt: Date; passwordHint?: string },
     ipAddress?: string,
     userAgent?: string,
-    userId?: string, // Опциональный userId для админа
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
 
@@ -1347,70 +1320,41 @@ export class AuthService {
         throw new UnauthorizedException('Invalid user data');
       }
 
-      // normalizedPhone уже получен из параметров метода
+      // Ищем или создаем пользователя по телефону
+      this.logger.log(`[2FA] Starting user lookup for phone: ${normalizedPhone}`);
+      let user: User = await this.userRepository.findOne({
+        where: { phone: normalizedPhone },
+      });
 
-      // Если передан userId (админ создает сессию), используем его
-      // Иначе ищем или создаем пользователя по телефону
-      this.logger.log(`[2FA] Starting user lookup. userId: ${userId || 'not provided'}, normalizedPhone: ${normalizedPhone}`);
-      let user: User;
-      if (userId) {
-        this.logger.log(`[2FA] Using provided userId: ${userId}`);
-        // Используем переданный userId (для админа)
-        user = await this.userRepository.findOne({
-          where: { id: userId },
+      if (!user) {
+        // Создаем нового пользователя
+        user = this.userRepository.create({
+          phone: normalizedPhone,
+          firstName: authUser.first_name || null,
+          lastName: authUser.last_name || null,
+          username: authUser.username || null,
+          telegramId: authUser.id.toString(),
+          role: UserRole.CLIENT,
+          isActive: true,
         });
-        if (!user) {
-          this.logger.error(`[2FA] User not found for userId: ${userId}`);
-          throw new UnauthorizedException('User not found');
-        }
-        this.logger.log(`[2FA] Found user: ${user.id}, role: ${user.role}, phone: ${user.phone}`);
-        // Обновляем данные пользователя из Telegram
+        await this.userRepository.save(user);
+        this.logger.log(`[2FA] Created new user: ${user.id}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}`);
+      } else {
+        // Обновляем данные существующего пользователя
         user.firstName = authUser.first_name || user.firstName;
         user.lastName = authUser.last_name || user.lastName;
         user.username = authUser.username || user.username;
         if (!user.telegramId) {
           user.telegramId = authUser.id.toString();
         }
-        if (normalizedPhone && !user.phone) {
-          user.phone = normalizedPhone;
-        }
         await this.userRepository.save(user);
-      } else {
-        // Ищем или создаем пользователя по телефону
-        user = await this.userRepository.findOne({
-          where: { phone: normalizedPhone },
-        });
-
-        if (!user) {
-          // Создаем нового пользователя
-          user = this.userRepository.create({
-            phone: normalizedPhone,
-            firstName: authUser.first_name || null,
-            lastName: authUser.last_name || null,
-            username: authUser.username || null,
-            telegramId: authUser.id.toString(),
-            role: UserRole.CLIENT,
-            isActive: true,
-          });
-          await this.userRepository.save(user);
-        } else {
-          // Обновляем данные существующего пользователя
-          user.firstName = authUser.first_name || user.firstName;
-          user.lastName = authUser.last_name || user.lastName;
-          user.username = authUser.username || user.username;
-          if (!user.telegramId) {
-            user.telegramId = authUser.id.toString();
-          }
-          await this.userRepository.save(user);
-        }
+        this.logger.log(`[2FA] Updated existing user: ${user.id}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}`);
       }
 
-      // Сохраняем сессию MTProto
-      // ВАЖНО: Если передан userId (админ создает сессию), сохраняем для него, а не для найденного пользователя
-      const sessionUserId = userId || user.id;
-      this.logger.log(`Saving Telegram session for user ${sessionUserId} (role: ${user.role}, phone: ${normalizedPhone}, userId provided: ${userId ? 'yes' : 'no'})`);
+      // Сохраняем сессию MTProto для пользователя, найденного/созданного по телефону
+      this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId})`);
       await this.telegramUserClientService.saveSession(
-        sessionUserId,
+        user.id,
         client,
         normalizedPhone,
         ipAddress,
