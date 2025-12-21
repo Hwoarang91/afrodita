@@ -20,6 +20,11 @@ class DatabaseStorage implements Partial<Storage> {
     private apiHash: string,
   ) {}
 
+  async initialize(): Promise<void> {
+    // Инициализация storage - ничего не делаем, так как данные уже в БД
+    return Promise.resolve();
+  }
+
   async get<T = Uint8Array>(key: readonly StorageKeyPart[]): Promise<T | null> {
     try {
       const session = await this.sessionRepository.findOne({
@@ -248,17 +253,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
         apiHash,
       );
 
-      // Копируем данные сессии из клиента в наш storage
-      // Это делается через переключение storage клиента
-      // Но так как мы не можем напрямую получить данные из storage клиента,
-      // мы создадим новую сессию с нашим storage и переподключимся
-      const newClient = new Client({
-        apiId,
-        apiHash,
-        storage: storage as any,
-      });
-
       // Сохраняем сессию в БД
+      // Используем существующий авторизованный клиент, не создаем новый
       const sessionData = await this.extractSessionData(client);
       const encrypted = this.encryptionService.encrypt(JSON.stringify(sessionData));
 
@@ -289,9 +285,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       await this.sessionRepository.save(session);
 
-      // Обновляем клиент в кэше
-      this.clients.set(userId, newClient);
-      await newClient.connect();
+      // Сохраняем существующий авторизованный клиент в кэше
+      this.clients.set(userId, client);
 
       this.logger.log(`Session saved for user ${userId}`);
     } catch (error: any) {
