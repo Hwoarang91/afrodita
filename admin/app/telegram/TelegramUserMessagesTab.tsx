@@ -55,7 +55,8 @@ export default function TelegramUserMessagesTab() {
       const error: any = chatsError;
       if (error.response?.status === 401) {
         if (error.response?.data?.message?.includes('No active Telegram session')) {
-          // Это нормально - просто нет активной Telegram сессии
+          // Показываем понятное сообщение пользователю
+          toast.error('Сначала необходимо создать Telegram сессию. Перейдите на вкладку "Авторизация" и авторизуйтесь через телефон или QR-код.');
           return;
         }
         // Другая ошибка 401 - возможно, не авторизован в админ-панели
@@ -80,7 +81,8 @@ export default function TelegramUserMessagesTab() {
       const error: any = contactsError;
       if (error.response?.status === 401) {
         if (error.response?.data?.message?.includes('No active Telegram session')) {
-          // Это нормально - просто нет активной Telegram сессии
+          // Показываем понятное сообщение пользователю
+          toast.error('Сначала необходимо создать Telegram сессию. Перейдите на вкладку "Авторизация" и авторизуйтесь через телефон или QR-код.');
           return;
         }
         // Другая ошибка 401 - возможно, не авторизован в админ-панели
