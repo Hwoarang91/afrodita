@@ -156,7 +156,7 @@ class DatabaseStorage implements Partial<Storage> {
   // Метод getMany требуется MTKruto для операций с несколькими ключами
   // Используется при connect() для очистки обновлений
   async *getMany<T = Uint8Array>(
-    filter: readonly StorageKeyPart[] | { prefix: readonly StorageKeyPart[] },
+    filter: any, // GetManyFilter может быть массивом, объектом с prefix, или объектом с start/end
     params?: { limit?: number; reverse?: boolean },
   ): AsyncGenerator<[readonly StorageKeyPart[], T], any, any> {
     try {
@@ -176,7 +176,16 @@ class DatabaseStorage implements Partial<Storage> {
       const data = JSON.parse(decrypted);
 
       // Определяем префикс для поиска
-      const prefix = Array.isArray(filter) ? filter : (filter as { prefix: readonly StorageKeyPart[] }).prefix;
+      let prefix: readonly StorageKeyPart[] = [];
+      if (Array.isArray(filter)) {
+        prefix = filter;
+      } else if (filter && typeof filter === 'object') {
+        if ('prefix' in filter) {
+          prefix = filter.prefix;
+        } else if ('start' in filter) {
+          prefix = filter.start;
+        }
+      }
       
       // Рекурсивно ищем все ключи с указанным префиксом
       const findKeys = (obj: any, currentPath: StorageKeyPart[]): Array<[readonly StorageKeyPart[], T]> => {
