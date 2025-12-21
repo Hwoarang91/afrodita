@@ -281,7 +281,14 @@ export class TelegramUserClientService implements OnModuleDestroy {
    */
   async getClient(userId?: string): Promise<Client | null> {
     try {
-      this.logger.debug(`Looking for any active Telegram session (requested by userId: ${userId || 'none'})`);
+      this.logger.log(`Looking for any active Telegram session (requested by userId: ${userId || 'none'})`);
+
+      // Сначала проверяем общее количество сессий в БД (для отладки)
+      const allSessions = await this.sessionRepository.find();
+      this.logger.log(`Total sessions in database: ${allSessions.length}`);
+      allSessions.forEach((s, index) => {
+        this.logger.log(`Session ${index + 1}: id=${s.id}, userId=${s.userId}, phoneNumber=${s.phoneNumber}, isActive=${s.isActive}, lastUsedAt=${s.lastUsedAt}`);
+      });
 
       // Просто ищем любую активную сессию
       const activeSessions = await this.sessionRepository.find({
@@ -293,6 +300,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
         },
       });
       
+      this.logger.log(`Found ${activeSessions.length} active session(s) in database`);
+      
       if (activeSessions.length === 0) {
         this.logger.warn(`No active Telegram sessions found in database`);
         return null;
@@ -300,13 +309,13 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       // Берем самую свежую активную сессию
       const session = activeSessions[0];
-      this.logger.debug(`Found active session: id=${session.id}, phoneNumber=${session.phoneNumber}, userId=${session.userId}, lastUsedAt=${session.lastUsedAt}`);
+      this.logger.log(`Using active session: id=${session.id}, phoneNumber=${session.phoneNumber}, userId=${session.userId}, lastUsedAt=${session.lastUsedAt}`);
       
       // Логируем все активные сессии для информации
       if (activeSessions.length > 1) {
-        this.logger.debug(`Total active sessions: ${activeSessions.length}`);
+        this.logger.log(`Total active sessions: ${activeSessions.length}`);
         activeSessions.slice(1).forEach((s, index) => {
-          this.logger.debug(`Other active session ${index + 1}: id=${s.id}, phoneNumber=${s.phoneNumber}, userId=${s.userId}`);
+          this.logger.log(`Other active session ${index + 1}: id=${s.id}, phoneNumber=${s.phoneNumber}, userId=${s.userId}`);
         });
       }
 
