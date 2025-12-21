@@ -1115,8 +1115,18 @@ export class AuthService {
       
       // Создаем SRP routines для вычисления параметров
       // Для MTProto используем кастомные параметры через SRPParameters
+      // Нужно передать функцию хеширования, а не строку
       const { SRPParameters } = require('tssrp6a');
-      const customParams = new SRPParameters({ N: pBigInt, g: gBigInt }, 'sha256');
+      const hashFunction = (data: Buffer | string) => {
+        const hash = crypto.createHash('sha256');
+        if (Buffer.isBuffer(data)) {
+          hash.update(data);
+        } else {
+          hash.update(Buffer.from(data, 'utf8'));
+        }
+        return hash.digest();
+      };
+      const customParams = new SRPParameters({ N: pBigInt, g: gBigInt }, hashFunction);
       const routines = new SRPRoutines(customParams);
       
       // Вычисляем A = g^a mod p (публичный ключ клиента)
@@ -1140,20 +1150,28 @@ export class AuthService {
       const ABigIntForM1 = BigInt('0x' + ABuffer.toString('hex'));
       const BBigIntForM1 = BigInt('0x' + BBytes.toString('hex'));
       
-      // Вычисляем M1 = H(A || B || S) - асинхронный метод
-      // computeClientEvidence(_I, _s, A, B, S) где _I и _s не используются для M1
-      // Для MTProto используем пустые значения для _I и _s
-      const M1BigInt = await routines.computeClientEvidence(
-        '', // _I - identity, не используется для M1
-        Buffer.alloc(0), // _s - salt, не используется для M1
-        ABigIntForM1,
-        BBigIntForM1,
-        SBigInt,
-      );
+      // Для MTProto M1 вычисляется по специальной формуле:
+      // M1 = SHA256(SHA256(p) || SHA256(g) || SHA256(A) || SHA256(B) || SHA256(S))
+      // Это отличается от стандартного SRP, где M1 = H(A || B || S)
+      const pHash = crypto.createHash('sha256').update(pBuffer).digest();
+      const gHash = crypto.createHash('sha256').update(Buffer.from([g])).digest();
       
-      // Преобразуем M1 из BigInt в Buffer (256 байт)
-      const M1Hex = M1BigInt.toString(16).padStart(512, '0');
-      const M1Buffer = Buffer.from(M1Hex, 'hex');
+      // Преобразуем A, B, S в Buffer для хеширования
+      // A уже в ABuffer (256 байт)
+      // B уже в BBytes (256 байт)
+      // S нужно преобразовать из BigInt в Buffer (256 байт)
+      const SHex = SBigInt.toString(16).padStart(512, '0');
+      const SBuffer = Buffer.from(SHex, 'hex');
+      
+      // Вычисляем SHA256 для A, B, S
+      const AHash = crypto.createHash('sha256').update(ABuffer).digest();
+      const BHash = crypto.createHash('sha256').update(BBytes).digest();
+      const SHash = crypto.createHash('sha256').update(SBuffer).digest();
+      
+      // Вычисляем M1 = SHA256(pHash || gHash || AHash || BHash || SHash)
+      const M1Buffer = crypto.createHash('sha256')
+        .update(Buffer.concat([pHash, gHash, AHash, BHash, SHash]))
+        .digest();
       
       const A = new Uint8Array(Array.from(ABuffer));
       const M1 = new Uint8Array(Array.from(M1Buffer));

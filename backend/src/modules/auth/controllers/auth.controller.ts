@@ -125,14 +125,19 @@ export class AuthController {
   ): Promise<RefreshResponseDto> {
     try {
       // Получаем refresh token из body или из cookies (приоритет cookies, так как они httpOnly)
-      const refreshToken = req.cookies?.refresh_token || refreshDto.refreshToken;
+      const refreshTokenFromCookie = req.cookies?.refresh_token;
+      const refreshTokenFromBody = refreshDto.refreshToken;
+      const refreshToken = refreshTokenFromCookie || refreshTokenFromBody;
       
-      this.logger.debug(`Refresh request: hasCookie=${!!req.cookies?.refresh_token}, hasBody=${!!refreshDto.refreshToken}, ip=${req.ip}`);
+      this.logger.debug(`Refresh request: hasCookie=${!!refreshTokenFromCookie}, hasBody=${!!refreshTokenFromBody}, ip=${req.ip}`);
+      this.logger.debug(`Cookies received: ${JSON.stringify(Object.keys(req.cookies || {}))}`);
       
       if (!refreshToken) {
         this.logger.warn('Refresh token отсутствует в cookies и body', {
           cookies: Object.keys(req.cookies || {}),
-          hasBody: !!refreshDto.refreshToken,
+          hasBody: !!refreshTokenFromBody,
+          cookieValue: refreshTokenFromCookie ? 'present' : 'missing',
+          bodyValue: refreshTokenFromBody ? 'present' : 'missing',
         });
         throw new UnauthorizedException('Refresh token is required');
       }
