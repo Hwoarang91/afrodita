@@ -385,17 +385,16 @@ export class TelegramUserClientService implements OnModuleDestroy {
         apiHash,
       );
 
-      // Создаем новый клиент с нашим storage
+      // ВАЖНО: Сначала копируем данные сессии напрямую в DatabaseStorage
+      // Это сохранит их в БД до создания нового клиента
+      await this.copySessionDataToStorage(client, storage);
+
+      // Создаем новый клиент с нашим storage (данные уже в БД)
       const newClient = new Client({
         apiId,
         apiHash,
         storage: storage as any,
       });
-
-      // Копируем данные сессии из старого клиента в новый
-      // MTKruto автоматически сохранит данные в наш storage при подключении
-      // Но нам нужно скопировать существующие данные
-      await this.copySessionData(client, newClient);
 
       // Подключаем новый клиент (он загрузит данные из нашего storage)
       await newClient.connect();
@@ -444,14 +443,13 @@ export class TelegramUserClientService implements OnModuleDestroy {
   }
 
   /**
-   * Копирует данные сессии из одного клиента в другой
-   * Использует известные ключи сессии MTKruto
+   * Копирует данные сессии из клиента напрямую в DatabaseStorage
+   * Это сохраняет данные в БД до создания нового клиента
    */
-  private async copySessionData(sourceClient: Client, targetClient: Client): Promise<void> {
+  private async copySessionDataToStorage(sourceClient: Client, targetStorage: DatabaseStorage): Promise<void> {
     try {
-      // Получаем storage обоих клиентов
+      // Получаем storage исходного клиента
       const sourceStorage = (sourceClient as any).storage as Storage;
-      const targetStorage = (targetClient as any).storage as Storage;
 
       // Проверяем, что sourceStorage имеет метод get
       if (!sourceStorage || typeof sourceStorage.get !== 'function') {
@@ -470,13 +468,14 @@ export class TelegramUserClientService implements OnModuleDestroy {
         ['takeout_id'],
       ];
 
-      // Копируем данные по каждому ключу
+      // Копируем данные по каждому ключу напрямую в DatabaseStorage
+      // Это сохранит их в БД через метод set
       for (const key of sessionKeys) {
         try {
           const value = await sourceStorage.get(key);
           if (value) {
             await targetStorage.set(key, value as Uint8Array);
-            this.logger.debug(`Copied session key: ${key.join('.')}`);
+            this.logger.debug(`Copied session key to DatabaseStorage: ${key.join('.')}`);
           }
         } catch (e) {
           // Игнорируем ошибки для отдельных ключей
@@ -492,16 +491,16 @@ export class TelegramUserClientService implements OnModuleDestroy {
           const value = await sourceStorage.get(dcKey);
           if (value) {
             await targetStorage.set(dcKey, value as Uint8Array);
-            this.logger.debug(`Copied DC key: ${dcKey.join('.')}`);
+            this.logger.debug(`Copied DC key to DatabaseStorage: ${dcKey.join('.')}`);
           }
         } catch (e) {
           // Игнорируем ошибки
         }
       }
 
-      this.logger.log('Session data copied successfully');
+      this.logger.log('Session data copied to DatabaseStorage successfully');
     } catch (error: any) {
-      this.logger.warn(`Failed to copy session data: ${error.message}`);
+      this.logger.warn(`Failed to copy session data to DatabaseStorage: ${error.message}`);
       // Не бросаем ошибку, так как storage может заполниться автоматически при использовании
     }
   }
