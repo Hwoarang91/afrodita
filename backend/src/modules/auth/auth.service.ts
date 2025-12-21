@@ -1074,35 +1074,40 @@ export class AuthService {
         throw new UnauthorizedException('Failed to get SRP parameters: missing required fields');
       }
 
-      // Используем библиотеку tssrp6a для вычисления SRP параметров
-      // MTProto использует модифицированный SRP протокол
-      const { SRPRoutines } = require('tssrp6a');
+      // Вычисляем SRP параметры по алгоритму MTKruto (не используем tssrp6a)
       const crypto = require('crypto');
       
       // Преобразуем параметры для SRP
       // MTProto использует специфичный формат для SRP
       const passwordBytes = Buffer.from(password, 'utf8');
       
-      // Вычисляем x по формуле Telegram SRP:
-      // x = SHA256(salt2 + PBKDF2_HMAC_SHA512(SHA256(salt1 + password + salt1), salt1, 100000, 64) + salt2)
-      // Шаг 1: SHA256(salt1 + password + salt1) - ВАЖНО: salt1 дважды!
-      const step1 = crypto.createHash('sha256')
+      // Вычисляем x по формуле MTKruto (PH2):
+      // PH2(password, salt1, salt2) := SH(pbkdf2(PH1(password, salt1, salt2), salt1, 100000), salt2)
+      // PH1(password, salt1, salt2) := SH(SH(password, salt1), salt2)
+      // SH(data, salt) := H(salt | data | salt)
+      
+      // Шаг 1: SH(password, salt1) = H(salt1 | password | salt1)
+      const sh1 = crypto.createHash('sha256')
         .update(Buffer.concat([salt1, passwordBytes, salt1]))
         .digest();
       
-      // Шаг 2: PBKDF2_HMAC_SHA512(step1, salt1, 100000, 64, 'sha512')
-      // ВАЖНО: используем sha512, а не sha256, и размер вывода 64 байта, а не 256
-      const step2 = crypto.pbkdf2Sync(
-        step1,
+      // Шаг 2: PH1 = SH(SH(password, salt1), salt2) = H(salt2 | sh1 | salt2)
+      const ph1 = crypto.createHash('sha256')
+        .update(Buffer.concat([salt2, sh1, salt2]))
+        .digest();
+      
+      // Шаг 3: pbkdf2(PH1, salt1, 100000) с SHA-512, 512 бит (64 байта)
+      const pbkdf2Result = crypto.pbkdf2Sync(
+        ph1,
         salt1,
         100000,
-        64,  // 64 байта, не 256!
-        'sha512'  // sha512, не sha256!
+        64,  // 64 байта (512 бит)
+        'sha512'
       );
       
-      // Шаг 3: SHA256(salt2 + step2 + salt2)
+      // Шаг 4: PH2 = SH(pbkdf2(...), salt2) = H(salt2 | pbkdf2Result | salt2)
       const xBytes = crypto.createHash('sha256')
-        .update(Buffer.concat([salt2, step2, salt2]))
+        .update(Buffer.concat([salt2, pbkdf2Result, salt2]))
         .digest();
       
       // Преобразуем параметры в нужный формат
@@ -1124,85 +1129,121 @@ export class AuthService {
       // Преобразуем B из Buffer в BigInt
       const BBigInt = BigInt('0x' + BBytes.toString('hex'));
       
-      // Генерируем приватное значение a вручную (случайное число меньше p)
-      // Используем crypto для генерации случайного числа
-      const aBytes = crypto.randomBytes(256);
-      let aBigInt = BigInt('0x' + aBytes.toString('hex')) % pBigInt;
-      if (aBigInt === BigInt(0)) {
-        aBigInt = BigInt(1); // Убеждаемся, что a не равно 0
+      // Вычисляем параметры SRP по алгоритму MTKruto (не используем tssrp6a)
+      // Функция pad для дополнения до 256 байт
+      const pad = (bigint: bigint | Buffer): Buffer => {
+        if (Buffer.isBuffer(bigint)) {
+          if (bigint.length >= 256) return bigint;
+          return Buffer.concat([Buffer.alloc(256 - bigint.length, 0), bigint]);
+        }
+        const hex = bigint.toString(16).padStart(512, '0');
+        return Buffer.from(hex, 'hex');
+      };
+      
+      // Функция modExp для вычисления g^a mod p
+      const modExp = (base: bigint, exp: bigint, mod: bigint): bigint => {
+        let result = 1n;
+        base = base % mod;
+        while (exp > 0n) {
+          if (exp % 2n === 1n) {
+            result = (result * base) % mod;
+          }
+          exp = exp >> 1n;
+          base = (base * base) % mod;
+        }
+        return result;
+      };
+      
+      // Функция mod для вычисления a mod p
+      const mod = (a: bigint, p: bigint): bigint => {
+        const result = a % p;
+        return result < 0n ? result + p : result;
+      };
+      
+      // k := H(p | g)
+      const kBytes = crypto.createHash('sha256')
+        .update(Buffer.concat([pad(pBigInt), pad(BigInt(g))]))
+        .digest();
+      const kBigInt = BigInt('0x' + kBytes.toString('hex'));
+      
+      // Генерируем a и вычисляем gA = g^a mod p
+      // Повторяем до тех пор, пока u > 0
+      let aBigInt = 0n;
+      let gA = 0n;
+      let uBigInt = 0n;
+      
+      for (let i = 0; i < 1000; i++) {
+        const aBytes = crypto.randomBytes(256);
+        aBigInt = BigInt('0x' + aBytes.toString('hex')) % pBigInt;
+        if (aBigInt === 0n) continue;
+        
+        gA = modExp(BigInt(g), aBigInt, pBigInt);
+        
+        // Проверяем, что gA валиден (isGoodModExpFirst)
+        const diff = pBigInt - gA;
+        if (diff < 0n) continue;
+        const diffBits = diff.toString(2).length;
+        const gABits = gA.toString(2).length;
+        if (diffBits < 2048 - 64 || gABits < 2048 - 64) continue;
+        if (Math.floor((gABits + 7) / 8) > 256) continue;
+        
+        // u := H(gA | gB)
+        const uBytes = crypto.createHash('sha256')
+          .update(Buffer.concat([pad(gA), pad(BBigInt)]))
+          .digest();
+        uBigInt = BigInt('0x' + uBytes.toString('hex'));
+        
+        if (uBigInt > 0n) {
+          break;
+        }
       }
       
-      // Создаем SRP routines для вычисления параметров
-      // Для MTProto используем кастомные параметры через SRPParameters
-      // Нужно передать функцию хеширования, а не строку
-      const { SRPParameters } = require('tssrp6a');
-      const hashFunction = (data: Buffer | string) => {
-        const hash = crypto.createHash('sha256');
-        if (Buffer.isBuffer(data)) {
-          hash.update(data);
-        } else {
-          hash.update(Buffer.from(data, 'utf8'));
-        }
-        return hash.digest();
-      };
-      const customParams = new SRPParameters({ N: pBigInt, g: gBigInt }, hashFunction);
-      const routines = new SRPRoutines(customParams);
+      if (!aBigInt || !uBigInt || !gA) {
+        throw new UnauthorizedException('Failed to generate valid SRP parameters');
+      }
       
-      // Вычисляем A = g^a mod p (публичный ключ клиента)
-      const ABigInt = routines.computeClientPublicValue(gBigInt, pBigInt, aBigInt);
+      // Преобразуем gA в Buffer (256 байт)
+      const ABuffer = pad(gA);
       
-      // Преобразуем A в Buffer (256 байт, дополняем нулями слева)
-      const AHex = ABigInt.toString(16).padStart(512, '0');
-      const ABuffer = Buffer.from(AHex, 'hex');
+      // v := pow(g, x) mod p
+      const v = modExp(BigInt(g), xBigInt, pBigInt);
       
-      // Вычисляем u = H(A || B) - computeU принимает только 2 параметра (BigInt) и асинхронный
-      const uBigInt = await routines.computeU(ABigInt, BBigInt);
+      // k_v := (k * v) mod p
+      const kV = mod(kBigInt * v, pBigInt);
       
-      // Вычисляем k = H(p || g) - computeK не принимает параметры, использует внутренние параметры
-      const kBigInt = await routines.computeK();
+      // t := (g_b - k_v) mod p
+      const t = mod(BBigInt - kV, pBigInt);
       
-      // Вычисляем S используя computeClientSessionKey(k, x, u, a, B)
-      // Формула: S = (B - k * g^x)^(a + u * x) mod p
-      const SBigInt = routines.computeClientSessionKey(kBigInt, xBigInt, uBigInt, aBigInt, BBigInt);
+      // s_a := pow(t, a + u * x) mod p
+      const sA = modExp(t, aBigInt + uBigInt * xBigInt, pBigInt);
       
-      // Преобразуем A, B, S в BigInt для computeClientEvidence
-      const ABigIntForM1 = BigInt('0x' + ABuffer.toString('hex'));
-      const BBigIntForM1 = BigInt('0x' + BBytes.toString('hex'));
+      // k_a := H(s_a)
+      const kA = crypto.createHash('sha256').update(pad(sA)).digest();
       
-      // Для MTProto M1 вычисляется по специальной формуле:
-      // M1 = SHA256(SHA256(p) || SHA256(g) || SHA256(A) || SHA256(B) || SHA256(S))
-      // Это отличается от стандартного SRP, где M1 = H(A || B || S)
-      // g - это число (обычно 3), нужно преобразовать в Buffer (1 байт)
-      const gBuffer = Buffer.allocUnsafe(1);
-      gBuffer.writeUInt8(g, 0);
-      const pHash = crypto.createHash('sha256').update(pBuffer).digest();
-      const gHash = crypto.createHash('sha256').update(gBuffer).digest();
+      // M1 := H(H(p) xor H(g) | H(salt1) | H(salt2) | g_a | g_b | k_a)
+      // Согласно MTKruto реализации
+      const pHash = crypto.createHash('sha256').update(pad(pBigInt)).digest();
+      const gPadded = pad(BigInt(g));
+      const gHash = crypto.createHash('sha256').update(gPadded).digest();
+      const salt1Hash = crypto.createHash('sha256').update(salt1).digest();
+      const salt2Hash = crypto.createHash('sha256').update(salt2).digest();
       
-      // Преобразуем A, B, S в Buffer для хеширования
-      // A уже в ABuffer (256 байт)
-      // B уже в BBytes (256 байт)
-      // S нужно преобразовать из BigInt в Buffer (256 байт)
-      const SHex = SBigInt.toString(16).padStart(512, '0');
-      const SBuffer = Buffer.from(SHex, 'hex');
-      
-      // Вычисляем SHA256 для A, B
-      const AHash = crypto.createHash('sha256').update(ABuffer).digest();
-      const BHash = crypto.createHash('sha256').update(BBytes).digest();
-      
-      // Для MTProto: K = SHA256(S) - session key это хеш от shared secret
-      const KHash = crypto.createHash('sha256').update(SBuffer).digest();
-      
-      // Вычисляем M1 по формуле MTProto SRP:
-      // M1 = SHA256((SHA256(p) XOR SHA256(g)) || SHA256(A) || SHA256(B) || K)
-      // где K = SHA256(S) - это ключ сессии
-      // XOR применяется к pHash и gHash, затем все конкатенируется и хешируется
+      // H(p) xor H(g)
       const pXorG = Buffer.alloc(32);
       for (let i = 0; i < 32; i++) {
         pXorG[i] = pHash[i] ^ gHash[i];
       }
       
+      // M1 = H(H(p) xor H(g) | H(salt1) | H(salt2) | g_a | g_b | k_a)
       const M1Buffer = crypto.createHash('sha256')
-        .update(Buffer.concat([pXorG, AHash, BHash, KHash]))
+        .update(Buffer.concat([
+          pXorG,
+          salt1Hash,
+          salt2Hash,
+          pad(gA),      // g_a (256 байт)
+          pad(BBigInt), // g_b (256 байт)
+          kA,           // k_a (32 байта)
+        ]))
         .digest();
       
       // Логируем промежуточные значения для отладки
@@ -1210,14 +1251,14 @@ export class AuthService {
         xLength: xBytes.length,
         ALength: ABuffer.length,
         BLength: BBytes.length,
-        SLength: SBuffer.length,
+        sALength: pad(sA).length,
         M1Length: M1Buffer.length,
         pHashLength: pHash.length,
         gHashLength: gHash.length,
         pXorGLength: pXorG.length,
-        AHashLength: AHash.length,
-        BHashLength: BHash.length,
-        KHashLength: KHash.length,
+        salt1HashLength: salt1Hash.length,
+        salt2HashLength: salt2Hash.length,
+        kALength: kA.length,
       });
       
       const A = new Uint8Array(Array.from(ABuffer));
