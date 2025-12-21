@@ -1172,14 +1172,11 @@ export class AuthService {
       const SHash = crypto.createHash('sha256').update(SBuffer).digest();
       
       // Вычисляем M1 = SHA256(pHash || gHash || AHash || BHash || SHash)
-      // SHA256 дает 32 байта, но для MTProto нужно 256 байт (дополняем нулями слева)
-      const M1Hash = crypto.createHash('sha256')
+      // Для MTProto M1 - это просто SHA256 хеш (32 байта), НЕ дополняем до 256 байт
+      // A, B, S - это 256 байт, но M1 - это просто хеш
+      const M1Buffer = crypto.createHash('sha256')
         .update(Buffer.concat([pHash, gHash, AHash, BHash, SHash]))
         .digest();
-      
-      // Дополняем M1 до 256 байт нулями слева (как и A, B, S)
-      const M1Buffer = Buffer.alloc(256, 0);
-      M1Hash.copy(M1Buffer, 256 - M1Hash.length);
       
       const A = new Uint8Array(Array.from(ABuffer));
       const M1 = new Uint8Array(Array.from(M1Buffer));
