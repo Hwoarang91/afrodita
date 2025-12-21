@@ -212,7 +212,7 @@ export class TelegramUserController {
       this.logger.debug(`Получение списка чатов для пользователя ${userId}`);
 
       // Получаем клиент пользователя (для админов может использоваться любая активная сессия)
-      const { client } = await this.telegramUserClientService.getClient(userId);
+      const client = await this.telegramUserClientService.getClient(userId);
       if (!client) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
@@ -290,7 +290,7 @@ export class TelegramUserController {
       this.logger.debug(`Получение списка контактов для пользователя ${userId}`);
 
       // Получаем клиент пользователя (для админов может использоваться любая активная сессия)
-      const { client } = await this.telegramUserClientService.getClient(userId);
+      const client = await this.telegramUserClientService.getClient(userId);
       if (!client) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
