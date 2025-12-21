@@ -494,7 +494,17 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       this.clients.set(userId, newClient);
 
-      this.logger.log(`Session saved successfully for user ${userId}, session id: ${session.id}`);
+      this.logger.log(`Session saved successfully for user ${userId}, session id: ${session.id}, phoneNumber: ${phoneNumber}, isActive: ${session.isActive}`);
+      
+      // Проверяем, что сессия действительно сохранена и активна
+      const savedSession = await this.sessionRepository.findOne({
+        where: { id: session.id },
+      });
+      if (savedSession) {
+        this.logger.log(`Verified saved session: id=${savedSession.id}, isActive=${savedSession.isActive}, phoneNumber=${savedSession.phoneNumber}, userId=${savedSession.userId}`);
+      } else {
+        this.logger.error(`ERROR: Session ${session.id} was not found in database after saving!`);
+      }
     } catch (error: any) {
       this.logger.error(`Error saving session for user ${userId}: ${error.message}`, error.stack);
       throw error;
