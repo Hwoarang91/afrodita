@@ -114,7 +114,8 @@ export class JwtAuthService {
     });
 
     if (!refreshTokenEntity) {
-      this.logger.warn('Refresh token не найден или неактивен');
+      this.logger.warn(`Refresh token не найден или неактивен. Hash preview: ${refreshTokenHash.substring(0, 16)}...`);
+      this.logger.debug(`Searching for token with hash: ${refreshTokenHash}`);
       throw new Error('Invalid refresh token');
     }
 

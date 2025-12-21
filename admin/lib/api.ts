@@ -104,7 +104,9 @@ apiClient.interceptors.response.use(
             .find(row => row.startsWith('csrf_token='))
             ?.split('=')[1] || '';
 
-          const refreshResponse = await fetch('/api/auth/refresh', {
+          // Используем правильный URL с учетом baseURL
+          const refreshUrl = `${getApiUrl()}/auth/refresh`;
+          const refreshResponse = await fetch(refreshUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

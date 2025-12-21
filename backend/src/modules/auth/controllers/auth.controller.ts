@@ -131,6 +131,7 @@ export class AuthController {
       
       this.logger.debug(`Refresh request: hasCookie=${!!refreshTokenFromCookie}, hasBody=${!!refreshTokenFromBody}, ip=${req.ip}`);
       this.logger.debug(`Cookies received: ${JSON.stringify(Object.keys(req.cookies || {}))}`);
+      this.logger.debug(`Refresh token from cookie length: ${refreshTokenFromCookie?.length || 0}, from body length: ${refreshTokenFromBody?.length || 0}`);
       
       if (!refreshToken) {
         this.logger.warn('Refresh token отсутствует в cookies и body', {
@@ -141,6 +142,10 @@ export class AuthController {
         });
         throw new UnauthorizedException('Refresh token is required');
       }
+      
+      // Логируем хеш токена для отладки (первые 8 символов)
+      const tokenHashPreview = refreshToken.substring(0, 8) + '...';
+      this.logger.debug(`Attempting to refresh token with hash preview: ${tokenHashPreview}`);
 
       // Обновляем токены
       const tokenPair = await this.jwtService.refreshTokens(
