@@ -461,7 +461,7 @@ export class TelegramUserController {
     },
   })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
-  async getSessions(@Request() req): Promise<{ success: boolean; sessions: SessionInfoDto[] }> {
+  async getSessions(@Request() req): Promise<{ success: boolean; currentSessionId: string | null; sessions: SessionInfoDto[] }> {
     try {
       const userId = req.user.sub;
       this.logger.debug(`Получение сессий для пользователя ${userId}`);
