@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { Client, Storage, StorageKeyPart, StorageMemory } from '@mtkruto/node';
 import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
 import { SessionEncryptionService } from './session-encryption.service';
-import { User } from '../../../entities/user.entity';
+import { User, UserRole } from '../../../entities/user.entity';
 
 /**
  * Кастомный Storage адаптер для MTKruto, который сохраняет сессии в БД с шифрованием
@@ -342,7 +342,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       // Если все еще не найдено и пользователь - админ, ищем любую активную сессию
       // Это позволяет админу использовать любую Telegram сессию для работы с API
-      if (!session && user?.role === 'admin') {
+      if (!session && user?.role === UserRole.ADMIN) {
         session = await this.sessionRepository.findOne({
           where: {
             isActive: true,
