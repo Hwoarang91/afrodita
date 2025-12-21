@@ -188,7 +188,7 @@ export class MastersService {
     // Это временное решение - в production нужно создавать User сначала
     const master = this.masterRepository.create({
       ...masterData,
-      userId: dto.userId || '00000000-0000-0000-0000-000000000000', // Временный UUID
+      userId: dto.userId || null, // Разрешаем null вместо несуществующего UUID
     });
 
     const savedMaster = await this.masterRepository.save(master);
