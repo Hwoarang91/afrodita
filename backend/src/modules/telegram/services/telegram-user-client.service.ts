@@ -6,6 +6,7 @@ import { Client, Storage, StorageKeyPart, StorageMemory } from '@mtkruto/node';
 import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
 import { SessionEncryptionService } from './session-encryption.service';
 import { User, UserRole } from '../../../entities/user.entity';
+import { handleMtprotoError, MtprotoErrorAction } from '../utils/mtproto-error.handler';
 
 /**
  * Кастомный Storage адаптер для MTKruto, который сохраняет сессии в БД с шифрованием
@@ -563,11 +564,14 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.debug(`Session ${session.id} updated successfully with status=active`);
       } else {
         this.logger.debug(`Creating new session for user ${userId}`);
+        // КРИТИЧЕСКИ ВАЖНО: НЕ создаем сессию с пустым encryptedSessionData
+        // DatabaseStorage уже сохранил все данные через set()
+        // Создаем сессию БЕЗ encryptedSessionData - она будет заполнена через storage
         session = this.sessionRepository.create({
           userId,
           apiId,
           apiHash,
-          encryptedSessionData: this.encryptionService.encrypt('{}'), // Пустые данные, storage уже работает
+          encryptedSessionData: null, // Будет заполнено через DatabaseStorage
           phoneNumber,
           isActive: true,
           status: 'active', // Сессия валидна после успешного getMe()

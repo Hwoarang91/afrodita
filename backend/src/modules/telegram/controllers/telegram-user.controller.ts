@@ -231,13 +231,17 @@ export class TelegramUserController {
           hash: BigInt(0),
         }) as any;
       } catch (error: any) {
-        // Обрабатываем AUTH_KEY_UNREGISTERED - сессия недействительна
-        if (error.message?.includes('AUTH_KEY_UNREGISTERED') || error.errorMessage === 'AUTH_KEY_UNREGISTERED') {
-          this.logger.error(`AUTH_KEY_UNREGISTERED detected for user ${userId} - invalidating session`);
-          // Инвалидируем все активные сессии
-          await this.telegramUserClientService.invalidateAllSessions();
+        // Используем централизованный обработчик MTProto ошибок
+        const { handleMtprotoError, MtprotoErrorAction } = await import('../utils/mtproto-error.handler');
+        const errorResult = handleMtprotoError(error);
+        
+        if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
+          this.logger.error(`MTProto fatal error detected: ${errorResult.reason} - invalidating sessions`);
+          await this.telegramUserClientService.invalidateAllSessions(errorResult.reason);
           throw new UnauthorizedException('Telegram session is invalid. Please re-authorize via phone or QR code.');
         }
+        
+        // Для других ошибок пробрасываем как есть
         throw error;
       }
 
@@ -315,13 +319,17 @@ export class TelegramUserController {
           hash: BigInt(0),
         }) as any;
       } catch (error: any) {
-        // Обрабатываем AUTH_KEY_UNREGISTERED - сессия недействительна
-        if (error.message?.includes('AUTH_KEY_UNREGISTERED') || error.errorMessage === 'AUTH_KEY_UNREGISTERED') {
-          this.logger.error(`AUTH_KEY_UNREGISTERED detected for user ${userId} - invalidating session`);
-          // Инвалидируем все активные сессии
-          await this.telegramUserClientService.invalidateAllSessions();
+        // Используем централизованный обработчик MTProto ошибок
+        const { handleMtprotoError, MtprotoErrorAction } = await import('../utils/mtproto-error.handler');
+        const errorResult = handleMtprotoError(error);
+        
+        if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
+          this.logger.error(`MTProto fatal error detected: ${errorResult.reason} - invalidating sessions`);
+          await this.telegramUserClientService.invalidateAllSessions(errorResult.reason);
           throw new UnauthorizedException('Telegram session is invalid. Please re-authorize via phone or QR code.');
         }
+        
+        // Для других ошибок пробрасываем как есть
         throw error;
       }
 

@@ -26,10 +26,14 @@ interface SessionInfo {
   ipAddress: string | null;
   userAgent: string | null;
   isActive: boolean;
+  status: 'active' | 'invalid' | 'revoked' | 'initializing';
+  invalidReason?: string | null;
+  dcId?: number | null;
   lastUsedAt: string | null;
   createdAt: string;
   userId?: string | null;
   userEmail?: string | null;
+  isCurrent?: boolean;
 }
 
 export default function TelegramUserMessagesTab() {
@@ -445,9 +449,29 @@ export default function TelegramUserMessagesTab() {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 space-y-3">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant={index === 0 ? 'default' : 'secondary'}>
-                                {index === 0 ? 'Текущая сессия' : 'Активная сессия'}
+                              {/* Статус сессии */}
+                              <Badge
+                                variant={
+                                  session.status === 'active'
+                                    ? 'default'
+                                    : session.status === 'invalid'
+                                    ? 'destructive'
+                                    : session.status === 'revoked'
+                                    ? 'secondary'
+                                    : 'outline'
+                                }
+                              >
+                                {session.status === 'active'
+                                  ? 'Активна'
+                                  : session.status === 'invalid'
+                                  ? 'Невалидна'
+                                  : session.status === 'revoked'
+                                  ? 'Отозвана'
+                                  : 'Инициализация'}
                               </Badge>
+                              {session.isCurrent && (
+                                <Badge variant="default">Текущая</Badge>
+                              )}
                               {session.phoneNumber && (
                                 <span className="text-sm font-medium">
                                   {session.phoneNumber}
@@ -464,6 +488,11 @@ export default function TelegramUserMessagesTab() {
                                 </span>
                               )}
                             </div>
+                            {session.invalidReason && (
+                              <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                                <strong>Причина:</strong> {session.invalidReason}
+                              </div>
+                            )}
                             <div className="text-sm space-y-1.5">
                               {session.ipAddress && (
                                 <div className="flex items-center gap-2">
@@ -491,28 +520,36 @@ export default function TelegramUserMessagesTab() {
                                   <span>{formatDate(session.lastUsedAt)}</span>
                                 </div>
                               )}
+                              {session.dcId && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground min-w-[100px]">DC ID:</span>
+                                  <span>{session.dcId}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            {index !== 0 && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => deactivateSessionMutation.mutate({ sessionId: session.id, permanent: false })}
-                                  disabled={deactivateSessionMutation.isPending}
-                                >
-                                  {deactivateSessionMutation.isPending ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <X className="w-4 h-4 mr-2" />
-                                      Деактивировать
-                                    </>
-                                  )}
-                                </Button>
-                                <Button
-                                  variant="destructive"
+                            {/* Показываем кнопки в зависимости от статуса */}
+                            {session.status === 'active' && !session.isCurrent && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => deactivateSessionMutation.mutate({ sessionId: session.id, permanent: false })}
+                                disabled={deactivateSessionMutation.isPending}
+                              >
+                                {deactivateSessionMutation.isPending ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <X className="w-4 h-4 mr-2" />
+                                    Деактивировать
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            {(session.status === 'invalid' || session.status === 'revoked') && (
+                              <Button
+                                variant="destructive"
                                   size="sm"
                                   onClick={() => {
                                     if (confirm('Вы уверены, что хотите полностью удалить эту сессию? Это действие нельзя отменить.')) {

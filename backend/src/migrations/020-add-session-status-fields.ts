@@ -70,6 +70,26 @@ export class AddSessionStatusFields1704000000000 implements MigrationInterface {
       console.log('Колонка dc_id уже существует, пропускаем');
     }
 
+    // Добавляем CHECK constraint против пустого объекта '{}'
+    const checkConstraintExists = await queryRunner.query(`
+      SELECT constraint_name 
+      FROM information_schema.table_constraints 
+      WHERE table_schema = 'public' 
+      AND table_name = 'telegram_user_sessions' 
+      AND constraint_name = 'encrypted_session_data_not_empty';
+    `);
+
+    if (checkConstraintExists.length === 0) {
+      await queryRunner.query(`
+        ALTER TABLE telegram_user_sessions
+        ADD CONSTRAINT encrypted_session_data_not_empty
+        CHECK (encrypted_session_data IS NULL OR encrypted_session_data <> '{}');
+      `);
+      console.log('CHECK constraint добавлен: запрещено сохранение пустого объекта {}');
+    } else {
+      console.log('CHECK constraint уже существует, пропускаем');
+    }
+
     // Обновляем существующие записи: если is_active = true, то status = 'active', иначе 'invalid'
     await queryRunner.query(`
       UPDATE telegram_user_sessions 

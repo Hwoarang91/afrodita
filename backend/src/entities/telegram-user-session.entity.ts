@@ -33,8 +33,8 @@ export class TelegramUserSession {
   @Column({ type: 'varchar', length: 255, name: 'api_hash' })
   apiHash: string;
 
-  @Column({ type: 'text', name: 'encrypted_session_data' })
-  encryptedSessionData: string; // Зашифрованные данные сессии MTProto
+  @Column({ type: 'text', nullable: true, name: 'encrypted_session_data' })
+  encryptedSessionData: string | null; // Зашифрованные данные сессии MTProto (заполняется через DatabaseStorage)
 
   @Column({ type: 'boolean', default: true, name: 'is_active' })
   isActive: boolean;

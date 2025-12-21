@@ -50,7 +50,9 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
     retry: false,
   });
 
-  const isConnected = sessionsData?.sessions?.length > 0;
+  // Проверяем наличие активной сессии со статусом 'active'
+  const activeSession = sessionsData?.sessions?.find((s: any) => s.status === 'active');
+  const isConnected = Boolean(activeSession);
 
   const generateQrCode = useCallback(async () => {
     try {
@@ -276,16 +278,24 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
               : 'Подключите свой Telegram аккаунт для отправки сообщений клиентам от вашего имени.'}
           </CardDescription>
         </CardHeader>
-        {isConnected && sessionsData?.sessions?.[0] && (
+        {isConnected && activeSession && (
           <CardContent>
             <div className="text-sm space-y-1">
               <div>
                 <span className="text-muted-foreground">Телефон:</span>{' '}
-                {sessionsData.sessions[0].phoneNumber || 'Не указан'}
+                {activeSession.phoneNumber || 'Не указан'}
               </div>
               <div>
-                <span className="text-muted-foreground">Активных сессий:</span> {sessionsData.sessions.length}
+                <span className="text-muted-foreground">Статус:</span>{' '}
+                <Badge variant="default" className="ml-1">
+                  {activeSession.status === 'active' ? 'Активна' : activeSession.status}
+                </Badge>
               </div>
+              {activeSession.invalidReason && (
+                <div className="text-xs text-destructive mt-1">
+                  Причина: {activeSession.invalidReason}
+                </div>
+              )}
             </div>
           </CardContent>
         )}
