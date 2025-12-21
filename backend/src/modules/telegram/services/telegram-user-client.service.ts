@@ -152,6 +152,77 @@ class DatabaseStorage implements Partial<Storage> {
       // Игнорируем ошибки удаления
     }
   }
+
+  // Метод getMany требуется MTKruto для операций с несколькими ключами
+  // Используется при connect() для очистки обновлений
+  async *getMany<T = Uint8Array>(
+    filter: readonly StorageKeyPart[] | { prefix: readonly StorageKeyPart[] },
+    params?: { limit?: number; reverse?: boolean },
+  ): AsyncGenerator<[readonly StorageKeyPart[], T], any, any> {
+    try {
+      const session = await this.sessionRepository.findOne({
+        where: {
+          userId: this.userId,
+          apiId: this.apiId,
+          isActive: true,
+        },
+      });
+
+      if (!session) {
+        return;
+      }
+
+      const decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
+      const data = JSON.parse(decrypted);
+
+      // Определяем префикс для поиска
+      const prefix = Array.isArray(filter) ? filter : filter.prefix;
+      
+      // Рекурсивно ищем все ключи с указанным префиксом
+      const findKeys = (obj: any, currentPath: StorageKeyPart[]): Array<[readonly StorageKeyPart[], T]> => {
+        const results: Array<[readonly StorageKeyPart[], T]> = [];
+        
+        // Проверяем, соответствует ли текущий путь префиксу
+        if (prefix.length > currentPath.length) {
+          // Нужно углубиться дальше
+          const nextPart = prefix[currentPath.length];
+          if (obj && typeof obj === 'object' && obj[String(nextPart)] !== undefined) {
+            return findKeys(obj[String(nextPart)], [...currentPath, nextPart]);
+          }
+          return results;
+        }
+        
+        // Если путь соответствует префиксу, ищем все дочерние ключи
+        if (prefix.length === currentPath.length || prefix.length === 0) {
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+              const value = obj[key];
+              const fullPath = [...currentPath, key] as readonly StorageKeyPart[];
+              
+              if (Array.isArray(value)) {
+                // Конвертируем массив обратно в Uint8Array
+                const uint8Array = new Uint8Array(value) as T;
+                results.push([fullPath, uint8Array]);
+              }
+            }
+          }
+        }
+        
+        return results;
+      };
+
+      const matches = findKeys(data, []);
+      const limit = params?.limit || matches.length;
+      const sorted = params?.reverse ? matches.reverse() : matches;
+      
+      for (let i = 0; i < Math.min(limit, sorted.length); i++) {
+        yield sorted[i];
+      }
+    } catch (error) {
+      // Возвращаем пустой генератор при ошибке
+      return;
+    }
+  }
 }
 
 @Injectable()
