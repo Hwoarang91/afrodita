@@ -912,6 +912,7 @@ export class AuthService {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
+    userId?: string, // Опциональный userId для админа
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
       // Нормализуем номер телефона для поиска в хранилище
