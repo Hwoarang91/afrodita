@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, MinLength, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength } from 'class-validator';
 
 export class Telegram2FAVerifyDto {
   @ApiProperty({
@@ -26,14 +26,5 @@ export class Telegram2FAVerifyDto {
   @IsString({ message: 'Phone code hash должен быть строкой' })
   @IsNotEmpty({ message: 'Phone code hash обязателен' })
   phoneCodeHash: string;
-
-  @ApiProperty({
-    description: 'ID пользователя для привязки сессии (опционально, для админа)',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-    required: false,
-  })
-  @IsOptional()
-  @IsUUID({ message: 'userId должен быть валидным UUID' })
-  userId?: string;
 }
 
