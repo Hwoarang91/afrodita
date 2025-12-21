@@ -168,12 +168,22 @@ class DatabaseStorage implements Partial<Storage> {
         },
       });
 
-      if (!session) {
+      if (!session || !session.encryptedSessionData) {
+        // Если сессии нет или данные пустые, возвращаем пустой генератор
         return;
       }
 
-      const decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
-      const data = JSON.parse(decrypted);
+      let data: any = {};
+      try {
+        const decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
+        // Проверяем, что расшифрованные данные не пустые
+        if (decrypted && decrypted.trim() !== '' && decrypted !== '{}') {
+          data = JSON.parse(decrypted);
+        }
+      } catch (decryptError) {
+        // Если не удалось расшифровать (например, сессия только создается), возвращаем пустой генератор
+        return;
+      }
 
       // Определяем префикс для поиска
       let prefix: readonly StorageKeyPart[] = [];
