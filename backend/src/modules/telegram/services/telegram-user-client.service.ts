@@ -451,6 +451,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
     userAgent?: string,
   ): Promise<void> {
     try {
+      this.logger.log(`Starting saveSession for user ${userId}, phone: ${phoneNumber}`);
+      
       const apiIdStr = this.configService.get<string>('TELEGRAM_API_ID');
       const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
 
@@ -463,6 +465,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
+      this.logger.debug(`Creating DatabaseStorage for user ${userId}, apiId: ${apiId}`);
+
       // Создаем наш DatabaseStorage для этого пользователя
       const storage = new DatabaseStorage(
         this.sessionRepository,
@@ -474,9 +478,12 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       // ВАЖНО: Сначала копируем данные сессии напрямую в DatabaseStorage
       // Это сохранит их в БД до создания нового клиента
+      this.logger.debug(`Copying session data to DatabaseStorage for user ${userId}`);
       await this.copySessionDataToStorage(client, storage);
+      this.logger.debug(`Session data copied successfully for user ${userId}`);
 
       // Создаем новый клиент с нашим storage (данные уже в БД)
+      this.logger.debug(`Creating new Client with DatabaseStorage for user ${userId}`);
       const newClient = new Client({
         apiId,
         apiHash,
@@ -484,21 +491,27 @@ export class TelegramUserClientService implements OnModuleDestroy {
       });
 
       // Подключаем новый клиент (он загрузит данные из нашего storage)
+      this.logger.debug(`Connecting new client for user ${userId}`);
       await newClient.connect();
+      this.logger.debug(`New client connected successfully for user ${userId}`);
 
       // Сохраняем метаданные сессии в БД
+      this.logger.debug(`Saving session metadata for user ${userId}`);
       let session = await this.sessionRepository.findOne({
         where: { userId, apiId },
       });
 
       if (session) {
+        this.logger.debug(`Updating existing session ${session.id} for user ${userId}`);
         session.phoneNumber = phoneNumber;
         session.isActive = true;
         session.lastUsedAt = new Date();
         session.ipAddress = ipAddress || null;
         session.userAgent = userAgent || null;
         await this.sessionRepository.save(session);
+        this.logger.debug(`Session ${session.id} updated successfully`);
       } else {
+        this.logger.debug(`Creating new session for user ${userId}`);
         session = this.sessionRepository.create({
           userId,
           apiId,
@@ -511,18 +524,19 @@ export class TelegramUserClientService implements OnModuleDestroy {
           userAgent: userAgent || null,
         });
         await this.sessionRepository.save(session);
+        this.logger.debug(`New session ${session.id} created successfully`);
       }
 
       // Отключаем старый клиент и сохраняем новый в кэше
       try {
         await client.disconnect();
       } catch (e) {
-        // Игнорируем ошибки отключения
+        this.logger.warn(`Error disconnecting old client: ${(e as Error).message}`);
       }
 
       this.clients.set(userId, newClient);
 
-      this.logger.log(`Session saved for user ${userId}`);
+      this.logger.log(`Session saved successfully for user ${userId}, session id: ${session.id}`);
     } catch (error: any) {
       this.logger.error(`Error saving session for user ${userId}: ${error.message}`, error.stack);
       throw error;
