@@ -964,6 +964,7 @@ export class AuthService {
     stored: { client: Client; phoneCodeHash: string; expiresAt: Date; passwordHint?: string },
     ipAddress?: string,
     userAgent?: string,
+    userId?: string, // Опциональный userId для админа
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
 
