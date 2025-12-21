@@ -176,7 +176,7 @@ class DatabaseStorage implements Partial<Storage> {
       const data = JSON.parse(decrypted);
 
       // Определяем префикс для поиска
-      const prefix = Array.isArray(filter) ? filter : filter.prefix;
+      const prefix = Array.isArray(filter) ? filter : (filter as { prefix: readonly StorageKeyPart[] }).prefix;
       
       // Рекурсивно ищем все ключи с указанным префиксом
       const findKeys = (obj: any, currentPath: StorageKeyPart[]): Array<[readonly StorageKeyPart[], T]> => {
