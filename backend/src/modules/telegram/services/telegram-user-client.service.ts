@@ -294,15 +294,19 @@ export class TelegramUserClientService implements OnModuleDestroy {
       this.logger.debug(`Looking for session for user ${userId} (telegramId: ${user?.telegramId || 'none'}, phone: ${user?.phone || 'none'}, email: ${user?.email || 'none'})`);
 
       // Получаем сессию из БД - сначала по userId
+      // Для админа может быть несколько сессий, берем последнюю использованную
       let session = await this.sessionRepository.findOne({
         where: {
           userId,
           isActive: true,
         },
+        order: {
+          lastUsedAt: 'DESC', // Берем последнюю использованную сессию
+        },
       });
 
       if (session) {
-        this.logger.debug(`Found session directly by userId ${userId}`);
+        this.logger.debug(`Found session directly by userId ${userId} (session id: ${session.id})`);
       }
 
       // Если сессия не найдена по userId, ищем по telegramId пользователя
@@ -340,19 +344,19 @@ export class TelegramUserClientService implements OnModuleDestroy {
         }
       }
 
-      // ВАЖНО: Админ не может использовать сессии других пользователей
-      // Telegram сессии работают независимо и привязаны только к конкретным пользователям
-      // Админ может управлять сессиями через админ панель, но не использовать их для работы с API
+      // ВАЖНО: Пользователь может использовать только свои сессии
+      // Админ может создавать множество сессий через админ панель, все они привязаны к его userId
+      // Админ может управлять всеми сессиями через админ панель, но использовать только свои
       if (!session) {
         this.logger.warn(`No active session found for user ${userId} (telegramId: ${user?.telegramId || 'none'}, phone: ${user?.phone || 'none'}, role: ${user?.role || 'none'})`);
         return null;
       }
 
-      // ВАЖНО: Используем userId из найденной сессии, а не из запроса
-      // Это позволяет админ пользователю использовать сессию Telegram пользователя
+      // Используем userId из найденной сессии (должен совпадать с запросом)
       const sessionUserId = session.userId;
       if (sessionUserId !== userId) {
-        this.logger.debug(`Using session from user ${sessionUserId} for request from user ${userId}`);
+        this.logger.warn(`Session userId ${sessionUserId} does not match request userId ${userId} - this should not happen`);
+        return null;
       }
 
       // Получаем API credentials
