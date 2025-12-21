@@ -1403,9 +1403,11 @@ export class AuthService {
       }
 
       // Сохраняем сессию MTProto
-      this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone})`);
+      // ВАЖНО: Если передан userId (админ создает сессию), сохраняем для него, а не для найденного пользователя
+      const sessionUserId = userId || user.id;
+      this.logger.log(`Saving Telegram session for user ${sessionUserId} (role: ${user.role}, phone: ${normalizedPhone}, userId provided: ${userId ? 'yes' : 'no'})`);
       await this.telegramUserClientService.saveSession(
-        user.id,
+        sessionUserId,
         client,
         normalizedPhone,
         ipAddress,
