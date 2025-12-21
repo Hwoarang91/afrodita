@@ -13,13 +13,13 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../../common/guards/optional-jwt-auth.guard';
 import { UserSendMessageDto, UserSendMediaDto } from '../dto/user-send-message.dto';
 import { DeactivateSessionDto, SessionInfoDto } from '../dto/session-management.dto';
 
 @ApiTags('telegram')
 @Controller('telegram/user')
-@UseGuards(JwtAuthGuard)
+@UseGuards(OptionalJwtAuthGuard)
 @ApiBearerAuth()
 export class TelegramUserController {
   private readonly logger = new Logger(TelegramUserController.name);
@@ -203,11 +203,16 @@ export class TelegramUserController {
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async getChats(@Request() req, @Query('type') type?: 'private' | 'group' | 'all') {
     try {
+      // Проверяем, что пользователь авторизован
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+
       const userId = req.user.sub;
       this.logger.debug(`Получение списка чатов для пользователя ${userId}`);
 
-      // Получаем клиент пользователя
-      const client = await this.telegramUserClientService.getClient(userId);
+      // Получаем клиент пользователя (для админов может использоваться любая активная сессия)
+      const { client } = await this.telegramUserClientService.getClient(userId);
       if (!client) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
@@ -276,11 +281,16 @@ export class TelegramUserController {
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async getContacts(@Request() req) {
     try {
+      // Проверяем, что пользователь авторизован
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+
       const userId = req.user.sub;
       this.logger.debug(`Получение списка контактов для пользователя ${userId}`);
 
-      // Получаем клиент пользователя
-      const client = await this.telegramUserClientService.getClient(userId);
+      // Получаем клиент пользователя (для админов может использоваться любая активная сессия)
+      const { client } = await this.telegramUserClientService.getClient(userId);
       if (!client) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
