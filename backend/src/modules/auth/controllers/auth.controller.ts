@@ -478,7 +478,8 @@ export class AuthController {
     @Request() req,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramAuthResponseDto> {
-    this.logger.debug(`Проверка кода для телефона: ${dto.phoneNumber}`);
+    this.logger.log(`[Phone Verify] Запрос на проверку кода для телефона: ${dto?.phoneNumber || 'не указан'}`);
+    this.logger.log(`[Phone Verify] Полученные данные: phoneNumber=${dto?.phoneNumber || 'не указан'}, code=${dto?.code ? '***' : 'не указан'}, phoneCodeHash=${dto?.phoneCodeHash ? dto.phoneCodeHash.substring(0, 20) + '...' : 'не указан'}`);
     try {
       // Сессия сохраняется для пользователя, найденного/созданного по телефону
       const result = await this.authService.verifyPhoneCode(

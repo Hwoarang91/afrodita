@@ -174,7 +174,6 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         phoneNumber,
         code,
         phoneCodeHash,
-        userId: user?.id, // Передаем userId админа, если он авторизован
       });
 
       if (response.data.requires2FA) {
