@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Send, MessageSquare, Image, Video, File, Loader2, Shield, Trash2 } from 'lucide-react';
+import { Send, MessageSquare, Image, Video, File, Loader2, Shield, Trash2, X } from 'lucide-react';
 
 interface SessionInfo {
   id: string;
@@ -28,6 +28,8 @@ interface SessionInfo {
   isActive: boolean;
   lastUsedAt: string | null;
   createdAt: string;
+  userId?: string | null;
+  userEmail?: string | null;
 }
 
 export default function TelegramUserMessagesTab() {
@@ -141,11 +143,12 @@ export default function TelegramUserMessagesTab() {
 
   // Деактивация сессии
   const deactivateSessionMutation = useMutation({
-    mutationFn: async (sessionId: string) => {
-      return await apiClient.delete(`/telegram/user/sessions/${sessionId}`);
+    mutationFn: async ({ sessionId, permanent }: { sessionId: string; permanent?: boolean }) => {
+      const url = `/telegram/user/sessions/${sessionId}${permanent ? '?permanent=true' : ''}`;
+      return await apiClient.delete(url);
     },
-    onSuccess: () => {
-      toast.success('Сессия деактивирована');
+    onSuccess: (_, variables) => {
+      toast.success(variables.permanent ? 'Сессия полностью удалена' : 'Сессия деактивирована');
       queryClient.invalidateQueries({ queryKey: ['telegram-user-sessions'] });
     },
     onError: (error: any) => {
@@ -437,61 +440,120 @@ export default function TelegramUserMessagesTab() {
               ) : sessionsData?.sessions?.length > 0 ? (
                 <div className="space-y-4">
                   {sessionsData.sessions.map((session: SessionInfo, index: number) => (
-                    <Card key={session.id} className={index === 0 ? 'border-primary' : ''}>
+                    <Card key={session.id} className={index === 0 ? 'border-primary border-2' : 'border'}>
                       <CardContent className="pt-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-2">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 space-y-3">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant={index === 0 ? 'default' : 'secondary'}>
                                 {index === 0 ? 'Текущая сессия' : 'Активная сессия'}
                               </Badge>
                               {session.phoneNumber && (
-                                <span className="text-sm text-muted-foreground">
+                                <span className="text-sm font-medium">
                                   {session.phoneNumber}
                                 </span>
                               )}
+                              {session.userId && (
+                                <span className="text-xs text-muted-foreground font-mono">
+                                  ID: {session.userId.substring(0, 8)}...
+                                </span>
+                              )}
+                              {session.userEmail && (
+                                <span className="text-xs text-muted-foreground">
+                                  {session.userEmail}
+                                </span>
+                              )}
                             </div>
-                            <div className="text-sm space-y-1">
+                            <div className="text-sm space-y-1.5">
                               {session.ipAddress && (
-                                <div>
-                                  <span className="text-muted-foreground">IP:</span> {session.ipAddress}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground min-w-[100px]">IP адрес:</span>
+                                  <span className="font-mono text-xs">{session.ipAddress}</span>
                                 </div>
                               )}
                               {session.userAgent && (
-                                <div>
-                                  <span className="text-muted-foreground">Устройство:</span>{' '}
-                                  {session.userAgent.length > 60
-                                    ? `${session.userAgent.substring(0, 60)}...`
-                                    : session.userAgent}
+                                <div className="flex items-start gap-2">
+                                  <span className="text-muted-foreground min-w-[100px]">Устройство:</span>
+                                  <span className="text-xs break-words">
+                                    {session.userAgent.length > 80
+                                      ? `${session.userAgent.substring(0, 80)}...`
+                                      : session.userAgent}
+                                  </span>
                                 </div>
                               )}
-                              <div>
-                                <span className="text-muted-foreground">Создана:</span>{' '}
-                                {formatDate(session.createdAt)}
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground min-w-[100px]">Создана:</span>
+                                <span>{formatDate(session.createdAt)}</span>
                               </div>
-                              <div>
-                                <span className="text-muted-foreground">Последнее использование:</span>{' '}
-                                {formatDate(session.lastUsedAt)}
-                              </div>
+                              {session.lastUsedAt && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground min-w-[100px]">Использована:</span>
+                                  <span>{formatDate(session.lastUsedAt)}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          {index !== 0 && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => deactivateSessionMutation.mutate(session.id)}
-                              disabled={deactivateSessionMutation.isPending}
-                            >
-                              {deactivateSessionMutation.isPending ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <>
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Деактивировать
-                                </>
-                              )}
-                            </Button>
-                          )}
+                          <div className="flex gap-2">
+                            {index !== 0 && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => deactivateSessionMutation.mutate({ sessionId: session.id, permanent: false })}
+                                  disabled={deactivateSessionMutation.isPending}
+                                >
+                                  {deactivateSessionMutation.isPending ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <X className="w-4 h-4 mr-2" />
+                                      Деактивировать
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm('Вы уверены, что хотите полностью удалить эту сессию? Это действие нельзя отменить.')) {
+                                      deactivateSessionMutation.mutate({ sessionId: session.id, permanent: true });
+                                    }
+                                  }}
+                                  disabled={deactivateSessionMutation.isPending}
+                                >
+                                  {deactivateSessionMutation.isPending ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Удалить
+                                    </>
+                                  )}
+                                </Button>
+                              </>
+                            )}
+                            {index === 0 && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm('Вы уверены, что хотите полностью удалить текущую сессию? Это действие нельзя отменить.')) {
+                                    deactivateSessionMutation.mutate({ sessionId: session.id, permanent: true });
+                                  }
+                                }}
+                                disabled={deactivateSessionMutation.isPending}
+                              >
+                                {deactivateSessionMutation.isPending ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Удалить
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>

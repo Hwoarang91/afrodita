@@ -461,7 +461,7 @@ export class TelegramUserController {
 
   @Delete('sessions/:sessionId')
   @ApiOperation({
-    summary: 'Деактивация конкретной сессии',
+    summary: 'Деактивация или удаление конкретной сессии',
     description: 'Деактивирует указанную Telegram сессию пользователя. После деактивации сессия не может быть использована для отправки сообщений.',
   })
   @ApiParam({
@@ -469,9 +469,15 @@ export class TelegramUserController {
     description: 'UUID сессии для деактивации',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
+  @ApiQuery({
+    name: 'permanent',
+    required: false,
+    description: 'Если true, сессия будет полностью удалена из БД, иначе только деактивирована',
+    type: Boolean,
+  })
   @ApiResponse({
     status: 200,
-    description: 'Сессия успешно деактивирована',
+    description: 'Сессия успешно деактивирована или удалена',
     schema: {
       example: {
         success: true,
@@ -480,17 +486,26 @@ export class TelegramUserController {
   })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
   @ApiResponse({ status: 404, description: 'Сессия не найдена или не принадлежит пользователю' })
-  async deactivateSession(@Param('sessionId') sessionId: string, @Request() req): Promise<{ success: boolean }> {
+  async deactivateSession(
+    @Param('sessionId') sessionId: string,
+    @Request() req,
+    @Query('permanent') permanent?: string,
+  ): Promise<{ success: boolean }> {
     try {
       const userId = req.user.sub;
-      this.logger.debug(`Деактивация сессии ${sessionId} для пользователя ${userId}`);
+      const isPermanent = permanent === 'true' || permanent === '1';
+      this.logger.debug(`${isPermanent ? 'Удаление' : 'Деактивация'} сессии ${sessionId} для пользователя ${userId}`);
 
-      await this.telegramUserClientService.deactivateSession(userId, sessionId);
+      if (isPermanent) {
+        await this.telegramUserClientService.removeSession(userId, sessionId);
+      } else {
+        await this.telegramUserClientService.deactivateSession(userId, sessionId);
+      }
 
       return { success: true };
     } catch (error: any) {
-      this.logger.error(`Ошибка деактивации сессии: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to deactivate session: ${error.message}`);
+      this.logger.error(`Ошибка ${permanent === 'true' ? 'удаления' : 'деактивации'} сессии: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Failed to ${permanent === 'true' ? 'remove' : 'deactivate'} session: ${error.message}`);
     }
   }
 

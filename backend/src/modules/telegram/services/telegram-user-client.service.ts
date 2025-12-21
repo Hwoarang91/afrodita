@@ -704,6 +704,51 @@ export class TelegramUserClientService implements OnModuleDestroy {
   }
 
   /**
+   * Полностью удаляет сессию из БД (не только деактивирует)
+   * Админ может удалить любую сессию в системе
+   */
+  async removeSession(userId: string, sessionId: string): Promise<void> {
+    // Проверяем, является ли пользователь админом
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    // Ищем сессию
+    let session: TelegramUserSession | null;
+    if (user?.role === UserRole.ADMIN) {
+      // Админ может удалить любую сессию
+      session = await this.sessionRepository.findOne({
+        where: { id: sessionId },
+      });
+    } else {
+      // Обычный пользователь может удалить только свою сессию
+      session = await this.sessionRepository.findOne({
+        where: { id: sessionId, userId },
+      });
+    }
+
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    // Отключаем клиент, если он активен
+    const client = this.clients.get(session.userId);
+    if (client) {
+      try {
+        await client.disconnect();
+      } catch (e) {
+        this.logger.warn(`Error disconnecting client for session ${sessionId}: ${(e as Error).message}`);
+      }
+      this.clients.delete(session.userId);
+    }
+
+    // Полностью удаляем сессию из БД
+    await this.sessionRepository.remove(session);
+
+    this.logger.log(`Session ${sessionId} completely removed from database`);
+  }
+
+  /**
    * Деактивирует конкретную сессию по ID
    * Админ может деактивировать любую сессию в системе
    */
