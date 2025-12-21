@@ -1166,13 +1166,16 @@ export class AuthService {
       const SHex = SBigInt.toString(16).padStart(512, '0');
       const SBuffer = Buffer.from(SHex, 'hex');
       
-      // Вычисляем SHA256 для A, B, S
+      // Вычисляем SHA256 для A, B
       const AHash = crypto.createHash('sha256').update(ABuffer).digest();
       const BHash = crypto.createHash('sha256').update(BBytes).digest();
-      const SHash = crypto.createHash('sha256').update(SBuffer).digest();
+      
+      // Для MTProto: K = SHA256(S) - session key это хеш от shared secret
+      const KHash = crypto.createHash('sha256').update(SBuffer).digest();
       
       // Вычисляем M1 по формуле MTProto SRP:
-      // M1 = SHA256((SHA256(p) XOR SHA256(g)) || SHA256(A) || SHA256(B) || SHA256(S))
+      // M1 = SHA256((SHA256(p) XOR SHA256(g)) || SHA256(A) || SHA256(B) || K)
+      // где K = SHA256(S) - это ключ сессии
       // XOR применяется к pHash и gHash, затем все конкатенируется и хешируется
       const pXorG = Buffer.alloc(32);
       for (let i = 0; i < 32; i++) {
@@ -1180,7 +1183,7 @@ export class AuthService {
       }
       
       const M1Buffer = crypto.createHash('sha256')
-        .update(Buffer.concat([pXorG, AHash, BHash, SHash]))
+        .update(Buffer.concat([pXorG, AHash, BHash, KHash]))
         .digest();
       
       const A = new Uint8Array(Array.from(ABuffer));
