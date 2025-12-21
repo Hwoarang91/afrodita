@@ -108,8 +108,13 @@ class DatabaseStorage implements Partial<Storage> {
       if (session) {
         session.encryptedSessionData = encrypted;
         session.lastUsedAt = new Date();
+        // Убеждаемся, что сессия активна
+        if (!session.isActive) {
+          session.isActive = true;
+        }
         await this.sessionRepository.save(session);
       } else {
+        // Создаем новую сессию, если её еще нет
         session = this.sessionRepository.create({
           userId: this.userId,
           apiId: this.apiId,
