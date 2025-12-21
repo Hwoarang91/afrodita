@@ -308,7 +308,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
         if (session) {
           this.logger.debug(`Found session for user ${userId} via phone ${user.phone} (session userId: ${session.userId}, session id: ${session.id})`);
+        } else {
+          this.logger.debug(`No session found for user ${userId} via phone ${user.phone}`);
         }
+      } else {
+        this.logger.debug(`User ${userId} has no phone number, skipping phone search`);
       }
 
       // Если сессия не найдена по телефону, ищем по telegramId
@@ -331,13 +335,20 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
           if (session) {
             this.logger.debug(`Found session for user ${userId} via telegramId ${user.telegramId} (session userId: ${session.userId}, session id: ${session.id})`);
+          } else {
+            this.logger.debug(`No session found for user ${userId} via telegramId ${user.telegramId}`);
           }
+        } else {
+          this.logger.debug(`No user found with telegramId ${user.telegramId}`);
         }
+      } else if (!session && !user.telegramId) {
+        this.logger.debug(`User ${userId} has no telegramId, skipping telegramId search`);
       }
 
       // Если админ и сессия не найдена, ищем любую активную сессию (для админов)
       if (!session && user.role === UserRole.ADMIN) {
-        session = await this.sessionRepository.findOne({
+        this.logger.debug(`User ${userId} is ADMIN, searching for any active session`);
+        const activeSessions = await this.sessionRepository.find({
           where: {
             isActive: true,
           },
@@ -345,10 +356,19 @@ export class TelegramUserClientService implements OnModuleDestroy {
             lastUsedAt: 'DESC',
           },
         });
-
-        if (session) {
-          this.logger.debug(`Found any active session for admin ${userId} (session userId: ${session.userId}, phone: ${session.phoneNumber}, session id: ${session.id})`);
+        
+        this.logger.debug(`Found ${activeSessions.length} active session(s) in database`);
+        if (activeSessions.length > 0) {
+          activeSessions.forEach((s, index) => {
+            this.logger.debug(`Active session ${index + 1}: userId=${s.userId}, phoneNumber=${s.phoneNumber}, id=${s.id}, lastUsedAt=${s.lastUsedAt}`);
+          });
+          session = activeSessions[0]; // Берем первую (самую свежую)
+          this.logger.debug(`Using active session for admin ${userId} (session userId: ${session.userId}, phone: ${session.phoneNumber}, session id: ${session.id})`);
+        } else {
+          this.logger.debug(`No active sessions found in database for admin ${userId}`);
         }
+      } else if (!session && user.role !== UserRole.ADMIN) {
+        this.logger.debug(`User ${userId} is not ADMIN (role: ${user.role}), skipping admin session search`);
       }
 
       if (!session) {
