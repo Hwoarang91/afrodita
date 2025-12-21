@@ -35,8 +35,8 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Отправка сообщения от пользователя ${userId} в чат ${dto.chatId}`);
 
-      // Получаем клиент пользователя
-      const client = await this.telegramUserClientService.getClient(userId);
+      // Получаем клиент - просто используем любую активную сессию
+      const client = await this.telegramUserClientService.getClient();
       if (!client) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
@@ -119,8 +119,8 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Отправка медиа от пользователя ${userId} в чат ${dto.chatId}`);
 
-      // Получаем клиент пользователя
-      const client = await this.telegramUserClientService.getClient(userId);
+      // Получаем клиент - просто используем любую активную сессию
+      const client = await this.telegramUserClientService.getClient();
       if (!client) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
@@ -211,8 +211,8 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение списка чатов для пользователя ${userId}`);
 
-      // Получаем клиент пользователя (для админов может использоваться любая активная сессия)
-      const client = await this.telegramUserClientService.getClient(userId);
+      // Получаем клиент - просто используем любую активную сессию
+      const client = await this.telegramUserClientService.getClient();
       if (!client) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
@@ -289,8 +289,8 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение списка контактов для пользователя ${userId}`);
 
-      // Получаем клиент пользователя (для админов может использоваться любая активная сессия)
-      const client = await this.telegramUserClientService.getClient(userId);
+      // Получаем клиент - просто используем любую активную сессию
+      const client = await this.telegramUserClientService.getClient();
       if (!client) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }

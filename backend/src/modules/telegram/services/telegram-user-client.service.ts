@@ -276,109 +276,41 @@ export class TelegramUserClientService implements OnModuleDestroy {
   }
 
   /**
-   * Получает или создает MTProto клиент для пользователя
-   * Ищет сессию по телефону или telegramId пользователя, а не по userId админа
+   * Получает или создает MTProto клиент
+   * Просто ищет любую активную сессию, без привязки к конкретному пользователю
    */
-  async getClient(userId: string): Promise<Client | null> {
+  async getClient(userId?: string): Promise<Client | null> {
     try {
-      // Получаем пользователя из БД для проверки телефона и telegramId
-      const user = await this.userRepository.findOne({
-        where: { id: userId },
+      this.logger.debug(`Looking for any active Telegram session (requested by userId: ${userId || 'none'})`);
+
+      // Просто ищем любую активную сессию
+      const activeSessions = await this.sessionRepository.find({
+        where: {
+          isActive: true,
+        },
+        order: {
+          lastUsedAt: 'DESC',
+        },
       });
-
-      if (!user) {
-        this.logger.warn(`User not found: ${userId}`);
+      
+      if (activeSessions.length === 0) {
+        this.logger.warn(`No active Telegram sessions found in database`);
         return null;
       }
 
-      this.logger.debug(`Looking for session for user ${userId} (telegramId: ${user.telegramId || 'none'}, phone: ${user.phone || 'none'}, email: ${user.email || 'none'}, role: ${user.role})`);
-
-      // Ищем сессию по телефону пользователя (основной способ)
-      let session = null;
-      if (user.phone) {
-        session = await this.sessionRepository.findOne({
-          where: {
-            phoneNumber: user.phone,
-            isActive: true,
-          },
-          order: {
-            lastUsedAt: 'DESC', // Берем последнюю использованную сессию
-          },
+      // Берем самую свежую активную сессию
+      const session = activeSessions[0];
+      this.logger.debug(`Found active session: id=${session.id}, phoneNumber=${session.phoneNumber}, userId=${session.userId}, lastUsedAt=${session.lastUsedAt}`);
+      
+      // Логируем все активные сессии для информации
+      if (activeSessions.length > 1) {
+        this.logger.debug(`Total active sessions: ${activeSessions.length}`);
+        activeSessions.slice(1).forEach((s, index) => {
+          this.logger.debug(`Other active session ${index + 1}: id=${s.id}, phoneNumber=${s.phoneNumber}, userId=${s.userId}`);
         });
-
-        if (session) {
-          this.logger.debug(`Found session for user ${userId} via phone ${user.phone} (session userId: ${session.userId}, session id: ${session.id})`);
-        } else {
-          this.logger.debug(`No session found for user ${userId} via phone ${user.phone}`);
-        }
-      } else {
-        this.logger.debug(`User ${userId} has no phone number, skipping phone search`);
       }
 
-      // Если сессия не найдена по телефону, ищем по telegramId
-      if (!session && user.telegramId) {
-        // Находим пользователя с таким telegramId (может быть другой пользователь)
-        const telegramUser = await this.userRepository.findOne({
-          where: { telegramId: user.telegramId },
-        });
-
-        if (telegramUser) {
-          session = await this.sessionRepository.findOne({
-            where: {
-              userId: telegramUser.id,
-              isActive: true,
-            },
-            order: {
-              lastUsedAt: 'DESC',
-            },
-          });
-
-          if (session) {
-            this.logger.debug(`Found session for user ${userId} via telegramId ${user.telegramId} (session userId: ${session.userId}, session id: ${session.id})`);
-          } else {
-            this.logger.debug(`No session found for user ${userId} via telegramId ${user.telegramId}`);
-          }
-        } else {
-          this.logger.debug(`No user found with telegramId ${user.telegramId}`);
-        }
-      } else if (!session && !user.telegramId) {
-        this.logger.debug(`User ${userId} has no telegramId, skipping telegramId search`);
-      }
-
-      // Если админ и сессия не найдена, ищем любую активную сессию (для админов)
-      if (!session && user.role === UserRole.ADMIN) {
-        this.logger.debug(`User ${userId} is ADMIN, searching for any active session`);
-        const activeSessions = await this.sessionRepository.find({
-          where: {
-            isActive: true,
-          },
-          order: {
-            lastUsedAt: 'DESC',
-          },
-        });
-        
-        this.logger.debug(`Found ${activeSessions.length} active session(s) in database`);
-        if (activeSessions.length > 0) {
-          activeSessions.forEach((s, index) => {
-            this.logger.debug(`Active session ${index + 1}: userId=${s.userId}, phoneNumber=${s.phoneNumber}, id=${s.id}, lastUsedAt=${s.lastUsedAt}`);
-          });
-          session = activeSessions[0]; // Берем первую (самую свежую)
-          this.logger.debug(`Using active session for admin ${userId} (session userId: ${session.userId}, phone: ${session.phoneNumber}, session id: ${session.id})`);
-        } else {
-          this.logger.debug(`No active sessions found in database for admin ${userId}`);
-        }
-      } else if (!session && user.role !== UserRole.ADMIN) {
-        this.logger.debug(`User ${userId} is not ADMIN (role: ${user.role}), skipping admin session search`);
-      }
-
-      if (!session) {
-        this.logger.warn(
-          `No active session found for user ${userId} (telegramId: ${user.telegramId || 'none'}, phone: ${user.phone || 'none'}, role: ${user.role || 'none'})`
-        );
-        return null;
-      }
-
-      // Используем userId из найденной сессии (может отличаться от userId запроса)
+      // Используем userId из найденной сессии
       const sessionUserId = session.userId;
       
       // Проверяем, есть ли уже активный клиент для этой сессии
@@ -422,13 +354,13 @@ export class TelegramUserClientService implements OnModuleDestroy {
         storage: storage as any,
       });
 
-      // Сохраняем клиент под sessionUserId (не под userId запроса)
+      // Сохраняем клиент под sessionUserId
       this.clients.set(sessionUserId, client);
 
       // Подключаемся к Telegram
       if (!client.connected) {
         await client.connect();
-        this.logger.log(`Client connected for user ${userId}`);
+        this.logger.log(`Client connected for session userId ${sessionUserId} (phone: ${session.phoneNumber})`);
       }
 
       return client;
@@ -592,8 +524,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
       for (const key of sessionKeys) {
         try {
           const value = await sourceStorage.get(key);
-          if (value && value.length > 0) {
-            await targetStorage.set(key, value as Uint8Array);
+          if (value && value instanceof Uint8Array && value.length > 0) {
+            await targetStorage.set(key, value);
             copiedCount++;
             this.logger.debug(`Copied session key to DatabaseStorage: ${key.join('.')} (${value.length} bytes)`);
           }
@@ -609,8 +541,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
         try {
           const dcKey: readonly StorageKeyPart[] = ['dc', dcId.toString()];
           const value = await sourceStorage.get(dcKey);
-          if (value && value.length > 0) {
-            await targetStorage.set(dcKey, value as Uint8Array);
+          if (value && value instanceof Uint8Array && value.length > 0) {
+            await targetStorage.set(dcKey, value);
             copiedCount++;
             this.logger.debug(`Copied DC key to DatabaseStorage: ${dcKey.join('.')} (${value.length} bytes)`);
           }
