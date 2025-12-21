@@ -114,6 +114,58 @@ class DatabaseStorage implements Partial<Storage> {
       throw new Error(`Failed to save session data: ${error.message}`);
     }
   }
+
+  async getMany(keys: readonly (readonly StorageKeyPart[])[]): Promise<(Uint8Array | null)[]> {
+    // Получаем все значения для массива ключей
+    return Promise.all(keys.map(key => this.get(key)));
+  }
+
+  async setMany(entries: readonly (readonly [readonly StorageKeyPart[], Uint8Array])[]): Promise<void> {
+    // Устанавливаем все значения для массива ключей
+    // Для оптимизации можно сделать батч-обновление, но пока делаем последовательно
+    for (const [key, value] of entries) {
+      await this.set(key, value);
+    }
+  }
+
+  async delete(key: readonly StorageKeyPart[]): Promise<void> {
+    try {
+      const session = await this.sessionRepository.findOne({
+        where: {
+          userId: this.userId,
+          apiId: this.apiId,
+        },
+      });
+
+      if (!session) {
+        return;
+      }
+
+      const decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
+      const data = JSON.parse(decrypted);
+
+      // Удаляем значение по ключу
+      let current: any = data;
+      for (let i = 0; i < key.length - 1; i++) {
+        const part = String(key[i]);
+        if (current[part] === undefined || typeof current[part] !== 'object') {
+          return; // Ключ не существует
+        }
+        current = current[part];
+      }
+
+      const lastKey = String(key[key.length - 1]);
+      delete current[lastKey];
+
+      const encrypted = this.encryptionService.encrypt(JSON.stringify(data));
+      session.encryptedSessionData = encrypted;
+      session.lastUsedAt = new Date();
+      await this.sessionRepository.save(session);
+    } catch (error: any) {
+      // Игнорируем ошибки удаления
+      this.logger.debug(`Failed to delete key ${key.join('.')}: ${error.message}`);
+    }
+  }
 }
 
 @Injectable()
