@@ -522,16 +522,45 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       this.clients.set(userId, newClient);
 
-      this.logger.log(`Session saved successfully for user ${userId}, session id: ${session.id}, phoneNumber: ${phoneNumber}, isActive: ${session.isActive}`);
+      this.logger.log(`✅ Session saved successfully for user ${userId}, session id: ${session.id}, phoneNumber: ${phoneNumber}, isActive: ${session.isActive}`);
       
       // Проверяем, что сессия действительно сохранена и активна
       const savedSession = await this.sessionRepository.findOne({
         where: { id: session.id },
       });
       if (savedSession) {
-        this.logger.log(`Verified saved session: id=${savedSession.id}, isActive=${savedSession.isActive}, phoneNumber=${savedSession.phoneNumber}, userId=${savedSession.userId}`);
+        // Проверяем, что в сессии есть данные (не пустые)
+        let hasData = false;
+        let dataSize = 0;
+        try {
+          if (savedSession.encryptedSessionData && savedSession.encryptedSessionData.trim() !== '' && savedSession.encryptedSessionData !== '{}') {
+            const decrypted = this.encryptionService.decrypt(savedSession.encryptedSessionData);
+            if (decrypted && decrypted.trim() !== '' && decrypted !== '{}') {
+              const data = JSON.parse(decrypted);
+              // Проверяем наличие критических ключей
+              const hasAuthKey = data.auth_key && Array.isArray(data.auth_key) && data.auth_key.length > 0;
+              const hasDc = data.dc !== undefined;
+              const hasServerSalt = data.server_salt && Array.isArray(data.server_salt) && data.server_salt.length > 0;
+              hasData = hasAuthKey && hasDc && hasServerSalt;
+              dataSize = decrypted.length;
+              
+              this.logger.log(`✅ Verified saved session: id=${savedSession.id}, isActive=${savedSession.isActive}, phoneNumber=${savedSession.phoneNumber}, userId=${savedSession.userId}`);
+              this.logger.log(`📊 Session data check: hasAuthKey=${hasAuthKey}, authKeyLength=${hasAuthKey ? data.auth_key.length : 0}, hasDc=${hasDc}, dc=${data.dc || 'N/A'}, hasServerSalt=${hasServerSalt}, dataSize=${dataSize} bytes`);
+              
+              if (!hasData) {
+                this.logger.error(`❌ CRITICAL: Session ${savedSession.id} has empty or invalid session data! Missing critical keys.`);
+              }
+            } else {
+              this.logger.error(`❌ CRITICAL: Session ${savedSession.id} has empty decrypted data!`);
+            }
+          } else {
+            this.logger.error(`❌ CRITICAL: Session ${savedSession.id} has empty encryptedSessionData!`);
+          }
+        } catch (e) {
+          this.logger.error(`❌ CRITICAL: Failed to verify session data for ${savedSession.id}: ${(e as Error).message}`);
+        }
       } else {
-        this.logger.error(`ERROR: Session ${session.id} was not found in database after saving!`);
+        this.logger.error(`❌ ERROR: Session ${session.id} was not found in database after saving!`);
       }
     } catch (error: any) {
       this.logger.error(`Error saving session for user ${userId}: ${error.message}`, error.stack);
@@ -568,18 +597,30 @@ export class TelegramUserClientService implements OnModuleDestroy {
       // Копируем данные по каждому ключу напрямую в DatabaseStorage
       // Это сохранит их в БД через метод set
       let copiedCount = 0;
+      const copiedKeys: string[] = [];
       for (const key of sessionKeys) {
         try {
           const value = await sourceStorage.get(key);
           if (value && value instanceof Uint8Array && value.length > 0) {
             await targetStorage.set(key, value);
             copiedCount++;
-            this.logger.debug(`Copied session key to DatabaseStorage: ${key.join('.')} (${value.length} bytes)`);
+            copiedKeys.push(`${key.join('.')} (${value.length} bytes)`);
+            this.logger.log(`✅ Copied session key to DatabaseStorage: ${key.join('.')} (${value.length} bytes)`);
+          } else {
+            this.logger.warn(`⚠️ Key ${key.join('.')} is empty or invalid: value=${value ? 'exists' : 'null'}, type=${value?.constructor?.name || 'unknown'}, length=${value instanceof Uint8Array ? value.length : 'N/A'}`);
           }
         } catch (e) {
           // Игнорируем ошибки для отдельных ключей, но логируем
-          this.logger.warn(`Failed to copy key ${key.join('.')}: ${(e as Error).message}`);
+          this.logger.error(`❌ Failed to copy key ${key.join('.')}: ${(e as Error).message}`);
         }
+      }
+      
+      this.logger.log(`📊 Session data copy summary: ${copiedCount}/${sessionKeys.length} keys copied successfully`);
+      if (copiedKeys.length > 0) {
+        this.logger.log(`📋 Copied keys: ${copiedKeys.join(', ')}`);
+      }
+      if (copiedCount === 0) {
+        this.logger.error(`❌ CRITICAL: No session keys were copied! Session will be invalid.`);
       }
 
       // Также копируем данные о DC (datacenter)
