@@ -61,8 +61,8 @@ export default function TelegramUserMessagesTab() {
           toast.error('Сначала необходимо создать Telegram сессию. Перейдите на вкладку "Авторизация" и авторизуйтесь через телефон или QR-код.');
           return;
         }
-        // Другая ошибка 401 - возможно, не авторизован в админ-панели
-        console.warn('Unauthorized access to Telegram chats. User may need to login to admin panel.');
+        // Другая ошибка 401 - возможно, не авторизован в Telegram
+        console.warn('Unauthorized access to Telegram chats. User may need to login to Telegram.');
       }
     }
   }, [chatsError]);
@@ -88,7 +88,7 @@ export default function TelegramUserMessagesTab() {
           return;
         }
         // Другая ошибка 401 - возможно, не авторизован в админ-панели
-        console.warn('Unauthorized access to Telegram contacts. User may need to login to admin panel.');
+        console.warn('Unauthorized access to Telegram contacts. User may need to login to Telegram.');
       }
     }
   }, [contactsError]);
@@ -276,7 +276,7 @@ export default function TelegramUserMessagesTab() {
                         ? (chatsError as any)?.response?.data?.message?.includes('No active Telegram session') ||
                           (contactsError as any)?.response?.data?.message?.includes('No active Telegram session')
                           ? 'Нет активной Telegram сессии. Пожалуйста, авторизуйтесь через Telegram на вкладке "Авторизация".'
-                          : 'Ошибка авторизации. Пожалуйста, войдите в админ-панель.'
+                          : 'Пожалуйста, войдите в Telegram. Перейдите на вкладку "Авторизация" и авторизуйтесь через телефон или QR-код.'
                         : 'Ошибка загрузки чатов и контактов. Попробуйте обновить страницу.'}
                     </p>
                   ) : (
