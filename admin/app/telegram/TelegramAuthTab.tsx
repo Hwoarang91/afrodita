@@ -13,12 +13,14 @@ import { toast } from '@/lib/toast';
 import { Loader2, Smartphone, QrCode, Shield, CheckCircle2, XCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface TelegramAuthTabProps {
   onAuthSuccess?: () => void;
 }
 
 export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps) {
+  const { user } = useAuth(); // Получаем данные текущего пользователя (админа)
   const [authMethod, setAuthMethod] = useState<'phone' | 'qr'>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [code, setCode] = useState('');
@@ -172,6 +174,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         phoneNumber,
         code,
         phoneCodeHash,
+        userId: user?.id, // Передаем userId админа, если он авторизован
       });
 
       if (response.data.requires2FA) {
@@ -223,6 +226,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         phoneNumber: phoneNumber.trim(),
         password: passwordToSend,
         phoneCodeHash,
+        userId: user?.id, // Передаем userId админа, если он авторизован
       });
 
       if (response.data.success) {
