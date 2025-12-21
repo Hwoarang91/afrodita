@@ -555,20 +555,32 @@ export class AuthController {
   }
 
   @Get('telegram/qr/status/:tokenId')
+  @UseGuards(OptionalJwtAuthGuard) // Опциональный guard - если токен есть, req.user будет доступен
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Проверка статуса QR токена' })
   @ApiResponse({
     status: 200,
     description: 'Статус токена',
     type: TelegramQrStatusResponseDto,
   })
+  @ApiResponse({ status: 401, description: 'QR токен не найден или истек' })
   async checkQrTokenStatus(
     @Param('tokenId') tokenId: string,
     @Request() req,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramQrStatusResponseDto> {
     this.logger.debug(`Проверка статуса QR токена: ${tokenId}`);
+    
+    // ВАЖНО: Telegram авторизация доступна только для авторизованных админов
+    // Если нет JWT - выбрасываем ошибку
+    if (!req.user?.sub) {
+      this.logger.warn('[QR] Попытка проверки статуса QR токена без JWT токена');
+      throw new UnauthorizedException('Telegram авторизация доступна только для авторизованных пользователей админ-панели');
+    }
+    
     try {
-      const result = await this.authService.checkQrTokenStatus(tokenId);
+      // Передаем userId из JWT для сохранения сессии
+      const result = await this.authService.checkQrTokenStatus(tokenId, req.user?.sub);
 
       if (result.status === 'accepted' && result.user) {
         // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
