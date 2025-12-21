@@ -604,6 +604,7 @@ export class AuthController {
         dto.phoneCodeHash,
         req.ip,
         req.get('user-agent'),
+        dto.userId, // Передаем userId если админ авторизован
       );
 
       // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде

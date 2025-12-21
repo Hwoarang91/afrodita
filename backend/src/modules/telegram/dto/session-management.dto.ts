@@ -28,5 +28,11 @@ export class SessionInfoDto {
 
   @ApiProperty({ description: 'Дата создания' })
   createdAt: Date;
+
+  @ApiProperty({ description: 'ID владельца сессии (для админа)', required: false })
+  userId?: string;
+
+  @ApiProperty({ description: 'Email владельца сессии (для админа)', required: false })
+  userEmail?: string | null;
 }
 

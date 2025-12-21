@@ -480,6 +480,7 @@ export class AuthService {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
+    userId?: string, // Опциональный userId для админа
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null; requires2FA: boolean; passwordHint?: string }> {
     try {
       this.logger.debug(`Проверка кода для телефона: ${phoneNumber}, phoneCodeHash: ${phoneCodeHash}`);
@@ -568,32 +569,56 @@ export class AuthService {
       // Нормализуем номер телефона
       const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
 
-      // Ищем или создаем пользователя
-      let user = await this.userRepository.findOne({
-        where: { phone: normalizedPhone },
-      });
-
-      if (!user) {
-        // Создаем нового пользователя
-        user = this.userRepository.create({
-          phone: normalizedPhone,
-          firstName: authUser.first_name || null,
-          lastName: authUser.last_name || null,
-          username: authUser.username || null,
-          telegramId: authUser.id.toString(),
-          role: UserRole.CLIENT,
-          isActive: true,
+      // Если передан userId (админ создает сессию), используем его
+      // Иначе ищем или создаем пользователя по телефону
+      let user: User;
+      if (userId) {
+        // Используем переданный userId (для админа)
+        user = await this.userRepository.findOne({
+          where: { id: userId },
         });
-        await this.userRepository.save(user);
-      } else {
-        // Обновляем данные существующего пользователя
+        if (!user) {
+          throw new UnauthorizedException('User not found');
+        }
+        // Обновляем данные пользователя из Telegram
         user.firstName = authUser.first_name || user.firstName;
         user.lastName = authUser.last_name || user.lastName;
         user.username = authUser.username || user.username;
         if (!user.telegramId) {
           user.telegramId = authUser.id.toString();
         }
+        if (normalizedPhone && !user.phone) {
+          user.phone = normalizedPhone;
+        }
         await this.userRepository.save(user);
+      } else {
+        // Ищем или создаем пользователя по телефону
+        user = await this.userRepository.findOne({
+          where: { phone: normalizedPhone },
+        });
+
+        if (!user) {
+          // Создаем нового пользователя
+          user = this.userRepository.create({
+            phone: normalizedPhone,
+            firstName: authUser.first_name || null,
+            lastName: authUser.last_name || null,
+            username: authUser.username || null,
+            telegramId: authUser.id.toString(),
+            role: UserRole.CLIENT,
+            isActive: true,
+          });
+          await this.userRepository.save(user);
+        } else {
+          // Обновляем данные существующего пользователя
+          user.firstName = authUser.first_name || user.firstName;
+          user.lastName = authUser.last_name || user.lastName;
+          user.username = authUser.username || user.username;
+          if (!user.telegramId) {
+            user.telegramId = authUser.id.toString();
+          }
+          await this.userRepository.save(user);
+        }
       }
 
       // Сохраняем сессию MTProto
@@ -913,7 +938,7 @@ export class AuthService {
           // Используем найденную сессию
           const migrated = this.twoFactorStore.get(normalizedPhone);
           if (migrated) {
-            return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent);
+            return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent, userId);
           }
         }
         throw new UnauthorizedException('2FA session not found. Please restart the authorization process.');
@@ -924,7 +949,7 @@ export class AuthService {
         throw new UnauthorizedException('Invalid phone code hash. Please restart the authorization process.');
       }
       
-      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent);
+      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent, userId);
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
       throw error;
