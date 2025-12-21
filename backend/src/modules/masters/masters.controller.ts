@@ -39,27 +39,32 @@ export class MastersController {
     );
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Получение мастера по ID' })
-  async findById(@Param('id') id: string) {
-    return await this.mastersService.findById(id);
-  }
-
-  @Get(':id/schedule')
-  @ApiOperation({ summary: 'Получение расписания мастера' })
-  async getSchedule(@Param('id') id: string) {
-    return await this.mastersService.getSchedule(id);
-  }
-
-  @Post(':id/schedule')
+  @Post()
   // Временно отключено для тестирования - в production включить обратно
   // @UseGuards(JwtAuthGuard, RolesGuard)
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
-  @ApiOperation({ summary: 'Создание расписания для мастера (только для админов)' })
-  async createSchedule(@Param('id') id: string, @Body() dto: CreateWorkScheduleDto) {
-    return await this.mastersService.createSchedule(id, dto);
+  @ApiOperation({ summary: 'Создание мастера (только для админов)' })
+  async create(@Request() req, @Body() dto: CreateMasterDto) {
+    const master = await this.mastersService.create(dto);
+    
+    // Логируем действие (если есть пользователь в запросе)
+    if (req?.user?.sub) {
+      await this.auditService.log(req.user.sub, AuditAction.MASTER_CREATED, {
+        entityType: 'master',
+        entityId: master.id,
+        description: `Создан мастер: ${master.name}`,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      });
+    }
+    
+    return master;
   }
+
+  // ============================================
+  // SCHEDULE ROUTES - ДОЛЖНЫ БЫТЬ ВЫШЕ :id
+  // ============================================
 
   @Put('schedule/:scheduleId')
   // Временно отключено для тестирования - в production включить обратно
@@ -80,6 +85,41 @@ export class MastersController {
   async deleteSchedule(@Param('scheduleId') scheduleId: string) {
     await this.mastersService.deleteSchedule(scheduleId);
     return { message: 'Schedule deleted successfully' };
+  }
+
+  // ============================================
+  // BLOCK INTERVALS ROUTES - ДОЛЖНЫ БЫТЬ ВЫШЕ :id
+  // ============================================
+
+  @Delete('block-intervals/:blockIntervalId')
+  // Временно отключено для тестирования - в production включить обратно
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(UserRole.ADMIN)
+  // @ApiBearerAuth()
+  @ApiOperation({ summary: 'Удаление заблокированного интервала (только для админов)' })
+  async deleteBlockInterval(@Param('blockIntervalId') blockIntervalId: string) {
+    await this.mastersService.deleteBlockInterval(blockIntervalId);
+    return { message: 'Block interval deleted successfully' };
+  }
+
+  // ============================================
+  // :id SPECIFIC ROUTES - ДОЛЖНЫ БЫТЬ НИЖЕ СПЕЦИФИЧНЫХ
+  // ============================================
+
+  @Get(':id/schedule')
+  @ApiOperation({ summary: 'Получение расписания мастера' })
+  async getSchedule(@Param('id') id: string) {
+    return await this.mastersService.getSchedule(id);
+  }
+
+  @Post(':id/schedule')
+  // Временно отключено для тестирования - в production включить обратно
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles(UserRole.ADMIN)
+  // @ApiBearerAuth()
+  @ApiOperation({ summary: 'Создание расписания для мастера (только для админов)' })
+  async createSchedule(@Param('id') id: string, @Body() dto: CreateWorkScheduleDto) {
+    return await this.mastersService.createSchedule(id, dto);
   }
 
   @Get(':id/block-intervals')
@@ -106,38 +146,10 @@ export class MastersController {
     return await this.mastersService.createBlockInterval(id, dto);
   }
 
-  @Delete('block-intervals/:blockIntervalId')
-  // Временно отключено для тестирования - в production включить обратно
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  // @Roles(UserRole.ADMIN)
-  // @ApiBearerAuth()
-  @ApiOperation({ summary: 'Удаление заблокированного интервала (только для админов)' })
-  async deleteBlockInterval(@Param('blockIntervalId') blockIntervalId: string) {
-    await this.mastersService.deleteBlockInterval(blockIntervalId);
-    return { message: 'Block interval deleted successfully' };
-  }
-
-  @Post()
-  // Временно отключено для тестирования - в production включить обратно
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  // @Roles(UserRole.ADMIN)
-  // @ApiBearerAuth()
-  @ApiOperation({ summary: 'Создание мастера (только для админов)' })
-  async create(@Request() req, @Body() dto: CreateMasterDto) {
-    const master = await this.mastersService.create(dto);
-    
-    // Логируем действие (если есть пользователь в запросе)
-    if (req?.user?.sub) {
-      await this.auditService.log(req.user.sub, AuditAction.MASTER_CREATED, {
-        entityType: 'master',
-        entityId: master.id,
-        description: `Создан мастер: ${master.name}`,
-        ipAddress: req.ip,
-        userAgent: req.get('user-agent'),
-      });
-    }
-    
-    return master;
+  @Get(':id')
+  @ApiOperation({ summary: 'Получение мастера по ID' })
+  async findById(@Param('id') id: string) {
+    return await this.mastersService.findById(id);
   }
 
   @Put(':id')
@@ -197,4 +209,3 @@ export class MastersController {
     return { message: 'Master deleted successfully' };
   }
 }
-
