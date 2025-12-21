@@ -480,16 +480,18 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       // Копируем данные по каждому ключу напрямую в DatabaseStorage
       // Это сохранит их в БД через метод set
+      let copiedCount = 0;
       for (const key of sessionKeys) {
         try {
           const value = await sourceStorage.get(key);
-          if (value) {
+          if (value && value.length > 0) {
             await targetStorage.set(key, value as Uint8Array);
-            this.logger.debug(`Copied session key to DatabaseStorage: ${key.join('.')}`);
+            copiedCount++;
+            this.logger.debug(`Copied session key to DatabaseStorage: ${key.join('.')} (${value.length} bytes)`);
           }
         } catch (e) {
-          // Игнорируем ошибки для отдельных ключей
-          this.logger.debug(`Failed to copy key ${key.join('.')}: ${(e as Error).message}`);
+          // Игнорируем ошибки для отдельных ключей, но логируем
+          this.logger.warn(`Failed to copy key ${key.join('.')}: ${(e as Error).message}`);
         }
       }
 
@@ -499,16 +501,21 @@ export class TelegramUserClientService implements OnModuleDestroy {
         try {
           const dcKey: readonly StorageKeyPart[] = ['dc', dcId.toString()];
           const value = await sourceStorage.get(dcKey);
-          if (value) {
+          if (value && value.length > 0) {
             await targetStorage.set(dcKey, value as Uint8Array);
-            this.logger.debug(`Copied DC key to DatabaseStorage: ${dcKey.join('.')}`);
+            copiedCount++;
+            this.logger.debug(`Copied DC key to DatabaseStorage: ${dcKey.join('.')} (${value.length} bytes)`);
           }
         } catch (e) {
           // Игнорируем ошибки
         }
       }
 
-      this.logger.log('Session data copy process completed');
+      if (copiedCount === 0) {
+        this.logger.warn('No session keys were copied - session may be empty');
+      } else {
+        this.logger.log(`Copied ${copiedCount} session keys to DatabaseStorage successfully`);
+      }
     } catch (error: any) {
       this.logger.error(`Failed to copy session data to DatabaseStorage: ${error.message}`, error.stack);
       // Бросаем ошибку, так как без данных сессии клиент не сможет работать
