@@ -115,19 +115,6 @@ class DatabaseStorage implements Partial<Storage> {
     }
   }
 
-  async getMany(keys: readonly (readonly StorageKeyPart[])[]): Promise<(Uint8Array | null)[]> {
-    // Получаем все значения для массива ключей
-    return Promise.all(keys.map(key => this.get(key)));
-  }
-
-  async setMany(entries: readonly (readonly [readonly StorageKeyPart[], Uint8Array])[]): Promise<void> {
-    // Устанавливаем все значения для массива ключей
-    // Для оптимизации можно сделать батч-обновление, но пока делаем последовательно
-    for (const [key, value] of entries) {
-      await this.set(key, value);
-    }
-  }
-
   async delete(key: readonly StorageKeyPart[]): Promise<void> {
     try {
       const session = await this.sessionRepository.findOne({
@@ -163,7 +150,6 @@ class DatabaseStorage implements Partial<Storage> {
       await this.sessionRepository.save(session);
     } catch (error: any) {
       // Игнорируем ошибки удаления
-      this.logger.debug(`Failed to delete key ${key.join('.')}: ${error.message}`);
     }
   }
 }
@@ -260,11 +246,16 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
   /**
    * Создает новый клиент для авторизации (без сохраненной сессии)
+   * Использует StorageMemory с методами getMany, setMany, delete для совместимости
    */
   async createClientForAuth(apiId: number, apiHash: string): Promise<Client> {
+    // Используем StorageMemory, который имеет все необходимые методы
+    const storage = new StorageMemory();
+    
     const client = new Client({
       apiId,
       apiHash,
+      storage: storage as any,
     });
 
     await client.connect();
@@ -371,6 +362,12 @@ export class TelegramUserClientService implements OnModuleDestroy {
       // Получаем storage обоих клиентов
       const sourceStorage = (sourceClient as any).storage as Storage;
       const targetStorage = (targetClient as any).storage as Storage;
+
+      // Проверяем, что sourceStorage имеет метод get
+      if (!sourceStorage || typeof sourceStorage.get !== 'function') {
+        this.logger.warn('Source storage does not have get method, skipping copy');
+        return;
+      }
 
       // MTKruto хранит сессию в определенных ключах
       // Основные ключи для сессии (из документации MTKruto):

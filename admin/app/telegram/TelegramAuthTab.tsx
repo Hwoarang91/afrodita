@@ -80,7 +80,10 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       // Обновляем таймер каждую секунду
       const timerInterval = setInterval(() => {
         if (qrExpiresAt > 0) {
-          const remaining = Math.max(0, qrExpiresAt - Math.floor(Date.now() / 1000));
+          // qrExpiresAt приходит в секундах (Unix timestamp)
+          // Проверяем, не в миллисекундах ли оно (если больше 1e10, значит миллисекунды)
+          const expiresAtSeconds = qrExpiresAt > 1e10 ? Math.floor(qrExpiresAt / 1000) : qrExpiresAt;
+          const remaining = Math.max(0, expiresAtSeconds - Math.floor(Date.now() / 1000));
           setQrTimeRemaining(remaining);
           if (remaining === 0 && qrStatus === 'pending') {
             setQrStatus('expired');
@@ -434,7 +437,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                           </p>
                           {qrTimeRemaining > 0 && (
                             <p className="text-xs text-muted-foreground">
-                              Осталось времени: {Math.floor(qrTimeRemaining / 60)}:{(qrTimeRemaining % 60).toString().padStart(2, '0')}
+                              Осталось времени: {Math.floor(qrTimeRemaining / 60)}:{(Math.floor(qrTimeRemaining % 60)).toString().padStart(2, '0')}
                             </p>
                           )}
                         </>
