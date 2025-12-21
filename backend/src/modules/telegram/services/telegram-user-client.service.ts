@@ -272,6 +272,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
   /**
    * Получает или создает MTProto клиент для пользователя
+   * Ищет сессию сначала по userId, затем по telegramId пользователя
    */
   async getClient(userId: string): Promise<Client | null> {
     try {
@@ -285,17 +286,64 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.clients.delete(userId);
       }
 
-      // Получаем сессию из БД
-      const session = await this.sessionRepository.findOne({
+      // Получаем пользователя из БД для проверки telegramId
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+      });
+
+      // Получаем сессию из БД - сначала по userId
+      let session = await this.sessionRepository.findOne({
         where: {
           userId,
           isActive: true,
         },
       });
 
+      // Если сессия не найдена по userId, ищем по telegramId пользователя
+      if (!session && user?.telegramId) {
+        // Находим пользователя с таким telegramId
+        const telegramUser = await this.userRepository.findOne({
+          where: { telegramId: user.telegramId },
+        });
+
+        if (telegramUser) {
+          session = await this.sessionRepository.findOne({
+            where: {
+              userId: telegramUser.id,
+              isActive: true,
+            },
+          });
+
+          if (session) {
+            this.logger.debug(`Found session for user ${userId} via telegramId ${user.telegramId} (session userId: ${session.userId})`);
+          }
+        }
+      }
+
+      // Если все еще не найдено, ищем любую активную сессию для этого пользователя по телефону
+      if (!session && user?.phone) {
+        session = await this.sessionRepository.findOne({
+          where: {
+            phoneNumber: user.phone,
+            isActive: true,
+          },
+        });
+
+        if (session) {
+          this.logger.debug(`Found session for user ${userId} via phone ${user.phone} (session userId: ${session.userId})`);
+        }
+      }
+
       if (!session) {
-        this.logger.warn(`No active session found for user ${userId}`);
+        this.logger.warn(`No active session found for user ${userId} (telegramId: ${user?.telegramId || 'none'}, phone: ${user?.phone || 'none'})`);
         return null;
+      }
+
+      // ВАЖНО: Используем userId из найденной сессии, а не из запроса
+      // Это позволяет админ пользователю использовать сессию Telegram пользователя
+      const sessionUserId = session.userId;
+      if (sessionUserId !== userId) {
+        this.logger.debug(`Using session from user ${sessionUserId} for request from user ${userId}`);
       }
 
       // Получаем API credentials
@@ -311,11 +359,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
-      // Создаем Storage адаптер
+      // Создаем Storage адаптер с userId из сессии
       const storage = new DatabaseStorage(
         this.sessionRepository,
         this.encryptionService,
-        userId,
+        sessionUserId, // Используем userId из сессии
         apiId,
         apiHash,
       );
