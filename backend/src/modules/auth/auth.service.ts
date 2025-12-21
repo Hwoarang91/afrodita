@@ -457,6 +457,15 @@ export class AuthService {
       this.logger.error(`Error requesting phone code: ${error.message}`, error.stack);
 
       // Обработка специфичных ошибок Telegram
+      if (error.message?.includes('FLOOD_WAIT')) {
+        // Извлекаем время ожидания из ошибки (например, FLOOD_WAIT_60150 означает 60150 секунд)
+        const waitMatch = error.message.match(/FLOOD_WAIT_(\d+)/);
+        const waitSeconds = waitMatch ? parseInt(waitMatch[1], 10) : 0;
+        const waitMinutes = Math.ceil(waitSeconds / 60);
+        throw new UnauthorizedException(
+          `Too many requests. Please try again in ${waitMinutes} minute(s).`
+        );
+      }
       if (error.message?.includes('FLOOD')) {
         throw new UnauthorizedException('Too many requests. Please try again later.');
       }
@@ -467,7 +476,9 @@ export class AuthService {
         throw new UnauthorizedException('Phone number is banned');
       }
 
-      throw new UnauthorizedException('Failed to send verification code');
+      // Логируем полную ошибку для отладки
+      this.logger.error(`Full error details:`, JSON.stringify(error, null, 2));
+      throw new UnauthorizedException(`Failed to send verification code: ${error.message || 'Unknown error'}`);
     }
   }
 
