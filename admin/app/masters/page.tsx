@@ -483,12 +483,46 @@ function MasterModal({ master, open, onClose }: { master: Master | null; open: b
         let photoUrl = data.photoUrl;
         const fileToProcess = data.avatarFile || avatarFile;
         if (fileToProcess) {
-          // Временно используем простую загрузку через base64
-          // В production нужно добавить эндпоинт для загрузки файлов
-          const reader = new FileReader();
+          // Сжимаем изображение перед отправкой
           photoUrl = await new Promise<string>((resolve, reject) => {
-            reader.onloadend = () => {
-              resolve(reader.result as string);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const img = new Image();
+              img.onload = () => {
+                // Создаем canvas для сжатия
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Максимальные размеры
+                const maxWidth = 800;
+                const maxHeight = 800;
+                let width = img.width;
+                let height = img.height;
+                
+                // Вычисляем новые размеры с сохранением пропорций
+                if (width > height) {
+                  if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                  }
+                } else {
+                  if (height > maxHeight) {
+                    width = Math.round((width * maxHeight) / height);
+                    height = maxHeight;
+                  }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // Рисуем изображение на canvas
+                ctx?.drawImage(img, 0, 0, width, height);
+                
+                // Конвертируем в base64 с качеством 0.8
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+              };
+              img.onerror = reject;
+              img.src = e.target?.result as string;
             };
             reader.onerror = reject;
             reader.readAsDataURL(fileToProcess);
