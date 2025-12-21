@@ -478,13 +478,19 @@ export class AuthController {
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramAuthResponseDto> {
     this.logger.debug(`Проверка кода для телефона: ${dto.phoneNumber}`);
+    this.logger.log(`[Phone] userId из DTO: ${dto.userId || 'не указан'}, userId из JWT: ${req.user?.sub || 'не авторизован'}`);
     try {
+      // Используем userId из DTO (если передан админом) или из JWT (если админ авторизован)
+      const userId = dto.userId || req.user?.sub;
+      this.logger.log(`[Phone] Используемый userId для сохранения сессии: ${userId || 'не указан (будет создан новый пользователь)'}`);
+      
       const result = await this.authService.verifyPhoneCode(
         dto.phoneNumber,
         dto.code,
         dto.phoneCodeHash,
         req.ip,
         req.get('user-agent'),
+        userId, // Передаем userId если админ авторизован
       );
 
       if (result.requires2FA) {
@@ -597,14 +603,19 @@ export class AuthController {
   ): Promise<TelegramAuthResponseDto> {
     this.logger.log(`[2FA] Запрос на проверку 2FA для телефона: ${dto.phoneNumber}, phoneCodeHash: ${dto.phoneCodeHash}`);
     this.logger.log(`[2FA] Пароль получен: ${dto.password ? 'да' : 'нет'}, длина: ${dto.password?.length || 0}`);
+    this.logger.log(`[2FA] userId из DTO: ${dto.userId || 'не указан'}, userId из JWT: ${req.user?.sub || 'не авторизован'}`);
     try {
+      // Используем userId из DTO (если передан админом) или из JWT (если админ авторизован)
+      const userId = dto.userId || req.user?.sub;
+      this.logger.log(`[2FA] Используемый userId для сохранения сессии: ${userId || 'не указан (будет создан новый пользователь)'}`);
+      
       const result = await this.authService.verify2FAPassword(
         dto.phoneNumber,
         dto.password,
         dto.phoneCodeHash,
         req.ip,
         req.get('user-agent'),
-        dto.userId, // Передаем userId если админ авторизован
+        userId, // Передаем userId если админ авторизован
       );
 
       // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
