@@ -79,6 +79,11 @@ class DatabaseStorage implements Partial<Storage> {
 
   async set(key: readonly StorageKeyPart[], value: Uint8Array): Promise<void> {
     try {
+      // Проверяем, что value действительно Uint8Array
+      if (!(value instanceof Uint8Array)) {
+        throw new Error(`Expected Uint8Array, got ${typeof value} (${value?.constructor?.name || 'unknown'})`);
+      }
+
       let session = await this.sessionRepository.findOne({
         where: {
           userId: this.userId,
@@ -115,6 +120,7 @@ class DatabaseStorage implements Partial<Storage> {
 
       const lastKey = String(key[key.length - 1]);
       // Сохраняем бинарные данные как base64 для правильной работы с MTProto
+      // Buffer.from() принимает Uint8Array, ArrayBuffer, Array или Array-like Object
       current[lastKey] = Buffer.from(value).toString('base64');
 
       const encrypted = this.encryptionService.encrypt(JSON.stringify(data));
@@ -636,13 +642,19 @@ export class TelegramUserClientService implements OnModuleDestroy {
       for (const key of sessionKeys) {
         try {
           const value = await sourceStorage.get(key);
+          // Проверяем, что value - это Uint8Array (бинарные данные)
           if (value && value instanceof Uint8Array && value.length > 0) {
             await targetStorage.set(key, value);
             copiedCount++;
             copiedKeys.push(`${key.join('.')} (${value.length} bytes)`);
             this.logger.log(`✅ Copied session key to DatabaseStorage: ${key.join('.')} (${value.length} bytes)`);
+          } else if (value !== null && value !== undefined) {
+            // Если значение не Uint8Array, но существует - это может быть другой тип данных
+            // Логируем, но не копируем (MTKruto Storage должен возвращать только Uint8Array)
+            const valueStr = value instanceof BigInt ? value.toString() : (typeof value === 'object' ? JSON.stringify(value).substring(0, 50) : String(value).substring(0, 50));
+            this.logger.warn(`⚠️ Key ${key.join('.')} is not Uint8Array: type=${value?.constructor?.name || typeof value}, value=${valueStr}`);
           } else {
-            this.logger.warn(`⚠️ Key ${key.join('.')} is empty or invalid: value=${value ? 'exists' : 'null'}, type=${value?.constructor?.name || 'unknown'}, length=${value instanceof Uint8Array ? value.length : 'N/A'}`);
+            this.logger.debug(`ℹ️ Key ${key.join('.')} is null or undefined (may not exist yet)`);
           }
         } catch (e) {
           // Игнорируем ошибки для отдельных ключей, но логируем
