@@ -348,7 +348,23 @@ export class TelegramUserClientService implements OnModuleDestroy {
       // Админ может создавать множество сессий через админ панель, все они привязаны к его userId
       // Админ может управлять всеми сессиями через админ панель, но использовать только свои
       if (!session) {
-        this.logger.warn(`No active session found for user ${userId} (telegramId: ${user?.telegramId || 'none'}, phone: ${user?.phone || 'none'}, role: ${user?.role || 'none'})`);
+        // Проверяем, есть ли вообще сессии для этого пользователя (даже неактивные)
+        const allSessions = await this.sessionRepository.find({
+          where: { userId },
+        });
+        this.logger.warn(
+          `No active session found for user ${userId} (telegramId: ${user?.telegramId || 'none'}, phone: ${user?.phone || 'none'}, role: ${user?.role || 'none'}). ` +
+          `Total sessions for this user: ${allSessions.length} (active: ${allSessions.filter(s => s.isActive).length})`
+        );
+        if (allSessions.length > 0) {
+          this.logger.debug(`Sessions for user ${userId}:`, allSessions.map(s => ({
+            id: s.id,
+            isActive: s.isActive,
+            phoneNumber: s.phoneNumber,
+            lastUsedAt: s.lastUsedAt,
+            createdAt: s.createdAt,
+          })));
+        }
         return null;
       }
 
