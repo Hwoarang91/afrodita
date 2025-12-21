@@ -402,9 +402,15 @@ export class TelegramUserClientService implements OnModuleDestroy {
         return null;
       }
       
-      if (!sessionData.encryptedSessionData || sessionData.encryptedSessionData === '{}' || sessionData.encryptedSessionData.trim() === '') {
-        this.logger.error(`Session ${session.id} has empty or invalid encryptedSessionData!`);
+      // NULL допустим (данные еще не сохранены), но '{}' - запрещено
+      if (sessionData.encryptedSessionData === '{}' || (sessionData.encryptedSessionData && sessionData.encryptedSessionData.trim() === '')) {
+        this.logger.error(`Session ${session.id} has empty or invalid encryptedSessionData (${sessionData.encryptedSessionData})!`);
         return null;
+      }
+      
+      // Если encryptedSessionData === null, это нормально - данные будут загружены через storage
+      if (sessionData.encryptedSessionData === null) {
+        this.logger.debug(`Session ${session.id} has null encryptedSessionData - will load from storage`);
       }
       
       this.logger.log(`Session ${session.id} found with data, creating storage and client...`);
@@ -438,6 +444,56 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.log(`Connecting client for session userId ${sessionUserId} (phone: ${session.phoneNumber})...`);
         await client.connect();
         this.logger.log(`Client connected successfully for session userId ${sessionUserId} (phone: ${session.phoneNumber})`);
+      }
+
+      // КРИТИЧЕСКИ ВАЖНО: Выполняем контрольный getMe() для валидации сессии
+      try {
+        this.logger.debug(`Validating session ${session.id} with getMe()...`);
+        await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        this.logger.log(`✅ Session ${session.id} validated successfully`);
+      } catch (e: any) {
+        const errorResult = handleMtprotoError(e);
+        this.logger.error(`❌ Session ${session.id} validation failed: ${errorResult.reason}`);
+        
+        if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
+          // Инвалидируем эту конкретную сессию
+          session.status = 'invalid';
+          session.isActive = false;
+          session.invalidReason = errorResult.reason;
+          await this.sessionRepository.save(session);
+          
+          // Отключаем и удаляем клиент из кеша
+          try {
+            await client.disconnect();
+          } catch (disconnectError) {
+            // Игнорируем ошибки отключения
+          }
+          this.clients.delete(sessionUserId);
+          
+          this.logger.warn(`Session ${session.id} invalidated due to ${errorResult.reason}`);
+          
+          // Пробуем найти другую активную сессию
+          const otherActiveSessions = await this.sessionRepository.find({
+            where: {
+              isActive: true,
+              status: 'active',
+            },
+            order: {
+              lastUsedAt: 'DESC',
+            },
+            take: 1,
+          });
+          
+          if (otherActiveSessions.length > 0 && otherActiveSessions[0].id !== session.id) {
+            this.logger.log(`Trying alternative session: ${otherActiveSessions[0].id}`);
+            return this.getClient(userId);
+          }
+          
+          return null;
+        }
+        
+        // Для других ошибок пробрасываем исключение
+        throw e;
       }
 
       return client;
@@ -942,6 +998,38 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.log(`Connecting client for session ${sessionId} (userId: ${sessionUserId}, phone: ${session.phoneNumber})...`);
         await client.connect();
         this.logger.log(`Client connected successfully for session ${sessionId}`);
+      }
+
+      // КРИТИЧЕСКИ ВАЖНО: Выполняем контрольный getMe() для валидации сессии
+      try {
+        this.logger.debug(`Validating session ${sessionId} with getMe()...`);
+        await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        this.logger.log(`✅ Session ${sessionId} validated successfully`);
+      } catch (e: any) {
+        const errorResult = handleMtprotoError(e);
+        this.logger.error(`❌ Session ${sessionId} validation failed: ${errorResult.reason}`);
+        
+        if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
+          // Инвалидируем эту конкретную сессию
+          session.status = 'invalid';
+          session.isActive = false;
+          session.invalidReason = errorResult.reason;
+          await this.sessionRepository.save(session);
+          
+          // Отключаем и удаляем клиент из кеша
+          try {
+            await client.disconnect();
+          } catch (disconnectError) {
+            // Игнорируем ошибки отключения
+          }
+          this.clients.delete(sessionUserId);
+          
+          this.logger.warn(`Session ${sessionId} invalidated due to ${errorResult.reason}`);
+          return null;
+        }
+        
+        // Для других ошибок пробрасываем исключение
+        throw e;
       }
 
       return client;
