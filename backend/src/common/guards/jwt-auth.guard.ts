@@ -5,7 +5,7 @@ import { AuthGuard } from '@nestjs/passport';
 export class JwtAuthGuard extends AuthGuard('jwt') {
   private readonly logger = new Logger(JwtAuthGuard.name);
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
     // Проверяем, есть ли пользователь в request (установлен JWT middleware)
@@ -16,7 +16,15 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     // Если нет пользователя в request, используем Passport стратегию
     this.logger.debug('JwtAuthGuard: Используем Passport стратегию');
-    return super.canActivate(context);
+    try {
+      const result = await super.canActivate(context);
+      return result as boolean;
+    } catch (error) {
+      this.logger.warn('JwtAuthGuard: Passport canActivate failed', {
+        error: (error as Error)?.message,
+      });
+      return false;
+    }
   }
 
   handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
