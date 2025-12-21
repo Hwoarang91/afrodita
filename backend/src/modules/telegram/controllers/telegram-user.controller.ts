@@ -434,6 +434,9 @@ export class TelegramUserController {
         isActive: session.isActive,
         lastUsedAt: session.lastUsedAt,
         createdAt: session.createdAt,
+        // Для админа добавляем информацию о владельце сессии
+        userId: (session as any).user?.id || session.userId,
+        userEmail: (session as any).user?.email || null,
       }));
 
       return {

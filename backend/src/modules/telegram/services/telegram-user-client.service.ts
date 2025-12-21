@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { Client, Storage, StorageKeyPart, StorageMemory } from '@mtkruto/node';
 import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
 import { SessionEncryptionService } from './session-encryption.service';
-import { User } from '../../../entities/user.entity';
+import { User, UserRole } from '../../../entities/user.entity';
 
 /**
  * Кастомный Storage адаптер для MTKruto, который сохраняет сессии в БД с шифрованием
@@ -612,8 +612,24 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
   /**
    * Получает список всех активных сессий пользователя
+   * Для админа возвращает все сессии в системе
    */
   async getUserSessions(userId: string): Promise<TelegramUserSession[]> {
+    // Проверяем, является ли пользователь админом
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    // Если админ - возвращаем все сессии в системе
+    if (user?.role === UserRole.ADMIN) {
+      return await this.sessionRepository.find({
+        where: { isActive: true },
+        order: { lastUsedAt: 'DESC' },
+        relations: ['user'], // Загружаем информацию о пользователе
+      });
+    }
+
+    // Для обычных пользователей - только их сессии
     return await this.sessionRepository.find({
       where: { userId, isActive: true },
       order: { lastUsedAt: 'DESC' },
@@ -622,11 +638,27 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
   /**
    * Деактивирует конкретную сессию по ID
+   * Админ может деактивировать любую сессию в системе
    */
   async deactivateSession(userId: string, sessionId: string): Promise<void> {
-    const session = await this.sessionRepository.findOne({
-      where: { id: sessionId, userId },
+    // Проверяем, является ли пользователь админом
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
     });
+
+    // Ищем сессию
+    let session: TelegramUserSession | null;
+    if (user?.role === UserRole.ADMIN) {
+      // Админ может деактивировать любую сессию
+      session = await this.sessionRepository.findOne({
+        where: { id: sessionId },
+      });
+    } else {
+      // Обычный пользователь может деактивировать только свою сессию
+      session = await this.sessionRepository.findOne({
+        where: { id: sessionId, userId },
+      });
+    }
 
     if (!session) {
       throw new Error('Session not found');
@@ -634,10 +666,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
     // Если это текущая активная сессия, отключаем клиент
     if (session.isActive) {
-      const client = this.clients.get(userId);
+      const sessionOwnerId = session.userId;
+      const client = this.clients.get(sessionOwnerId);
       if (client) {
         await client.disconnect();
-        this.clients.delete(userId);
+        this.clients.delete(sessionOwnerId);
       }
     }
 
@@ -645,7 +678,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
     session.isActive = false;
     await this.sessionRepository.save(session);
 
-    this.logger.log(`Session ${sessionId} deactivated for user ${userId}`);
+    this.logger.log(`Session ${sessionId} deactivated by user ${userId} (session owner: ${session.userId})`);
   }
 
   /**
