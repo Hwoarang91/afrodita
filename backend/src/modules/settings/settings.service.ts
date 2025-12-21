@@ -24,11 +24,15 @@ export class SettingsService {
       where: { key },
     });
 
+    // Для null значений сохраняем как JSON null (не SQL NULL)
+    // JSONB колонка не может быть SQL NULL, но может содержать JSON null
+    const jsonValue = value === null ? null : value;
+
     if (setting) {
-      setting.value = value;
+      setting.value = jsonValue;
       return await this.settingsRepository.save(setting);
     } else {
-      setting = this.settingsRepository.create({ key, value });
+      setting = this.settingsRepository.create({ key, value: jsonValue });
       return await this.settingsRepository.save(setting);
     }
   }
