@@ -346,7 +346,31 @@ export class TelegramUserClientService implements OnModuleDestroy {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
+      // ВАЖНО: Согласно примерам, правильный lifecycle MTKruto:
+      // 1️⃣ Загрузить данные из БД (storage уже знает, где искать)
+      // 2️⃣ Storage уже заполнен (данные в БД)
+      // 3️⃣ Создать client
+      // 4️⃣ ТОЛЬКО ТЕПЕРЬ connect
+      
+      // Проверяем, что сессия действительно существует и имеет данные
+      const sessionData = await this.sessionRepository.findOne({
+        where: { id: session.id },
+      });
+      
+      if (!sessionData) {
+        this.logger.error(`Session ${session.id} not found in database!`);
+        return null;
+      }
+      
+      if (!sessionData.encryptedSessionData || sessionData.encryptedSessionData === '{}' || sessionData.encryptedSessionData.trim() === '') {
+        this.logger.error(`Session ${session.id} has empty or invalid encryptedSessionData!`);
+        return null;
+      }
+      
+      this.logger.log(`Session ${session.id} found with data, creating storage and client...`);
+
       // Создаем Storage адаптер с userId из сессии
+      // Storage будет загружать данные из БД при вызове get/getMany
       const storage = new DatabaseStorage(
         this.sessionRepository,
         this.encryptionService,
@@ -355,7 +379,10 @@ export class TelegramUserClientService implements OnModuleDestroy {
         apiHash,
       );
 
-      // Создаем клиент
+      // Инициализируем storage (если требуется)
+      await storage.initialize();
+
+      // Создаем клиент (storage уже знает, где искать данные)
       // @ts-ignore - временно игнорируем ошибку типов Storage
       const client = new Client({
         apiId,
@@ -366,10 +393,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
       // Сохраняем клиент под sessionUserId
       this.clients.set(sessionUserId, client);
 
-      // Подключаемся к Telegram
+      // Подключаемся к Telegram (storage загрузит данные при connect)
       if (!client.connected) {
+        this.logger.log(`Connecting client for session userId ${sessionUserId} (phone: ${session.phoneNumber})...`);
         await client.connect();
-        this.logger.log(`Client connected for session userId ${sessionUserId} (phone: ${session.phoneNumber})`);
+        this.logger.log(`Client connected successfully for session userId ${sessionUserId} (phone: ${session.phoneNumber})`);
       }
 
       return client;
