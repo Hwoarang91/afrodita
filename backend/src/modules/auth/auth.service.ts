@@ -1083,15 +1083,27 @@ export class AuthService {
       // MTProto использует специфичный формат для SRP
       const passwordBytes = Buffer.from(password, 'utf8');
       
-      // Вычисляем x = PBKDF2(salt1 + password + salt2, salt1, 100000, 256, 'sha256')
-      // Это специфичный для MTProto способ вычисления x
-      const xBytes = crypto.pbkdf2Sync(
-        Buffer.concat([salt1, passwordBytes, salt2]),
+      // Вычисляем x по формуле Telegram SRP:
+      // x = SHA256(salt2 + PBKDF2_HMAC_SHA512(SHA256(salt1 + password + salt1), salt1, 100000, 64) + salt2)
+      // Шаг 1: SHA256(salt1 + password + salt1) - ВАЖНО: salt1 дважды!
+      const step1 = crypto.createHash('sha256')
+        .update(Buffer.concat([salt1, passwordBytes, salt1]))
+        .digest();
+      
+      // Шаг 2: PBKDF2_HMAC_SHA512(step1, salt1, 100000, 64, 'sha512')
+      // ВАЖНО: используем sha512, а не sha256, и размер вывода 64 байта, а не 256
+      const step2 = crypto.pbkdf2Sync(
+        step1,
         salt1,
         100000,
-        256,
-        'sha256',
+        64,  // 64 байта, не 256!
+        'sha512'  // sha512, не sha256!
       );
+      
+      // Шаг 3: SHA256(salt2 + step2 + salt2)
+      const xBytes = crypto.createHash('sha256')
+        .update(Buffer.concat([salt2, step2, salt2]))
+        .digest();
       
       // Преобразуем параметры в нужный формат
       const gBigInt = BigInt(g);
@@ -1100,7 +1112,14 @@ export class AuthService {
       const BBytes = Buffer.from(srpB_bytes);
       
       // Преобразуем x из Buffer в BigInt
+      // xBytes теперь 32 байта (SHA256 hash), а не 256 байт
       const xBigInt = BigInt('0x' + xBytes.toString('hex'));
+      
+      // Логируем промежуточные значения для отладки
+      this.logger.debug('[2FA SRP] Computed x', {
+        xBytesLength: xBytes.length,
+        xHex: xBytes.toString('hex').substring(0, 32) + '...',
+      });
       
       // Преобразуем B из Buffer в BigInt
       const BBigInt = BigInt('0x' + BBytes.toString('hex'));
@@ -1185,6 +1204,21 @@ export class AuthService {
       const M1Buffer = crypto.createHash('sha256')
         .update(Buffer.concat([pXorG, AHash, BHash, KHash]))
         .digest();
+      
+      // Логируем промежуточные значения для отладки
+      this.logger.debug('[2FA SRP] Computed SRP parameters', {
+        xLength: xBytes.length,
+        ALength: ABuffer.length,
+        BLength: BBytes.length,
+        SLength: SBuffer.length,
+        M1Length: M1Buffer.length,
+        pHashLength: pHash.length,
+        gHashLength: gHash.length,
+        pXorGLength: pXorG.length,
+        AHashLength: AHash.length,
+        BHashLength: BHash.length,
+        KHashLength: KHash.length,
+      });
       
       const A = new Uint8Array(Array.from(ABuffer));
       const M1 = new Uint8Array(Array.from(M1Buffer));
