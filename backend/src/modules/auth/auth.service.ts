@@ -1348,15 +1348,19 @@ export class AuthService {
 
       // Если передан userId (админ создает сессию), используем его
       // Иначе ищем или создаем пользователя по телефону
+      this.logger.log(`[2FA] Starting user lookup. userId: ${userId || 'not provided'}, normalizedPhone: ${normalizedPhone}`);
       let user: User;
       if (userId) {
+        this.logger.log(`[2FA] Using provided userId: ${userId}`);
         // Используем переданный userId (для админа)
         user = await this.userRepository.findOne({
           where: { id: userId },
         });
         if (!user) {
+          this.logger.error(`[2FA] User not found for userId: ${userId}`);
           throw new UnauthorizedException('User not found');
         }
+        this.logger.log(`[2FA] Found user: ${user.id}, role: ${user.role}, phone: ${user.phone}`);
         // Обновляем данные пользователя из Telegram
         user.firstName = authUser.first_name || user.firstName;
         user.lastName = authUser.last_name || user.lastName;
