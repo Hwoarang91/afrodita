@@ -291,6 +291,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
         where: { id: userId },
       });
 
+      this.logger.debug(`Looking for session for user ${userId} (telegramId: ${user?.telegramId || 'none'}, phone: ${user?.phone || 'none'}, email: ${user?.email || 'none'})`);
+
       // Получаем сессию из БД - сначала по userId
       let session = await this.sessionRepository.findOne({
         where: {
@@ -298,6 +300,10 @@ export class TelegramUserClientService implements OnModuleDestroy {
           isActive: true,
         },
       });
+
+      if (session) {
+        this.logger.debug(`Found session directly by userId ${userId}`);
+      }
 
       // Если сессия не найдена по userId, ищем по telegramId пользователя
       if (!session && user?.telegramId) {
