@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { Client, Storage, StorageKeyPart, StorageMemory } from '@mtkruto/node';
 import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
 import { SessionEncryptionService } from './session-encryption.service';
-import { User, UserRole } from '../../../entities/user.entity';
+import { User } from '../../../entities/user.entity';
 
 /**
  * Кастомный Storage адаптер для MTKruto, который сохраняет сессии в БД с шифрованием
