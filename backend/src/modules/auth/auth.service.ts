@@ -784,32 +784,18 @@ export class AuthService {
               ? this.usersService.normalizePhone(authUser.phone)
               : null;
 
-            // Ищем или создаем пользователя
+            // Если передан userId (админ создает сессию), используем его
+            // Иначе ищем или создаем пользователя по телефону
             let user: User;
-            if (normalizedPhone) {
+            if (userId) {
+              // Используем переданный userId (для админа)
               user = await this.userRepository.findOne({
-                where: { phone: normalizedPhone },
+                where: { id: userId },
               });
-            } else {
-              user = await this.userRepository.findOne({
-                where: { telegramId: authUser.id.toString() },
-              });
-            }
-
-            if (!user) {
-              // Создаем нового пользователя
-              user = this.userRepository.create({
-                phone: normalizedPhone,
-                firstName: authUser.first_name || null,
-                lastName: authUser.last_name || null,
-                username: authUser.username || null,
-                telegramId: authUser.id.toString(),
-                role: UserRole.CLIENT,
-                isActive: true,
-              });
-              await this.userRepository.save(user);
-            } else {
-              // Обновляем данные существующего пользователя
+              if (!user) {
+                throw new UnauthorizedException('User not found');
+              }
+              // Обновляем данные пользователя из Telegram
               user.firstName = authUser.first_name || user.firstName;
               user.lastName = authUser.last_name || user.lastName;
               user.username = authUser.username || user.username;
@@ -820,13 +806,55 @@ export class AuthService {
                 user.phone = normalizedPhone;
               }
               await this.userRepository.save(user);
+            } else {
+              // Ищем или создаем пользователя по телефону
+              if (normalizedPhone) {
+                user = await this.userRepository.findOne({
+                  where: { phone: normalizedPhone },
+                });
+              } else {
+                user = await this.userRepository.findOne({
+                  where: { telegramId: authUser.id.toString() },
+                });
+              }
+
+              if (!user) {
+                // Создаем нового пользователя
+                user = this.userRepository.create({
+                  phone: normalizedPhone,
+                  firstName: authUser.first_name || null,
+                  lastName: authUser.last_name || null,
+                  username: authUser.username || null,
+                  telegramId: authUser.id.toString(),
+                  role: UserRole.CLIENT,
+                  isActive: true,
+                });
+                await this.userRepository.save(user);
+              } else {
+                // Обновляем данные существующего пользователя
+                user.firstName = authUser.first_name || user.firstName;
+                user.lastName = authUser.last_name || user.lastName;
+                user.username = authUser.username || user.username;
+                if (!user.telegramId) {
+                  user.telegramId = authUser.id.toString();
+                }
+                if (normalizedPhone && !user.phone) {
+                  user.phone = normalizedPhone;
+                }
+                await this.userRepository.save(user);
+              }
             }
 
             // Сохраняем сессию MTProto
+            // Используем userId из параметра (если передан админом) или создаем нового пользователя
+            const sessionUserId = userId || user.id;
+            this.logger.log(`Saving Telegram session for user ${sessionUserId} (role: ${user.role}, phone: ${normalizedPhone})`);
             await this.telegramUserClientService.saveSession(
-              user.id,
+              sessionUserId,
               stored.client,
               normalizedPhone || '',
+              undefined, // ipAddress не доступен в этом контексте
+              undefined, // userAgent не доступен в этом контексте
             );
 
             // НЕ генерируем JWT токены - авторизация Telegram не должна авторизовывать в дашборде
