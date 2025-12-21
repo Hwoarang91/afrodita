@@ -720,7 +720,7 @@ export class AuthService {
   /**
    * Проверяет статус QR токена
    */
-  async checkQrTokenStatus(tokenId: string): Promise<{
+  async checkQrTokenStatus(tokenId: string, userId?: string): Promise<{
     status: 'pending' | 'accepted' | 'expired';
     user?: User;
     tokens?: { accessToken: string; refreshToken: string } | null;
