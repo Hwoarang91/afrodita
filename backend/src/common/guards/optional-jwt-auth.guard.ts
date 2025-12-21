@@ -14,7 +14,7 @@ import { AuthGuard } from '@nestjs/passport';
 export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
   private readonly logger = new Logger(OptionalJwtAuthGuard.name);
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
     // Проверяем, есть ли пользователь в request (установлен JWT middleware)
@@ -25,7 +25,17 @@ export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
 
     // Пытаемся использовать Passport стратегию, но перехватываем ошибки
     // Если токена нет или он невалиден - разрешаем доступ (не выбрасываем ошибку)
-    return super.canActivate(context) as Promise<boolean> | boolean;
+    try {
+      const result = await super.canActivate(context);
+      return result as boolean;
+    } catch (error) {
+      // Если Passport выбрасывает ошибку (токен отсутствует или невалиден) - разрешаем доступ
+      // Это позволяет эндпоинту работать без авторизации
+      this.logger.debug('OptionalJwtAuthGuard: Ошибка при проверке токена - продолжаем без авторизации', {
+        error: (error as Error)?.message,
+      });
+      return true; // Разрешаем доступ даже без токена
+    }
   }
 
   handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
