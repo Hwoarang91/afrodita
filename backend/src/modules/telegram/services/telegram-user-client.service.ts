@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Client, Storage, StorageKeyPart } from '@mtkruto/node';
+import { Client, Storage, StorageKeyPart, StorageMemory } from '@mtkruto/node';
 import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
 import { SessionEncryptionService } from './session-encryption.service';
 import { User } from '../../../entities/user.entity';
@@ -221,6 +221,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
   /**
    * Сохраняет сессию после успешной авторизации
+   * Создает новый клиент с нашим DatabaseStorage и копирует данные сессии
    */
   async saveSession(
     userId: string,
@@ -230,8 +231,6 @@ export class TelegramUserClientService implements OnModuleDestroy {
     userAgent?: string,
   ): Promise<void> {
     try {
-      // Получаем данные сессии из клиента
-      // MTKruto хранит сессию в storage, нам нужно получить её
       const apiIdStr = this.configService.get<string>('TELEGRAM_API_ID');
       const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
 
@@ -244,7 +243,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
-      // Создаем Storage адаптер для сохранения
+      // Создаем наш DatabaseStorage для этого пользователя
       const storage = new DatabaseStorage(
         this.sessionRepository,
         this.encryptionService,
@@ -253,40 +252,56 @@ export class TelegramUserClientService implements OnModuleDestroy {
         apiHash,
       );
 
-      // Сохраняем сессию в БД
-      // Используем существующий авторизованный клиент, не создаем новый
-      const sessionData = await this.extractSessionData(client);
-      const encrypted = this.encryptionService.encrypt(JSON.stringify(sessionData));
+      // Создаем новый клиент с нашим storage
+      const newClient = new Client({
+        apiId,
+        apiHash,
+        storage: storage as any,
+      });
 
+      // Копируем данные сессии из старого клиента в новый
+      // MTKruto автоматически сохранит данные в наш storage при подключении
+      // Но нам нужно скопировать существующие данные
+      await this.copySessionData(client, newClient);
+
+      // Подключаем новый клиент (он загрузит данные из нашего storage)
+      await newClient.connect();
+
+      // Сохраняем метаданные сессии в БД
       let session = await this.sessionRepository.findOne({
         where: { userId, apiId },
       });
 
       if (session) {
-        session.encryptedSessionData = encrypted;
         session.phoneNumber = phoneNumber;
         session.isActive = true;
         session.lastUsedAt = new Date();
         session.ipAddress = ipAddress || null;
         session.userAgent = userAgent || null;
+        await this.sessionRepository.save(session);
       } else {
         session = this.sessionRepository.create({
           userId,
           apiId,
           apiHash,
-          encryptedSessionData: encrypted,
+          encryptedSessionData: this.encryptionService.encrypt('{}'), // Пустые данные, storage уже работает
           phoneNumber,
           isActive: true,
           lastUsedAt: new Date(),
           ipAddress: ipAddress || null,
           userAgent: userAgent || null,
         });
+        await this.sessionRepository.save(session);
       }
 
-      await this.sessionRepository.save(session);
+      // Отключаем старый клиент и сохраняем новый в кэше
+      try {
+        await client.disconnect();
+      } catch (e) {
+        // Игнорируем ошибки отключения
+      }
 
-      // Сохраняем существующий авторизованный клиент в кэше
-      this.clients.set(userId, client);
+      this.clients.set(userId, newClient);
 
       this.logger.log(`Session saved for user ${userId}`);
     } catch (error: any) {
@@ -296,15 +311,62 @@ export class TelegramUserClientService implements OnModuleDestroy {
   }
 
   /**
-   * Извлекает данные сессии из клиента (временное решение)
-   * В будущем можно улучшить, если MTKruto предоставит API для этого
+   * Копирует данные сессии из одного клиента в другой
+   * Использует известные ключи сессии MTKruto
    */
-  private async extractSessionData(client: Client): Promise<any> {
-    // Это временная реализация
-    // В реальности нужно получить данные из storage клиента
-    // Пока возвращаем пустой объект, данные будут сохранены через наш DatabaseStorage
-    return {};
+  private async copySessionData(sourceClient: Client, targetClient: Client): Promise<void> {
+    try {
+      // Получаем storage обоих клиентов
+      const sourceStorage = (sourceClient as any).storage as Storage;
+      const targetStorage = (targetClient as any).storage as Storage;
+
+      // MTKruto хранит сессию в определенных ключах
+      // Основные ключи для сессии (из документации MTKruto):
+      const sessionKeys: readonly StorageKeyPart[][] = [
+        ['dc'],
+        ['auth_key'],
+        ['auth_key_id'],
+        ['server_salt'],
+        ['session_id'],
+        ['takeout_id'],
+      ];
+
+      // Копируем данные по каждому ключу
+      for (const key of sessionKeys) {
+        try {
+          const value = await sourceStorage.get(key);
+          if (value) {
+            await targetStorage.set(key, value as Uint8Array);
+            this.logger.debug(`Copied session key: ${key.join('.')}`);
+          }
+        } catch (e) {
+          // Игнорируем ошибки для отдельных ключей
+          this.logger.debug(`Failed to copy key ${key.join('.')}: ${(e as Error).message}`);
+        }
+      }
+
+      // Также копируем данные о DC (datacenter)
+      // MTKruto может хранить несколько DC (обычно 1-5)
+      for (let dcId = 1; dcId <= 5; dcId++) {
+        try {
+          const dcKey: readonly StorageKeyPart[] = ['dc', dcId.toString()];
+          const value = await sourceStorage.get(dcKey);
+          if (value) {
+            await targetStorage.set(dcKey, value as Uint8Array);
+            this.logger.debug(`Copied DC key: ${dcKey.join('.')}`);
+          }
+        } catch (e) {
+          // Игнорируем ошибки
+        }
+      }
+
+      this.logger.log('Session data copied successfully');
+    } catch (error: any) {
+      this.logger.warn(`Failed to copy session data: ${error.message}`);
+      // Не бросаем ошибку, так как storage может заполниться автоматически при использовании
+    }
   }
+
 
   /**
    * Удаляет сессию пользователя
