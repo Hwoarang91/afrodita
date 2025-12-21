@@ -283,10 +283,10 @@ export default function MastersPage() {
                 asChild
                 className="w-full"
               >
-                <a href={`/masters/${master.id}/schedule`}>
+                <Link href={`/masters/${master.id}/schedule`}>
                   <Calendar className="h-4 w-4 mr-2" />
                   Расписание
-                </a>
+                </Link>
               </Button>
             </div>
             </CardContent>
