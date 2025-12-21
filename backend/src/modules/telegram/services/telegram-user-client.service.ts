@@ -340,23 +340,9 @@ export class TelegramUserClientService implements OnModuleDestroy {
         }
       }
 
-      // Если все еще не найдено и пользователь - админ, ищем любую активную сессию
-      // Это позволяет админу использовать любую Telegram сессию для работы с API
-      if (!session && user?.role === UserRole.ADMIN) {
-        session = await this.sessionRepository.findOne({
-          where: {
-            isActive: true,
-          },
-          order: {
-            lastUsedAt: 'DESC', // Берем последнюю использованную сессию
-          },
-        });
-
-        if (session) {
-          this.logger.debug(`Found any active session for admin user ${userId} (session userId: ${session.userId}, phone: ${session.phoneNumber})`);
-        }
-      }
-
+      // ВАЖНО: Админ не может использовать сессии других пользователей
+      // Telegram сессии работают независимо и привязаны только к конкретным пользователям
+      // Админ может управлять сессиями через админ панель, но не использовать их для работы с API
       if (!session) {
         this.logger.warn(`No active session found for user ${userId} (telegramId: ${user?.telegramId || 'none'}, phone: ${user?.phone || 'none'}, role: ${user?.role || 'none'})`);
         return null;
