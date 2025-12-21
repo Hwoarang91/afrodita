@@ -1318,35 +1318,60 @@ export class AuthService {
 
       // normalizedPhone уже получен из параметров метода
 
-      // Ищем или создаем пользователя
-      let user = await this.userRepository.findOne({
-        where: { phone: normalizedPhone },
-      });
-
-      if (!user) {
-        // Создаем нового пользователя
-        user = this.userRepository.create({
-          phone: normalizedPhone,
-          firstName: authUser.first_name || null,
-          lastName: authUser.last_name || null,
-          username: authUser.username || null,
-          telegramId: authUser.id.toString(),
-          role: UserRole.CLIENT,
-          isActive: true,
+      // Если передан userId (админ создает сессию), используем его
+      // Иначе ищем или создаем пользователя по телефону
+      let user: User;
+      if (userId) {
+        // Используем переданный userId (для админа)
+        user = await this.userRepository.findOne({
+          where: { id: userId },
         });
-        await this.userRepository.save(user);
-      } else {
-        // Обновляем данные существующего пользователя
+        if (!user) {
+          throw new UnauthorizedException('User not found');
+        }
+        // Обновляем данные пользователя из Telegram
         user.firstName = authUser.first_name || user.firstName;
         user.lastName = authUser.last_name || user.lastName;
         user.username = authUser.username || user.username;
         if (!user.telegramId) {
           user.telegramId = authUser.id.toString();
         }
+        if (normalizedPhone && !user.phone) {
+          user.phone = normalizedPhone;
+        }
         await this.userRepository.save(user);
+      } else {
+        // Ищем или создаем пользователя по телефону
+        user = await this.userRepository.findOne({
+          where: { phone: normalizedPhone },
+        });
+
+        if (!user) {
+          // Создаем нового пользователя
+          user = this.userRepository.create({
+            phone: normalizedPhone,
+            firstName: authUser.first_name || null,
+            lastName: authUser.last_name || null,
+            username: authUser.username || null,
+            telegramId: authUser.id.toString(),
+            role: UserRole.CLIENT,
+            isActive: true,
+          });
+          await this.userRepository.save(user);
+        } else {
+          // Обновляем данные существующего пользователя
+          user.firstName = authUser.first_name || user.firstName;
+          user.lastName = authUser.last_name || user.lastName;
+          user.username = authUser.username || user.username;
+          if (!user.telegramId) {
+            user.telegramId = authUser.id.toString();
+          }
+          await this.userRepository.save(user);
+        }
       }
 
       // Сохраняем сессию MTProto
+      this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone})`);
       await this.telegramUserClientService.saveSession(
         user.id,
         client,
