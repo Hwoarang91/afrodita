@@ -18,6 +18,7 @@ import { AuthService, TelegramAuthData } from '../auth.service';
 import { JwtAuthService, TokenPair } from '../services/jwt.service';
 import { CsrfService } from '../services/csrf.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../../common/guards/optional-jwt-auth.guard';
 import { LoginRequestDto } from '../dto/login-request.dto';
 import { LoginResponseDto } from '../dto/login-response.dto';
 import { RefreshRequestDto } from '../dto/refresh-request.dto';
@@ -465,6 +466,8 @@ export class AuthController {
 
   @Post('telegram/phone/verify')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(OptionalJwtAuthGuard) // Опциональный guard - если токен есть, req.user будет доступен
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Проверка кода подтверждения и авторизация по номеру телефона' })
   @ApiResponse({
     status: 200,
@@ -589,6 +592,8 @@ export class AuthController {
 
   @Post('telegram/2fa/verify')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(OptionalJwtAuthGuard) // Опциональный guard - если токен есть, req.user будет доступен
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Проверка 2FA пароля и завершение авторизации' })
   @ApiResponse({
     status: 200,
