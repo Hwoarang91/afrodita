@@ -75,9 +75,19 @@ class DatabaseStorage implements Partial<Storage> {
 
       let data: any = {};
 
-      if (session) {
-        const decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
-        data = JSON.parse(decrypted);
+      if (session && session.encryptedSessionData) {
+        try {
+          // Проверяем, что данные не пустые
+          if (session.encryptedSessionData.trim() !== '' && session.encryptedSessionData !== '{}') {
+            const decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
+            if (decrypted && decrypted.trim() !== '' && decrypted !== '{}') {
+              data = JSON.parse(decrypted);
+            }
+          }
+        } catch (decryptError) {
+          // Если не удалось расшифровать (сессия повреждена или пустая), начинаем с пустого объекта
+          data = {};
+        }
       }
 
       // Устанавливаем значение по ключу
@@ -498,10 +508,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
         }
       }
 
-      this.logger.log('Session data copied to DatabaseStorage successfully');
+      this.logger.log('Session data copy process completed');
     } catch (error: any) {
-      this.logger.warn(`Failed to copy session data to DatabaseStorage: ${error.message}`);
-      // Не бросаем ошибку, так как storage может заполниться автоматически при использовании
+      this.logger.error(`Failed to copy session data to DatabaseStorage: ${error.message}`, error.stack);
+      // Бросаем ошибку, так как без данных сессии клиент не сможет работать
+      throw error;
     }
   }
 
