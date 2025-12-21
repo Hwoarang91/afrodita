@@ -346,8 +346,8 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение истории сообщений для пользователя ${userId} из чата ${chatId}`);
 
-      // Получаем клиент пользователя
-      const client = await this.telegramUserClientService.getClient(userId);
+      // Получаем клиент - просто используем любую активную сессию
+      const client = await this.telegramUserClientService.getClient();
       if (!client) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
