@@ -1153,8 +1153,11 @@ export class AuthService {
       // Для MTProto M1 вычисляется по специальной формуле:
       // M1 = SHA256(SHA256(p) || SHA256(g) || SHA256(A) || SHA256(B) || SHA256(S))
       // Это отличается от стандартного SRP, где M1 = H(A || B || S)
+      // g - это число (обычно 3), нужно преобразовать в Buffer (1 байт)
+      const gBuffer = Buffer.allocUnsafe(1);
+      gBuffer.writeUInt8(g, 0);
       const pHash = crypto.createHash('sha256').update(pBuffer).digest();
-      const gHash = crypto.createHash('sha256').update(Buffer.from([g])).digest();
+      const gHash = crypto.createHash('sha256').update(gBuffer).digest();
       
       // Преобразуем A, B, S в Buffer для хеширования
       // A уже в ABuffer (256 байт)
@@ -1169,9 +1172,14 @@ export class AuthService {
       const SHash = crypto.createHash('sha256').update(SBuffer).digest();
       
       // Вычисляем M1 = SHA256(pHash || gHash || AHash || BHash || SHash)
-      const M1Buffer = crypto.createHash('sha256')
+      // SHA256 дает 32 байта, но для MTProto нужно 256 байт (дополняем нулями слева)
+      const M1Hash = crypto.createHash('sha256')
         .update(Buffer.concat([pHash, gHash, AHash, BHash, SHash]))
         .digest();
+      
+      // Дополняем M1 до 256 байт нулями слева (как и A, B, S)
+      const M1Buffer = Buffer.alloc(256, 0);
+      M1Hash.copy(M1Buffer, 256 - M1Hash.length);
       
       const A = new Uint8Array(Array.from(ABuffer));
       const M1 = new Uint8Array(Array.from(M1Buffer));

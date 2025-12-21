@@ -23,8 +23,8 @@ git pull origin main
 echo "Остановка контейнеров..."
 docker compose down
 
-# Пересборка образов
-echo "Пересборка Docker образов..."
+# Пересборка образов без кеша
+echo "Пересборка Docker образов без кеша..."
 docker compose build --no-cache
 
 # Запуск контейнеров
@@ -33,25 +33,50 @@ docker compose up -d
 
 # Ожидание запуска
 echo "Ожидание запуска сервисов..."
-sleep 10
+sleep 15
 
 # Проверка статуса
+echo "=========================================="
 echo "Проверка статуса контейнеров..."
+echo "=========================================="
 docker compose ps
+
+# Проверка логов
+echo "=========================================="
+echo "Проверка логов контейнеров (последние 50 строк)..."
+echo "=========================================="
+
+echo ""
+echo "--- Логи Backend ---"
+docker compose logs --tail=50 backend
+
+echo ""
+echo "--- Логи Admin ---"
+docker compose logs --tail=50 admin
+
+echo ""
+echo "--- Логи App ---"
+docker compose logs --tail=50 app
+
+echo ""
+echo "--- Логи Nginx ---"
+docker compose logs --tail=50 nginx
+
+echo ""
+echo "--- Логи Postgres ---"
+docker compose logs --tail=50 postgres
+
+echo ""
+echo "--- Логи Redis ---"
+docker compose logs --tail=50 redis
 
 echo "=========================================="
 echo "Обновление завершено"
 echo "=========================================="
 
-# Подключение к БД и удаление регистраций администраторов
-echo "Подключение к БД для удаления регистраций администраторов..."
-docker compose exec -T postgres psql -U afrodita_user -d afrodita << EOF
--- Удаление всех регистраций администраторов
-DELETE FROM users WHERE role = 'admin';
-
--- Показать оставшихся пользователей
-SELECT id, email, role, "firstName", "lastName" FROM users;
-EOF
-
-echo "Регистрации администраторов удалены"
-
+echo ""
+echo "Для просмотра логов в реальном времени используйте:"
+echo "  docker compose logs -f [service_name]"
+echo ""
+echo "Для просмотра всех логов:"
+echo "  docker compose logs -f"
