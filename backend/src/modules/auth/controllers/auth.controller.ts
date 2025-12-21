@@ -439,6 +439,7 @@ export class AuthController {
 
   @Post('telegram/phone/request')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(OptionalJwtAuthGuard) // Используем OptionalJwtAuthGuard
   @ApiOperation({ summary: 'Запрос кода подтверждения для авторизации по номеру телефона' })
   @ApiResponse({
     status: 200,
@@ -455,7 +456,16 @@ export class AuthController {
     @Body() dto: TelegramPhoneRequestDto,
     @Request() req,
   ): Promise<{ phoneCodeHash: string }> {
-    this.logger.debug(`Запрос кода для телефона: ${dto.phoneNumber}`);
+    this.logger.log(`[Phone Request] Запрос кода для телефона: ${dto.phoneNumber}`);
+    this.logger.log(`[Phone Request] userId из JWT: ${req.user?.sub || 'не авторизован'}`);
+    
+    // ВАЖНО: Telegram авторизация доступна только для авторизованных админов
+    // Если нет JWT - выбрасываем ошибку
+    if (!req.user?.sub) {
+      this.logger.warn('[Phone Request] Попытка запроса кода без JWT токена');
+      throw new UnauthorizedException('Telegram авторизация доступна только для авторизованных пользователей админ-панели');
+    }
+    
     try {
       return await this.authService.requestPhoneCode(dto.phoneNumber);
     } catch (error: any) {
