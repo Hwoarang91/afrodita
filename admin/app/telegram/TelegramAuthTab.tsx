@@ -440,7 +440,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                           </p>
                           {qrTimeRemaining > 0 && (
                             <p className="text-xs text-muted-foreground">
-                              Осталось времени: {Math.floor(qrTimeRemaining / 60)}:{(Math.floor(qrTimeRemaining % 60)).toString().padStart(2, '0')}
+                              Осталось времени: {Math.floor(qrTimeRemaining / 60)}:{(qrTimeRemaining % 60).toString().padStart(2, '0')}
                             </p>
                           )}
                         </>

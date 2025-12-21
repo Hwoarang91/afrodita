@@ -218,16 +218,28 @@ export class TelegramUserController {
       }
 
       // Вызываем messages.getDialogs для получения списка диалогов
-      const result = await client.invoke({
-        _: 'messages.getDialogs',
-        limit: 100,
-        offset_date: 0,
-        offset_id: 0,
-        offset_peer: {
-          _: 'inputPeerEmpty',
-        },
-        hash: BigInt(0),
-      }) as any;
+      let result;
+      try {
+        result = await client.invoke({
+          _: 'messages.getDialogs',
+          limit: 100,
+          offset_date: 0,
+          offset_id: 0,
+          offset_peer: {
+            _: 'inputPeerEmpty',
+          },
+          hash: BigInt(0),
+        }) as any;
+      } catch (error: any) {
+        // Обрабатываем AUTH_KEY_UNREGISTERED - сессия недействительна
+        if (error.message?.includes('AUTH_KEY_UNREGISTERED') || error.errorMessage === 'AUTH_KEY_UNREGISTERED') {
+          this.logger.error(`AUTH_KEY_UNREGISTERED detected for user ${userId} - invalidating session`);
+          // Инвалидируем все активные сессии
+          await this.telegramUserClientService.invalidateAllSessions();
+          throw new UnauthorizedException('Telegram session is invalid. Please re-authorize via phone or QR code.');
+        }
+        throw error;
+      }
 
       if (result._ !== 'messages.dialogs') {
         throw new UnauthorizedException('Failed to get dialogs');
@@ -296,10 +308,22 @@ export class TelegramUserController {
       }
 
       // Вызываем contacts.getContacts для получения списка контактов
-      const result = await client.invoke({
-        _: 'contacts.getContacts',
-        hash: BigInt(0),
-      }) as any;
+      let result;
+      try {
+        result = await client.invoke({
+          _: 'contacts.getContacts',
+          hash: BigInt(0),
+        }) as any;
+      } catch (error: any) {
+        // Обрабатываем AUTH_KEY_UNREGISTERED - сессия недействительна
+        if (error.message?.includes('AUTH_KEY_UNREGISTERED') || error.errorMessage === 'AUTH_KEY_UNREGISTERED') {
+          this.logger.error(`AUTH_KEY_UNREGISTERED detected for user ${userId} - invalidating session`);
+          // Инвалидируем все активные сессии
+          await this.telegramUserClientService.invalidateAllSessions();
+          throw new UnauthorizedException('Telegram session is invalid. Please re-authorize via phone or QR code.');
+        }
+        throw error;
+      }
 
       if (result._ !== 'contacts.contacts') {
         throw new UnauthorizedException('Failed to get contacts');

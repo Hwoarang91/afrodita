@@ -54,8 +54,21 @@ class DatabaseStorage implements Partial<Storage> {
         }
       }
 
+      // Обрабатываем base64 строки (бинарные данные сохранены как base64)
       if (typeof current === 'string') {
-        return new TextEncoder().encode(current) as T;
+        try {
+          // Пытаемся декодировать как base64 (бинарные данные)
+          const decoded = Buffer.from(current, 'base64');
+          return new Uint8Array(decoded) as T;
+        } catch {
+          // Если не base64, пытаемся как обычную строку
+          return new TextEncoder().encode(current) as T;
+        }
+      }
+
+      // Если это массив чисел (старый формат), конвертируем в Uint8Array
+      if (Array.isArray(current)) {
+        return new Uint8Array(current) as T;
       }
 
       return (current instanceof Uint8Array ? current : null) as T | null;
@@ -101,7 +114,8 @@ class DatabaseStorage implements Partial<Storage> {
       }
 
       const lastKey = String(key[key.length - 1]);
-      current[lastKey] = Array.from(value);
+      // Сохраняем бинарные данные как base64 для правильной работы с MTProto
+      current[lastKey] = Buffer.from(value).toString('base64');
 
       const encrypted = this.encryptionService.encrypt(JSON.stringify(data));
 
@@ -233,8 +247,17 @@ class DatabaseStorage implements Partial<Storage> {
               const value = obj[key];
               const fullPath = [...currentPath, key] as readonly StorageKeyPart[];
               
-              if (Array.isArray(value)) {
-                // Конвертируем массив обратно в Uint8Array
+              // Обрабатываем base64 строки (бинарные данные)
+              if (typeof value === 'string') {
+                try {
+                  const decoded = Buffer.from(value, 'base64');
+                  const uint8Array = new Uint8Array(decoded) as T;
+                  results.push([fullPath, uint8Array]);
+                } catch {
+                  // Если не base64, пропускаем
+                }
+              } else if (Array.isArray(value)) {
+                // Старый формат (массив чисел) - конвертируем в Uint8Array
                 const uint8Array = new Uint8Array(value) as T;
                 results.push([fullPath, uint8Array]);
               }
@@ -480,6 +503,18 @@ export class TelegramUserClientService implements OnModuleDestroy {
       this.logger.debug(`Connecting new client for user ${userId}`);
       await newClient.connect();
       this.logger.debug(`New client connected successfully for user ${userId}`);
+
+      // КРИТИЧЕСКИ ВАЖНО: Делаем контрольный запрос getMe() перед сохранением
+      // Это гарантирует, что auth_key финальный и зарегистрирован в Telegram
+      this.logger.debug(`Performing getMe() check for user ${userId} to ensure auth_key is final`);
+      try {
+        await newClient.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        this.logger.log(`✅ getMe() successful - auth_key is valid and registered for user ${userId}`);
+      } catch (getMeError: any) {
+        this.logger.error(`❌ getMe() failed for user ${userId}: ${getMeError.message}`);
+        // Если getMe() не прошел, сессия невалидна - не сохраняем
+        throw new Error(`Session validation failed: ${getMeError.message}`);
+      }
 
       // Сохраняем метаданные сессии в БД
       this.logger.debug(`Saving session metadata for user ${userId}`);
@@ -746,6 +781,39 @@ export class TelegramUserClientService implements OnModuleDestroy {
     await this.sessionRepository.remove(session);
 
     this.logger.log(`Session ${sessionId} completely removed from database`);
+  }
+
+  /**
+   * Инвалидирует все активные сессии (используется при AUTH_KEY_UNREGISTERED)
+   */
+  async invalidateAllSessions(): Promise<void> {
+    try {
+      const activeSessions = await this.sessionRepository.find({
+        where: { isActive: true },
+      });
+
+      for (const session of activeSessions) {
+        // Отключаем клиент, если он активен
+        const client = this.clients.get(session.userId);
+        if (client) {
+          try {
+            await client.disconnect();
+          } catch (e) {
+            this.logger.warn(`Error disconnecting client for session ${session.id}: ${(e as Error).message}`);
+          }
+          this.clients.delete(session.userId);
+        }
+
+        // Деактивируем сессию
+        session.isActive = false;
+        await this.sessionRepository.save(session);
+      }
+
+      this.logger.log(`Invalidated ${activeSessions.length} active session(s) due to AUTH_KEY_UNREGISTERED`);
+    } catch (error: any) {
+      this.logger.error(`Error invalidating sessions: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   /**
