@@ -458,14 +458,16 @@ export class AuthService {
 
       // Обработка специфичных ошибок Telegram
       if (error.message?.includes('FLOOD_WAIT')) {
-        // Извлекаем время ожидания из ошибки (например, FLOOD_WAIT_59517 означает 59517 миллисекунд)
+        // Извлекаем время ожидания из ошибки
+        // FLOOD_WAIT может возвращать время в секундах или миллисекундах
+        // Обычно если значение > 1000, это миллисекунды, иначе секунды
         const waitMatch = error.message.match(/FLOOD_WAIT_(\d+)/);
         if (waitMatch) {
-          const waitMs = parseInt(waitMatch[1], 10);
-          // FLOOD_WAIT возвращает время в миллисекундах, но обычно это секунды
-          // Если значение больше 3600, это скорее всего миллисекунды, иначе секунды
-          const waitSeconds = waitMs > 3600 ? Math.ceil(waitMs / 1000) : waitMs;
-          const waitMinutes = Math.ceil(waitSeconds / 60);
+          const waitValue = parseInt(waitMatch[1], 10);
+          // Если значение больше 1000, это скорее всего миллисекунды
+          // Если значение меньше 1000, это скорее всего секунды
+          const waitSeconds = waitValue > 1000 ? Math.ceil(waitValue / 1000) : waitValue;
+          const waitMinutes = Math.floor(waitSeconds / 60);
           const waitSecondsRemainder = waitSeconds % 60;
           
           let message = `Too many requests. Please try again in `;
@@ -479,6 +481,7 @@ export class AuthService {
           }
           message += '.';
           
+          this.logger.warn(`FLOOD_WAIT detected: ${waitValue} (interpreted as ${waitSeconds} seconds)`);
           throw new UnauthorizedException(message);
         } else {
           throw new UnauthorizedException('Too many requests. Please try again later.');
