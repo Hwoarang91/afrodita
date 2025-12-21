@@ -1171,11 +1171,16 @@ export class AuthService {
       const BHash = crypto.createHash('sha256').update(BBytes).digest();
       const SHash = crypto.createHash('sha256').update(SBuffer).digest();
       
-      // Вычисляем M1 = SHA256(pHash || gHash || AHash || BHash || SHash)
-      // Для MTProto M1 - это просто SHA256 хеш (32 байта), НЕ дополняем до 256 байт
-      // A, B, S - это 256 байт, но M1 - это просто хеш
+      // Вычисляем M1 по формуле MTProto SRP:
+      // M1 = SHA256((SHA256(p) XOR SHA256(g)) || SHA256(A) || SHA256(B) || SHA256(S))
+      // XOR применяется к pHash и gHash, затем все конкатенируется и хешируется
+      const pXorG = Buffer.alloc(32);
+      for (let i = 0; i < 32; i++) {
+        pXorG[i] = pHash[i] ^ gHash[i];
+      }
+      
       const M1Buffer = crypto.createHash('sha256')
-        .update(Buffer.concat([pHash, gHash, AHash, BHash, SHash]))
+        .update(Buffer.concat([pXorG, AHash, BHash, SHash]))
         .digest();
       
       const A = new Uint8Array(Array.from(ABuffer));
