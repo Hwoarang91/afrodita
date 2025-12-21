@@ -458,13 +458,31 @@ export class AuthService {
 
       // Обработка специфичных ошибок Telegram
       if (error.message?.includes('FLOOD_WAIT')) {
-        // Извлекаем время ожидания из ошибки (например, FLOOD_WAIT_60150 означает 60150 секунд)
+        // Извлекаем время ожидания из ошибки (например, FLOOD_WAIT_59517 означает 59517 миллисекунд)
         const waitMatch = error.message.match(/FLOOD_WAIT_(\d+)/);
-        const waitSeconds = waitMatch ? parseInt(waitMatch[1], 10) : 0;
-        const waitMinutes = Math.ceil(waitSeconds / 60);
-        throw new UnauthorizedException(
-          `Too many requests. Please try again in ${waitMinutes} minute(s).`
-        );
+        if (waitMatch) {
+          const waitMs = parseInt(waitMatch[1], 10);
+          // FLOOD_WAIT возвращает время в миллисекундах, но обычно это секунды
+          // Если значение больше 3600, это скорее всего миллисекунды, иначе секунды
+          const waitSeconds = waitMs > 3600 ? Math.ceil(waitMs / 1000) : waitMs;
+          const waitMinutes = Math.ceil(waitSeconds / 60);
+          const waitSecondsRemainder = waitSeconds % 60;
+          
+          let message = `Too many requests. Please try again in `;
+          if (waitMinutes > 0) {
+            message += `${waitMinutes} minute(s)`;
+            if (waitSecondsRemainder > 0) {
+              message += ` and ${waitSecondsRemainder} second(s)`;
+            }
+          } else {
+            message += `${waitSeconds} second(s)`;
+          }
+          message += '.';
+          
+          throw new UnauthorizedException(message);
+        } else {
+          throw new UnauthorizedException('Too many requests. Please try again later.');
+        }
       }
       if (error.message?.includes('FLOOD')) {
         throw new UnauthorizedException('Too many requests. Please try again later.');
