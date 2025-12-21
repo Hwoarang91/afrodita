@@ -81,7 +81,11 @@ class DatabaseStorage implements Partial<Storage> {
     try {
       // Проверяем, что value действительно Uint8Array
       if (!(value instanceof Uint8Array)) {
-        throw new Error(`Expected Uint8Array, got ${typeof value} (${value?.constructor?.name || 'unknown'})`);
+        const valueType = typeof value;
+        const constructorName = value && typeof value === 'object' && 'constructor' in value 
+          ? (value as any).constructor?.name || 'unknown'
+          : 'unknown';
+        throw new Error(`Expected Uint8Array, got ${valueType} (${constructorName})`);
       }
 
       let session = await this.sessionRepository.findOne({
@@ -306,9 +310,14 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
   /**
    * Получает или создает MTProto клиент
-   * Просто ищет любую активную сессию, без привязки к конкретному пользователю
+   * Если передан sessionId, использует конкретную сессию
+   * Иначе ищет любую активную сессию со статусом 'active'
    */
-  async getClient(userId?: string): Promise<Client | null> {
+  async getClient(userId?: string, sessionId?: string): Promise<Client | null> {
+    // Если передан sessionId, используем детерминированный метод
+    if (sessionId) {
+      return this.getClientBySession(sessionId);
+    }
     try {
       this.logger.log(`Looking for any active Telegram session (requested by userId: ${userId || 'none'})`);
 
@@ -319,10 +328,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.log(`Session ${index + 1}: id=${s.id}, userId=${s.userId}, phoneNumber=${s.phoneNumber}, isActive=${s.isActive}, lastUsedAt=${s.lastUsedAt}`);
       });
 
-      // Просто ищем любую активную сессию
+      // Ищем активные сессии со статусом 'active' (валидные сессии)
       const activeSessions = await this.sessionRepository.find({
         where: {
           isActive: true,
+          status: 'active', // Только валидные сессии
         },
         order: {
           lastUsedAt: 'DESC',
@@ -528,15 +538,29 @@ export class TelegramUserClientService implements OnModuleDestroy {
         where: { userId, apiId },
       });
 
+      // Получаем DC ID из сессии для сохранения
+      let dcId: number | null = null;
+      try {
+        const dcValue = await newClient.storage.get(['dc']);
+        if (dcValue && typeof dcValue === 'object' && 'dcId' in (dcValue as any)) {
+          dcId = (dcValue as any).dcId;
+        }
+      } catch (e) {
+        this.logger.debug(`Could not extract DC ID: ${(e as Error).message}`);
+      }
+
       if (session) {
         this.logger.debug(`Updating existing session ${session.id} for user ${userId}`);
         session.phoneNumber = phoneNumber;
         session.isActive = true;
+        session.status = 'active'; // Сессия валидна после успешного getMe()
+        session.invalidReason = null; // Очищаем причину невалидности
+        session.dcId = dcId;
         session.lastUsedAt = new Date();
         session.ipAddress = ipAddress || null;
         session.userAgent = userAgent || null;
         await this.sessionRepository.save(session);
-        this.logger.debug(`Session ${session.id} updated successfully`);
+        this.logger.debug(`Session ${session.id} updated successfully with status=active`);
       } else {
         this.logger.debug(`Creating new session for user ${userId}`);
         session = this.sessionRepository.create({
@@ -546,12 +570,15 @@ export class TelegramUserClientService implements OnModuleDestroy {
           encryptedSessionData: this.encryptionService.encrypt('{}'), // Пустые данные, storage уже работает
           phoneNumber,
           isActive: true,
+          status: 'active', // Сессия валидна после успешного getMe()
+          invalidReason: null,
+          dcId: dcId,
           lastUsedAt: new Date(),
           ipAddress: ipAddress || null,
           userAgent: userAgent || null,
         });
         await this.sessionRepository.save(session);
-        this.logger.debug(`New session ${session.id} created successfully`);
+        this.logger.debug(`New session ${session.id} created successfully with status=active`);
       }
 
       // Отключаем старый клиент и сохраняем новый в кэше
@@ -734,19 +761,18 @@ export class TelegramUserClientService implements OnModuleDestroy {
       where: { id: userId },
     });
 
-    // Если админ - возвращаем все сессии в системе
+    // Если админ - возвращаем все сессии в системе (включая неактивные для просмотра)
     if (user?.role === UserRole.ADMIN) {
       return await this.sessionRepository.find({
-        where: { isActive: true },
-        order: { lastUsedAt: 'DESC' },
+        order: { lastUsedAt: 'DESC', createdAt: 'DESC' },
         relations: ['user'], // Загружаем информацию о пользователе
       });
     }
 
-    // Для обычных пользователей - только их сессии
+    // Для обычных пользователей - только их сессии (включая неактивные)
     return await this.sessionRepository.find({
-      where: { userId, isActive: true },
-      order: { lastUsedAt: 'DESC' },
+      where: { userId },
+      order: { lastUsedAt: 'DESC', createdAt: 'DESC' },
     });
   }
 
@@ -798,10 +824,10 @@ export class TelegramUserClientService implements OnModuleDestroy {
   /**
    * Инвалидирует все активные сессии (используется при AUTH_KEY_UNREGISTERED)
    */
-  async invalidateAllSessions(): Promise<void> {
+  async invalidateAllSessions(reason: string = 'AUTH_KEY_UNREGISTERED'): Promise<void> {
     try {
       const activeSessions = await this.sessionRepository.find({
-        where: { isActive: true },
+        where: { isActive: true, status: 'active' },
       });
 
       for (const session of activeSessions) {
@@ -816,15 +842,108 @@ export class TelegramUserClientService implements OnModuleDestroy {
           this.clients.delete(session.userId);
         }
 
-        // Деактивируем сессию
+        // Инвалидируем сессию с указанием причины
         session.isActive = false;
+        session.status = 'invalid';
+        session.invalidReason = reason;
         await this.sessionRepository.save(session);
       }
 
-      this.logger.log(`Invalidated ${activeSessions.length} active session(s) due to AUTH_KEY_UNREGISTERED`);
+      this.logger.log(`Invalidated ${activeSessions.length} active session(s) due to ${reason}`);
     } catch (error: any) {
       this.logger.error(`Error invalidating sessions: ${error.message}`, error.stack);
       throw error;
+    }
+  }
+
+  /**
+   * Получает клиент по конкретной сессии (детерминированный метод)
+   */
+  async getClientBySession(sessionId: string): Promise<Client | null> {
+    try {
+      this.logger.log(`Getting client for specific session: ${sessionId}`);
+
+      const session = await this.sessionRepository.findOne({
+        where: { id: sessionId },
+      });
+
+      if (!session) {
+        this.logger.warn(`Session ${sessionId} not found`);
+        return null;
+      }
+
+      // Проверяем статус сессии
+      if (session.status !== 'active' || !session.isActive) {
+        this.logger.warn(`Session ${sessionId} is not active (status: ${session.status}, isActive: ${session.isActive})`);
+        return null;
+      }
+
+      // Проверяем, что сессия имеет валидные данные
+      if (!session.encryptedSessionData || session.encryptedSessionData === '{}' || session.encryptedSessionData.trim() === '') {
+        this.logger.error(`Session ${sessionId} has empty or invalid encryptedSessionData`);
+        return null;
+      }
+
+      // Используем userId из сессии
+      const sessionUserId = session.userId;
+
+      // Проверяем, есть ли уже активный клиент для этой сессии
+      if (this.clients.has(sessionUserId)) {
+        const client = this.clients.get(sessionUserId)!;
+        if (client.connected) {
+          this.logger.debug(`Using cached client for session userId ${sessionUserId}`);
+          return client;
+        }
+        // Если клиент отключен, удаляем его
+        this.clients.delete(sessionUserId);
+      }
+
+      // Получаем API credentials
+      const apiIdStr = this.configService.get<string>('TELEGRAM_API_ID');
+      const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
+
+      if (!apiIdStr || !apiHash) {
+        throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in environment variables');
+      }
+
+      const apiId = parseInt(apiIdStr, 10);
+      if (isNaN(apiId)) {
+        throw new Error('TELEGRAM_API_ID must be a valid number');
+      }
+
+      // Создаем Storage адаптер с userId из сессии
+      const storage = new DatabaseStorage(
+        this.sessionRepository,
+        this.encryptionService,
+        sessionUserId,
+        apiId,
+        apiHash,
+      );
+
+      // Инициализируем storage
+      await storage.initialize();
+
+      // Создаем клиент
+      const client = new Client({
+        apiId,
+        apiHash,
+        storage: storage as any,
+      });
+
+      // Сохраняем клиент под sessionUserId
+      this.clients.set(sessionUserId, client);
+
+      // Подключаемся к Telegram
+      if (!client.connected) {
+        this.logger.log(`Connecting client for session ${sessionId} (userId: ${sessionUserId}, phone: ${session.phoneNumber})...`);
+        await client.connect();
+        this.logger.log(`Client connected successfully for session ${sessionId}`);
+      }
+
+      return client;
+    } catch (error: any) {
+      this.logger.error(`Error getting client for session ${sessionId}: ${error.message}`, error.stack);
+      return null;
     }
   }
 
@@ -868,9 +987,13 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
     // Деактивируем сессию в БД
     session.isActive = false;
+    if (session.status === 'active') {
+      session.status = 'invalid';
+      session.invalidReason = 'Deactivated by user';
+    }
     await this.sessionRepository.save(session);
 
-    this.logger.log(`Session ${sessionId} deactivated by user ${userId} (session owner: ${session.userId})`);
+    this.logger.log(`Session ${sessionId} deactivated by user ${userId} (session owner: ${session.userId}, status: ${session.status})`);
   }
 
   /**

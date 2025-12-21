@@ -460,21 +460,31 @@ export class TelegramUserController {
 
       const sessions = await this.telegramUserClientService.getUserSessions(userId);
 
+      // Определяем текущую активную сессию (используется для API)
+      // Для простоты берем первую активную сессию со статусом 'active'
+      const currentSession = sessions.find(s => s.status === 'active' && s.isActive);
+
       const sessionsInfo: SessionInfoDto[] = sessions.map((session) => ({
         id: session.id,
         phoneNumber: session.phoneNumber,
         ipAddress: session.ipAddress,
         userAgent: session.userAgent,
         isActive: session.isActive,
+        status: session.status || (session.isActive ? 'active' : 'invalid'),
+        invalidReason: session.invalidReason || null,
+        dcId: session.dcId || null,
         lastUsedAt: session.lastUsedAt,
         createdAt: session.createdAt,
         // Для админа добавляем информацию о владельце сессии
         userId: (session as any).user?.id || session.userId,
         userEmail: (session as any).user?.email || null,
+        // Помечаем текущую сессию
+        isCurrent: currentSession ? session.id === currentSession.id : false,
       }));
 
       return {
         success: true,
+        currentSessionId: currentSession?.id || null,
         sessions: sessionsInfo,
       };
     } catch (error: any) {
