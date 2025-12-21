@@ -482,10 +482,18 @@ export class AuthController {
   ): Promise<TelegramAuthResponseDto> {
     this.logger.debug(`Проверка кода для телефона: ${dto.phoneNumber}`);
     this.logger.log(`[Phone] userId из DTO: ${dto.userId || 'не указан'}, userId из JWT: ${req.user?.sub || 'не авторизован'}`);
+    
+    // ВАЖНО: Telegram авторизация доступна только для авторизованных админов
+    // Если нет JWT и нет userId в DTO - выбрасываем ошибку
+    if (!req.user?.sub && !dto.userId) {
+      this.logger.warn('[Phone] Попытка авторизации Telegram без JWT токена и без userId в DTO');
+      throw new UnauthorizedException('Telegram авторизация доступна только для авторизованных пользователей админ-панели');
+    }
+    
     try {
       // Используем userId из DTO (если передан админом) или из JWT (если админ авторизован)
       const userId = dto.userId || req.user?.sub;
-      this.logger.log(`[Phone] Используемый userId для сохранения сессии: ${userId || 'не указан (будет создан новый пользователь)'}`);
+      this.logger.log(`[Phone] Используемый userId для сохранения сессии: ${userId}`);
       
       const result = await this.authService.verifyPhoneCode(
         dto.phoneNumber,
@@ -609,10 +617,18 @@ export class AuthController {
     this.logger.log(`[2FA] Запрос на проверку 2FA для телефона: ${dto.phoneNumber}, phoneCodeHash: ${dto.phoneCodeHash}`);
     this.logger.log(`[2FA] Пароль получен: ${dto.password ? 'да' : 'нет'}, длина: ${dto.password?.length || 0}`);
     this.logger.log(`[2FA] userId из DTO: ${dto.userId || 'не указан'}, userId из JWT: ${req.user?.sub || 'не авторизован'}`);
+    
+    // ВАЖНО: Telegram авторизация доступна только для авторизованных админов
+    // Если нет JWT и нет userId в DTO - выбрасываем ошибку
+    if (!req.user?.sub && !dto.userId) {
+      this.logger.warn('[2FA] Попытка авторизации Telegram без JWT токена и без userId в DTO');
+      throw new UnauthorizedException('Telegram авторизация доступна только для авторизованных пользователей админ-панели');
+    }
+    
     try {
       // Используем userId из DTO (если передан админом) или из JWT (если админ авторизован)
       const userId = dto.userId || req.user?.sub;
-      this.logger.log(`[2FA] Используемый userId для сохранения сессии: ${userId || 'не указан (будет создан новый пользователь)'}`);
+      this.logger.log(`[2FA] Используемый userId для сохранения сессии: ${userId}`);
       
       const result = await this.authService.verify2FAPassword(
         dto.phoneNumber,
