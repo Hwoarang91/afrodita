@@ -98,9 +98,9 @@ export class AuthService {
     }
 
     if (!user.password) {
-      this.logger.warn(`У пользователя нет пароля: ${email}`);
-      throw new UnauthorizedException('Invalid email or password');
-    }
+        this.logger.warn(`У пользователя нет пароля: ${email}`);
+        throw new UnauthorizedException('Invalid email or password');
+      }
 
     this.logger.debug(`Пользователь найден, проверка пароля: ${email}`);
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -423,8 +423,9 @@ export class AuthService {
 
       // КРИТИЧЕСКИ ВАЖНО: Создаем клиент с DatabaseStorage сразу
       // НЕ используем StorageMemory - это нарушает lifecycle MTKruto
-      // Для авторизации нужен userId - используем временный на основе номера телефона
-      const tempUserId = `temp_${phoneNumber.replace(/[^0-9]/g, '')}`;
+      // Для авторизации нужен userId - используем временный UUID (будет обновлен после авторизации)
+      const { v4: uuidv4 } = await import('uuid');
+      const tempUserId = uuidv4();
       const { client, sessionId } = await this.telegramUserClientService.createClientForAuth(tempUserId, apiId, apiHash);
       
       // Клиент уже подключен в createClientForAuth
@@ -711,8 +712,9 @@ export class AuthService {
       }
 
       // КРИТИЧЕСКИ ВАЖНО: Создаем клиент с DatabaseStorage сразу
-      // Для QR-кода используем временный userId (будет обновлен после авторизации)
-      const tempUserId = `temp_qr_${Date.now()}`;
+      // Для QR-кода используем временный UUID (будет обновлен после авторизации)
+      const { v4: uuidv4 } = await import('uuid');
+      const tempUserId = uuidv4();
       const { client, sessionId } = await this.telegramUserClientService.createClientForAuth(tempUserId, apiId, apiHash);
       
       // Клиент уже подключен в createClientForAuth
