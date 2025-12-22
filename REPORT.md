@@ -97,14 +97,19 @@ docker rm n8n
 - React error #31 при попытке отрендерить объект ошибки
 - Отсутствие единого контракта для обработки ошибок
 - `userId` попадал в запрос `/auth/telegram/2fa/verify` несмотря на защиту
+- Telegram MTProto ошибки не были нормализованы для UI
 
 **Решение:**
 - Создан единый `ErrorResponse` контракт с гарантией, что `message` всегда строка
 - Создан helper `buildErrorResponse()` для стандартизации всех ошибок
 - Обновлен `ValidationExceptionFilter` для использования нового контракта
+- Создан глобальный `HttpExceptionFilter` для всех HTTP исключений
+- Создан маппинг Telegram MTProto ошибок → ErrorCode (`telegram-error-mapper.ts`)
+- Интегрирован маппинг в `mtproto-error.handler.ts`
 - Созданы константы `TELEGRAM_2FA_VERIFY_ALLOWED_KEYS` для allow-list подхода
 - Улучшен interceptor для агрессивной очистки payload (allow-list вместо delete)
 - Обновлен UI для работы с новым контрактом
+- Созданы contract tests для защиты от регрессий
 - Создана документация `ERROR_RESPONSE_CONTRACT.md`
 
 **Архитектурные улучшения:**
@@ -113,12 +118,19 @@ docker rm n8n
 - Единый формат ошибок: все ошибки следуют одному контракту
 - Machine-readable `errorCode` для программной обработки
 - Human-readable `message` для отображения пользователю
+- Telegram ошибки нормализованы: UI больше не парсит строки Telegram
+- Contract tests защищают от регрессий
 
 **Файлы:**
 - `backend/src/common/interfaces/error-response.interface.ts` - интерфейсы и типы
 - `backend/src/common/utils/error-response.builder.ts` - helper функции
 - `backend/src/common/filters/validation-exception.filter.ts` - обновлен для нового контракта
+- `backend/src/common/filters/http-exception.filter.ts` - глобальный фильтр для всех HttpException
+- `backend/src/modules/telegram/utils/telegram-error-mapper.ts` - маппинг Telegram ошибок
+- `backend/src/modules/telegram/utils/mtproto-error.handler.ts` - интегрирован маппинг
 - `backend/src/modules/auth/constants/telegram-auth.constants.ts` - константы allowed keys
+- `backend/src/common/interfaces/error-response.contract.spec.ts` - функции валидации контракта
+- `backend/src/common/interfaces/error-response.contract.test.ts` - contract tests
 - `backend/src/common/interfaces/ERROR_RESPONSE_CONTRACT.md` - документация
 - `admin/lib/api.ts` - улучшен interceptor с allow-list подходом
 - `admin/app/telegram/TelegramAuthTab.tsx` - улучшена обработка ошибок и формирование payload
