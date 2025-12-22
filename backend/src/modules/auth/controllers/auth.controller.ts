@@ -9,6 +9,7 @@ import {
   Request,
   Response,
   UnauthorizedException,
+  BadRequestException,
   Logger,
   Param,
 } from '@nestjs/common';
