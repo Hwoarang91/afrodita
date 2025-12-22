@@ -314,7 +314,7 @@ class DatabaseStorage implements Partial<Storage> {
                 results.push([fullPath, value as T]);
               } else if (typeof value === 'object') {
                 // Объекты - рекурсивно обрабатываем
-                const nestedResults = findKeys(value, fullPath);
+                const nestedResults = findKeys(value, [...fullPath] as StorageKeyPart[]);
                 results.push(...nestedResults);
               } else if (Array.isArray(value)) {
                 // Старый формат (массив чисел) - конвертируем в Uint8Array
