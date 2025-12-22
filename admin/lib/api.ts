@@ -39,6 +39,16 @@ apiClient.interceptors.request.use((config) => {
     }
   }
 
+  // КРИТИЧНО: Удаляем userId из запросов к /auth/telegram/2fa/verify
+  // Это поле не должно быть в DTO
+  if (config.url?.includes('/auth/telegram/2fa/verify') && config.data && typeof config.data === 'object') {
+    const { userId, ...restData } = config.data;
+    if (userId !== undefined) {
+      console.warn('[API] Removed userId from 2FA verify request:', userId);
+      config.data = restData;
+    }
+  }
+
   return config;
 });
 

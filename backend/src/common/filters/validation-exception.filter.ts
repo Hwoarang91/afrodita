@@ -36,6 +36,23 @@ export class ValidationExceptionFilter implements ExceptionFilter {
         this.logger.error(
           `[ValidationPipe] Validation errors: ${JSON.stringify(responseObj.message)}`,
         );
+        
+        // Преобразуем массив ошибок в читаемое сообщение для фронтенда
+        const errorMessages = responseObj.message.map((err: any) => {
+          if (err.constraints) {
+            return Object.values(err.constraints).join(', ');
+          }
+          return `${err.property}: invalid value`;
+        });
+        
+        // Возвращаем более понятный формат для фронтенда
+        response.status(status).json({
+          message: errorMessages.join('; '),
+          errors: responseObj.message,
+          error: responseObj.error || 'Bad Request',
+          statusCode: responseObj.statusCode || 400,
+        });
+        return;
       }
     }
 

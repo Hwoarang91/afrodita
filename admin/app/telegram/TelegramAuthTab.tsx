@@ -276,11 +276,19 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         return;
       }
 
-      const response = await apiClient.post('/auth/telegram/2fa/verify', {
+      // КРИТИЧНО: Убеждаемся, что userId НЕ отправляется
+      const requestBody = {
         phoneNumber: phoneNumber.trim(),
         password: passwordToSend,
         phoneCodeHash,
-      });
+      };
+      
+      // Логируем для отладки (только в dev режиме)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[2FA] Request body:', requestBody);
+      }
+      
+      const response = await apiClient.post('/auth/telegram/2fa/verify', requestBody);
 
       if (response.data.success) {
         toast.success('Telegram аккаунт успешно подключен!');
@@ -297,7 +305,31 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         }
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Ошибка проверки 2FA пароля');
+      // Улучшенная обработка ошибок валидации
+      let errorMessage = 'Ошибка проверки 2FA пароля';
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Если это массив ошибок валидации, извлекаем сообщения
+        if (Array.isArray(errorData.message)) {
+          errorMessage = errorData.message
+            .map((err: any) => {
+              if (typeof err === 'string') return err;
+              if (err.constraints) {
+                return Object.values(err.constraints).join(', ');
+              }
+              return `${err.property}: invalid value`;
+            })
+            .join('; ');
+        } else if (typeof errorData.message === 'string') {
+          errorMessage = errorData.message;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
