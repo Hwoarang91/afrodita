@@ -861,18 +861,16 @@ export class TelegramUserClientService implements OnModuleDestroy {
         return null;
       }
 
-      // Используем userId из сессии
-      const sessionUserId = session.userId;
-
+      // КРИТИЧЕСКИ ВАЖНО: Используем sessionId для кеша, не userId
       // Проверяем, есть ли уже активный клиент для этой сессии
-      if (this.clients.has(sessionUserId)) {
-        const client = this.clients.get(sessionUserId)!;
+      if (this.clients.has(sessionId)) {
+        const client = this.clients.get(sessionId)!;
         if (client.connected) {
-          this.logger.debug(`Using cached client for session userId ${sessionUserId}`);
+          this.logger.debug(`Using cached client for session ${sessionId}`);
           return client;
         }
         // Если клиент отключен, удаляем его
-        this.clients.delete(sessionUserId);
+        this.clients.delete(sessionId);
       }
 
       // Получаем API credentials
@@ -892,7 +890,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
       const storage = new DatabaseStorage(
         this.sessionRepository,
         this.encryptionService,
-        sessionUserId,
+        session.userId,
         apiId,
         apiHash,
       );
@@ -907,12 +905,12 @@ export class TelegramUserClientService implements OnModuleDestroy {
         storage: storage as any,
       });
 
-      // Сохраняем клиент под sessionUserId
-      this.clients.set(sessionUserId, client);
+      // КРИТИЧЕСКИ ВАЖНО: Сохраняем клиент под sessionId, не userId
+      this.clients.set(sessionId, client);
 
       // Подключаемся к Telegram
       if (!client.connected) {
-        this.logger.log(`Connecting client for session ${sessionId} (userId: ${sessionUserId}, phone: ${session.phoneNumber})...`);
+        this.logger.log(`Connecting client for session ${sessionId} (userId: ${session.userId}, phone: ${session.phoneNumber})...`);
         await client.connect();
         this.logger.log(`Client connected successfully for session ${sessionId}`);
       }
@@ -1027,12 +1025,12 @@ export class TelegramUserClientService implements OnModuleDestroy {
    */
   async onModuleDestroy() {
     this.logger.log('Disconnecting all Telegram user clients...');
-    for (const [userId, client] of this.clients.entries()) {
+    for (const [sessionId, client] of this.clients.entries()) {
       try {
         await client.disconnect();
-        this.logger.log(`Client disconnected for user ${userId}`);
+        this.logger.log(`Client disconnected for session ${sessionId}`);
       } catch (error: any) {
-        this.logger.error(`Error disconnecting client for user ${userId}: ${error.message}`);
+        this.logger.error(`Error disconnecting client for session ${sessionId}: ${error.message}`);
       }
     }
     this.clients.clear();
