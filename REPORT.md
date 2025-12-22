@@ -109,9 +109,36 @@ docker rm n8n
   - Убраны все string.includes() из бизнес-кода
   - Добавлены helper функции: `isFatalTelegramError()`, `isRetryableTelegramError()`
   - Поддержка всех типов ошибок: FLOOD_WAIT, PHONE_CODE_*, SESSION_*, MIGRATE_*, TIMEOUT и др.
+  - Использует типизацию ErrorCode → HTTP status (ERROR_HTTP_MAP)
 - Интегрирован маппинг в `mtproto-error.handler.ts`
   - Использует эталонный маппинг вместо string.includes()
   - Автоматическое определение фатальных и retryable ошибок
+- Создан SessionStateMachine с явными переходами состояний
+  - Разрешенные переходы: initializing → active/invalid, active → revoked/invalid
+  - Запрещенные переходы: invalid → active, revoked → active
+  - Helper функции: `assertSessionTransition()`, `isTransitionAllowed()`, `isFinalState()`
+- Cleanup job для сессий (cron)
+  - initializing > 24 часа → invalid
+  - invalid/revoked > 30 дней → DELETE
+  - Запускается раз в день в 3:00 UTC
+- Явное логирование ErrorCode с маскированием sensitive данных
+  - Логируется errorCode вместо message (message для UI)
+  - Маскирование phoneNumber, sessionId, password, email
+  - Обновлены ValidationExceptionFilter и HttpExceptionFilter
+- Типизация ErrorCode → HTTP status
+  - Создан ERROR_HTTP_MAP для единообразного маппинга
+  - Убрана магия из фильтров
+- UI матрица ErrorCode → UI behavior
+  - Единое поведение UI для каждого типа ошибки
+  - FLOOD_WAIT → таймер, PHONE_CODE_EXPIRED → кнопка запроса, SESSION_INVALID → redirect
+- Rate limiting по ErrorCode
+  - INVALID_2FA_PASSWORD → max 5 / 10 мин
+  - PHONE_CODE_INVALID → max 3 / 5 мин
+  - ErrorCodeRateLimitInterceptor для автоматической проверки
+- Метрики по ErrorCode
+  - ErrorMetricsService для сбора статистики
+  - Алерты для критичных ошибок (SESSION_INVALID, AUTH_KEY_UNREGISTERED)
+  - Интегрирован в HttpExceptionFilter
 - Созданы константы `TELEGRAM_2FA_VERIFY_ALLOWED_KEYS` для allow-list подхода
 - Улучшен interceptor для агрессивной очистки payload (allow-list вместо delete)
 - Обновлен UI для работы с новым контрактом

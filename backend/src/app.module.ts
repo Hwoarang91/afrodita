@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ErrorMetricsService } from './common/utils/error-metrics.service';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';

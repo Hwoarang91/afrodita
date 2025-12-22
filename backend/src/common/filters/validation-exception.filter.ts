@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { buildValidationErrorResponse } from '../utils/error-response.builder';
+import { maskSensitiveData } from '../utils/sensitive-data-masker';
 
 /**
  * Exception filter для обработки ошибок валидации
@@ -25,14 +26,20 @@ export class ValidationExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
     const exceptionResponse = exception.getResponse();
 
-    // Логируем детали ошибки валидации
+    // Логируем детали ошибки валидации с маскированием sensitive данных
+    const maskedBody = maskSensitiveData(request.body || {});
+    const maskedQuery = maskSensitiveData(request.query || {});
+    
     this.logger.error(
       `[Validation Error] ${request.method} ${request.url}`,
       {
         status,
-        exceptionResponse,
-        body: request.body,
-        query: request.query,
+        errorCode: 'VALIDATION_ERROR', // Явное логирование errorCode
+        exceptionResponse: typeof exceptionResponse === 'object' && exceptionResponse !== null
+          ? { ...exceptionResponse, message: '[masked]' }
+          : exceptionResponse,
+        body: maskedBody,
+        query: maskedQuery,
       },
     );
 

@@ -192,9 +192,16 @@ async function bootstrap() {
   // Exception filters для стандартизации всех ошибок
   // ВАЖНО: порядок регистрации имеет значение
   // ValidationExceptionFilter обрабатывает BadRequestException ПЕРЕД HttpExceptionFilter
+  
+  // Инициализируем ErrorMetricsService
+  const errorMetricsService = app.get(ErrorMetricsService);
+  
+  const httpExceptionFilter = new HttpExceptionFilter();
+  httpExceptionFilter.setErrorMetricsService(errorMetricsService);
+  
   app.useGlobalFilters(
     new ValidationExceptionFilter(), // Обрабатывает BadRequestException (ValidationPipe)
-    new HttpExceptionFilter(), // Обрабатывает все остальные HttpException
+    httpExceptionFilter, // Обрабатывает все остальные HttpException
   );
 
   // API prefix (исключаем health endpoint и корневые API роуты)

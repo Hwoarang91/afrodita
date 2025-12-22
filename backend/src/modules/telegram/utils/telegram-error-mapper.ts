@@ -16,6 +16,7 @@
 
 import { ErrorCode } from '../../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../../common/utils/error-response.builder';
+import { getHttpStatusForErrorCode } from '../../../common/utils/error-code-http-map';
 
 /**
  * Результат маппинга Telegram ошибки
@@ -61,7 +62,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   if (floodPremiumMatch) {
     const seconds = parseInt(floodPremiumMatch[1], 10);
     return {
-      statusCode: 429,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.FLOOD_WAIT),
       errorCode: ErrorCode.FLOOD_WAIT,
       message: `Превышен лимит Telegram. Повторите через ${seconds} секунд.`,
       retryAfter: seconds,
@@ -71,7 +72,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   // PHONE_NUMBER_FLOOD - слишком много попыток отправки кода
   if (upperMessage.includes('PHONE_NUMBER_FLOOD')) {
     return {
-      statusCode: 429,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.TOO_MANY_REQUESTS),
       errorCode: ErrorCode.TOO_MANY_REQUESTS,
       message: 'Слишком много попыток отправки кода. Подождите перед следующей попыткой.',
     };
@@ -83,7 +84,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   
   if (upperMessage.includes('PHONE_CODE_INVALID')) {
     return {
-      statusCode: 400,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.PHONE_CODE_INVALID),
       errorCode: ErrorCode.PHONE_CODE_INVALID,
       message: 'Неверный код подтверждения. Проверьте и введите код заново.',
     };
@@ -91,7 +92,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
 
   if (upperMessage.includes('PHONE_CODE_EXPIRED')) {
     return {
-      statusCode: 400,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.PHONE_CODE_EXPIRED),
       errorCode: ErrorCode.PHONE_CODE_EXPIRED,
       message: 'Код подтверждения истёк. Запросите новый код.',
     };
@@ -99,7 +100,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
 
   if (upperMessage.includes('PHONE_NUMBER_INVALID')) {
     return {
-      statusCode: 400,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.PHONE_NUMBER_INVALID),
       errorCode: ErrorCode.PHONE_NUMBER_INVALID,
       message: 'Некорректный номер телефона. Проверьте формат номера.',
     };
@@ -114,7 +115,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
     upperMessage.includes('SESSION_PASSWORD_NEEDED')
   ) {
     return {
-      statusCode: 401,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.INVALID_2FA_PASSWORD),
       errorCode: ErrorCode.INVALID_2FA_PASSWORD,
       message: 'Неверный пароль двухфакторной аутентификации.',
     };
@@ -123,7 +124,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   // SRP_PASSWORD_CHANGED - пароль был изменён, требуется новый ввод
   if (upperMessage.includes('SRP_PASSWORD_CHANGED')) {
     return {
-      statusCode: 401,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.INVALID_2FA_PASSWORD),
       errorCode: ErrorCode.INVALID_2FA_PASSWORD,
       message: 'Пароль двухфакторной аутентификации был изменён. Введите новый пароль.',
     };
@@ -136,7 +137,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   // AUTH_KEY_UNREGISTERED - auth_key не зарегистрирован
   if (upperMessage.includes('AUTH_KEY_UNREGISTERED')) {
     return {
-      statusCode: 401,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
       errorCode: ErrorCode.SESSION_INVALID,
       message: 'Telegram сессия недействительна. Требуется повторная авторизация.',
     };
@@ -145,7 +146,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   // SESSION_REVOKED - сессия отозвана
   if (upperMessage.includes('SESSION_REVOKED')) {
     return {
-      statusCode: 401,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
       errorCode: ErrorCode.SESSION_INVALID,
       message: 'Telegram сессия отозвана. Требуется повторная авторизация.',
     };
@@ -154,7 +155,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   // AUTH_KEY_DUPLICATED - сессия вытеснена другой сессией
   if (upperMessage.includes('AUTH_KEY_DUPLICATED')) {
     return {
-      statusCode: 401,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
       errorCode: ErrorCode.SESSION_INVALID,
       message: 'Telegram сессия вытеснена. Требуется повторная авторизация.',
     };
@@ -163,16 +164,16 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   // AUTH_RESTART - требуется перезапуск авторизации
   if (upperMessage.includes('AUTH_RESTART')) {
     return {
-      statusCode: 401,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
       errorCode: ErrorCode.SESSION_INVALID,
       message: 'Требуется перезапуск авторизации Telegram.',
     };
   }
 
   // USER_DEACTIVATED - аккаунт деактивирован
-  if (upperMessage.includes('USER_DEACTIVATED')) {
+  if (upperMessage.includes('USER_DEACTIVATED') && !upperMessage.includes('BAN')) {
     return {
-      statusCode: 403,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
       errorCode: ErrorCode.SESSION_INVALID,
       message: 'Telegram аккаунт деактивирован.',
     };
@@ -181,7 +182,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   // USER_DEACTIVATED_BAN - аккаунт заблокирован
   if (upperMessage.includes('USER_DEACTIVATED_BAN')) {
     return {
-      statusCode: 403,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
       errorCode: ErrorCode.SESSION_INVALID,
       message: 'Telegram аккаунт заблокирован.',
     };
@@ -193,7 +194,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   
   if (upperMessage.includes('PHONE_NUMBER_BANNED')) {
     return {
-      statusCode: 403,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.PHONE_NUMBER_BANNED),
       errorCode: ErrorCode.PHONE_NUMBER_BANNED,
       message: 'Номер телефона заблокирован Telegram.',
     };
@@ -208,7 +209,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   if (dcMigrateMatch) {
     const dcId = dcMigrateMatch[1];
     return {
-      statusCode: 409,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.DC_MIGRATE),
       errorCode: ErrorCode.DC_MIGRATE,
       message: `Перенаправление на дата-центр ${dcId}. Повторите запрос.`,
     };
@@ -219,7 +220,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   if (networkMigrateMatch) {
     const dcId = networkMigrateMatch[1];
     return {
-      statusCode: 409,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.DC_MIGRATE),
       errorCode: ErrorCode.DC_MIGRATE,
       message: `Перенаправление сети на дата-центр ${dcId}. Повторите запрос.`,
     };
@@ -230,7 +231,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   if (fileMigrateMatch) {
     const dcId = fileMigrateMatch[1];
     return {
-      statusCode: 409,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.DC_MIGRATE),
       errorCode: ErrorCode.DC_MIGRATE,
       message: `Перенаправление файлов на дата-центр ${dcId}. Повторите запрос.`,
     };
@@ -241,7 +242,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   if (phoneMigrateMatch) {
     const dcId = phoneMigrateMatch[1];
     return {
-      statusCode: 409,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.DC_MIGRATE),
       errorCode: ErrorCode.DC_MIGRATE,
       message: `Перенаправление пользователя на дата-центр ${dcId}. Повторите запрос.`,
     };
@@ -252,7 +253,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   if (userMigrateMatch) {
     const dcId = userMigrateMatch[1];
     return {
-      statusCode: 409,
+      statusCode: getHttpStatusForErrorCode(ErrorCode.DC_MIGRATE),
       errorCode: ErrorCode.DC_MIGRATE,
       message: `Перенаправление пользователя на дата-центр ${dcId}. Повторите запрос.`,
     };

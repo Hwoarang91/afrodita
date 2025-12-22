@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual, Between } from 'typeorm';
+import { Repository, MoreThanOrEqual, Between, LessThan, In } from 'typeorm';
 import { Appointment, AppointmentStatus } from '../entities/appointment.entity';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { FinancialService } from '../modules/financial/financial.service';
@@ -9,6 +9,7 @@ import { SettingsService } from '../modules/settings/settings.service';
 import { Service } from '../entities/service.entity';
 import { Notification, NotificationType, NotificationStatus, NotificationChannel } from '../entities/notification.entity';
 import { User, UserRole } from '../entities/user.entity';
+import { TelegramUserSession } from '../entities/telegram-user-session.entity';
 
 @Injectable()
 export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
@@ -58,6 +59,8 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
     private notificationRepository: Repository<Notification>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(TelegramUserSession)
+    private telegramSessionRepository: Repository<TelegramUserSession>,
     private notificationsService: NotificationsService,
     private financialService: FinancialService,
     private settingsService: SettingsService,

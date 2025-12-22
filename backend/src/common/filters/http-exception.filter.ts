@@ -9,6 +9,8 @@ import {
 import { Response } from 'express';
 import { ErrorResponse, ErrorCode } from '../interfaces/error-response.interface';
 import { buildErrorResponse } from '../utils/error-response.builder';
+import { getHttpStatusForErrorCode } from '../utils/error-code-http-map';
+import { maskSensitiveData } from '../utils/sensitive-data-masker';
 
 /**
  * Глобальный exception filter для всех HttpException
@@ -29,14 +31,20 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
     const exceptionResponse = exception.getResponse();
 
-    // Логируем ошибку
+    // Логируем ошибку с маскированием sensitive данных
+    // КРИТИЧНО: Логируем errorCode, а не message (message для UI)
+    const maskedBody = maskSensitiveData(request.body || {});
+    const maskedQuery = maskSensitiveData(request.query || {});
+    
     this.logger.error(
       `[HTTP Exception] ${request.method} ${request.url}`,
       {
         status,
-        exceptionResponse,
-        body: request.body,
-        query: request.query,
+        exceptionResponse: typeof exceptionResponse === 'object' && exceptionResponse !== null
+          ? { ...exceptionResponse, message: '[masked]' }
+          : exceptionResponse,
+        body: maskedBody,
+        query: maskedQuery,
       },
     );
 
@@ -96,6 +104,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errorCode,
       message,
     );
+
+    // Регистрируем ошибку в метриках (если сервис доступен)
+    if (this.errorMetricsService) {
+      this.errorMetricsService.recordError(errorCode, {
+        statusCode: status,
+        url: request.url,
+        method: request.method,
+      });
+    }
 
     response.status(status).json(errorResponse);
   }
