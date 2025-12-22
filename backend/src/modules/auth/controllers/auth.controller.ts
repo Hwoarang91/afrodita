@@ -612,11 +612,22 @@ export class AuthController {
     @Request() req,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramAuthResponseDto> {
-    this.logger.log(`[2FA] Запрос на проверку 2FA для телефона: ${dto.phoneNumber}, phoneCodeHash: ${dto.phoneCodeHash}`);
-    this.logger.log(`[2FA] Пароль получен: ${dto.password ? 'да' : 'нет'}, длина: ${dto.password?.length || 0}`);
+    // КРИТИЧНО: Логируем ДО валидации, чтобы увидеть что приходит
+    this.logger.log(`[2FA] Запрос получен. Raw body keys: ${Object.keys(dto || {}).join(', ')}`);
+    this.logger.log(`[2FA] phoneNumber: ${dto?.phoneNumber ? 'present' : 'missing'}, phoneCodeHash: ${dto?.phoneCodeHash ? 'present' : 'missing'}, password: ${dto?.password ? 'present' : 'missing'}`);
+    
     // КРИТИЧНО: НЕ логируем пароль - это безопасность
     const { password, ...safeDto } = dto;
-    this.logger.debug(`[2FA] Получен DTO: ${JSON.stringify(safeDto)}`);
+    this.logger.debug(`[2FA] Получен DTO (без пароля): ${JSON.stringify(safeDto)}`);
+    
+    // Проверяем наличие обязательных полей
+    if (!dto?.phoneNumber || !dto?.phoneCodeHash || !dto?.password) {
+      this.logger.error(`[2FA] Отсутствуют обязательные поля: phoneNumber=${!!dto?.phoneNumber}, phoneCodeHash=${!!dto?.phoneCodeHash}, password=${!!dto?.password}`);
+      throw new BadRequestException('Missing required fields: phoneNumber, phoneCodeHash, password');
+    }
+    
+    this.logger.log(`[2FA] Запрос на проверку 2FA для телефона: ${dto.phoneNumber}, phoneCodeHash: ${dto.phoneCodeHash}`);
+    this.logger.log(`[2FA] Пароль получен: длина: ${dto.password?.length || 0}`);
     try {
       // Сессия сохраняется для пользователя, найденного/созданного по телефону
       const result = await this.authService.verify2FAPassword(
