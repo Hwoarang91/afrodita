@@ -55,16 +55,30 @@ class DatabaseStorage implements Partial<Storage> {
         }
       }
 
-      // Обрабатываем base64 строки (бинарные данные сохранены как base64)
+      // Обрабатываем разные типы данных
       if (typeof current === 'string') {
-        try {
-          // Пытаемся декодировать как base64 (бинарные данные)
-          const decoded = Buffer.from(current, 'base64');
-          return new Uint8Array(decoded) as T;
-        } catch {
-          // Если не base64, пытаемся как обычную строку
+        // Проверяем, является ли это base64 строкой (бинарные данные)
+        // Base64 строки обычно длиннее и содержат только base64 символы
+        if (current.length > 20 && /^[A-Za-z0-9+/=]+$/.test(current)) {
+          try {
+            // Пытаемся декодировать как base64 (бинарные данные)
+            const decoded = Buffer.from(current, 'base64');
+            return new Uint8Array(decoded) as T;
+          } catch {
+            // Если не base64, пытаемся как обычную строку
+            return new TextEncoder().encode(current) as T;
+          }
+        } else {
+          // Короткая строка или не base64 - может быть BigInt сохраненный как строка
+          // Или обычная строка - возвращаем как есть или конвертируем в Uint8Array
+          // Если ожидается Uint8Array, конвертируем
           return new TextEncoder().encode(current) as T;
         }
+      }
+
+      // Если это число - возвращаем как есть
+      if (typeof current === 'number') {
+        return current as T;
       }
 
       // Если это массив чисел (старый формат), конвертируем в Uint8Array
@@ -72,7 +86,13 @@ class DatabaseStorage implements Partial<Storage> {
         return new Uint8Array(current) as T;
       }
 
-      return (current instanceof Uint8Array ? current : null) as T | null;
+      // Если это уже Uint8Array, возвращаем как есть
+      if (current instanceof Uint8Array) {
+        return current as T;
+      }
+
+      // Для других типов возвращаем null или значение как есть
+      return (current !== null && current !== undefined ? current : null) as T | null;
     } catch (error) {
       return null;
     }
