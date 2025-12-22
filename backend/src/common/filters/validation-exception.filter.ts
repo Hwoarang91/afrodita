@@ -42,13 +42,17 @@ export class ValidationExceptionFilter implements ExceptionFilter {
           if (err.constraints) {
             return Object.values(err.constraints).join(', ');
           }
-          return `${err.property}: invalid value`;
+          if (typeof err === 'string') {
+            return err;
+          }
+          return `${err.property || 'field'}: invalid value`;
         });
         
-        // Возвращаем более понятный формат для фронтенда
+        // КРИТИЧНО: Возвращаем строку в message, а не массив объектов
+        // Это предотвращает React error #31
         response.status(status).json({
-          message: errorMessages.join('; '),
-          errors: responseObj.message,
+          message: errorMessages.join('; '), // Строка, а не массив
+          errors: responseObj.message, // Детальная информация для отладки
           error: responseObj.error || 'Bad Request',
           statusCode: responseObj.statusCode || 400,
         });

@@ -305,26 +305,44 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         }
       }
     } catch (error: any) {
-      // Улучшенная обработка ошибок валидации
+      // КРИТИЧНО: Правильная обработка ошибок валидации
+      // Backend возвращает message как строку (благодаря ValidationExceptionFilter)
+      // Но на всякий случай защищаемся от массива объектов
       let errorMessage = 'Ошибка проверки 2FA пароля';
       
       if (error.response?.data) {
         const errorData = error.response.data;
+        const msg = errorData.message;
         
-        // Если это массив ошибок валидации, извлекаем сообщения
-        if (Array.isArray(errorData.message)) {
-          errorMessage = errorData.message
+        // Если message - строка (нормальный случай)
+        if (typeof msg === 'string') {
+          errorMessage = msg;
+        }
+        // Если message - массив объектов (защита на случай, если filter не сработал)
+        else if (Array.isArray(msg)) {
+          errorMessage = msg
             .map((err: any) => {
               if (typeof err === 'string') return err;
-              if (err.constraints) {
+              if (err.constraints && typeof err.constraints === 'object') {
                 return Object.values(err.constraints).join(', ');
               }
-              return `${err.property}: invalid value`;
+              if (err.message && typeof err.message === 'string') {
+                return err.message;
+              }
+              return `${err.property || 'field'}: invalid value`;
             })
             .join('; ');
-        } else if (typeof errorData.message === 'string') {
-          errorMessage = errorData.message;
-        } else if (errorData.error) {
+        }
+        // Если message - объект (не должно быть, но на всякий случай)
+        else if (msg && typeof msg === 'object') {
+          if (msg.constraints && typeof msg.constraints === 'object') {
+            errorMessage = Object.values(msg.constraints).join(', ');
+          } else if (msg.message && typeof msg.message === 'string') {
+            errorMessage = msg.message;
+          }
+        }
+        // Fallback на error поле
+        else if (errorData.error && typeof errorData.error === 'string') {
           errorMessage = errorData.error;
         }
       }
