@@ -77,21 +77,35 @@ interface ErrorDetail {
 
 ## Коды ошибок (ErrorCode enum)
 
+### Validation errors (400)
 - `VALIDATION_ERROR` - Ошибка валидации DTO
+
+### Authentication errors (401)
 - `UNAUTHORIZED` - Не авторизован
 - `INVALID_CREDENTIALS` - Неверные учетные данные
 - `INVALID_2FA_PASSWORD` - Неверный пароль 2FA
 - `SESSION_INVALID` - Сессия недействительна
 - `SESSION_NOT_FOUND` - Сессия не найдена
 - `PASSWORD_HASH_INVALID` - Неверный password hash
+
+### Not found errors (404)
 - `NOT_FOUND` - Ресурс не найден
+
+### Rate limiting (429)
 - `FLOOD_WAIT` - Rate limiting (Telegram)
 - `TOO_MANY_REQUESTS` - Слишком много запросов
+
+### Server errors (500)
 - `INTERNAL_SERVER_ERROR` - Внутренняя ошибка сервера
+
+### Telegram-specific errors
 - `PHONE_CODE_EXPIRED` - Код подтверждения истек
 - `PHONE_CODE_INVALID` - Неверный код подтверждения
 - `PHONE_NUMBER_INVALID` - Неверный номер телефона
 - `PHONE_NUMBER_BANNED` - Номер телефона заблокирован
+- `DC_MIGRATE` - Перенаправление на другой дата-центр
+- `TIMEOUT` - Превышено время ожидания
+- `RETRY` - Требуется повтор запроса
 - `DC_MIGRATE` - Перенаправление на другой дата-центр
 - `TIMEOUT` - Превышено время ожидания
 - `RETRY` - Требуется повтор запроса

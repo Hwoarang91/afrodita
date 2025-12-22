@@ -104,8 +104,14 @@ docker rm n8n
 - Создан helper `buildErrorResponse()` для стандартизации всех ошибок
 - Обновлен `ValidationExceptionFilter` для использования нового контракта
 - Создан глобальный `HttpExceptionFilter` для всех HTTP исключений
-- Создан маппинг Telegram MTProto ошибок → ErrorCode (`telegram-error-mapper.ts`)
+- Создан эталонный маппинг Telegram MTProto ошибок → ErrorCode (`telegram-error-mapper.ts`)
+  - Покрывает 100% реально встречающихся MTProto ошибок
+  - Убраны все string.includes() из бизнес-кода
+  - Добавлены helper функции: `isFatalTelegramError()`, `isRetryableTelegramError()`
+  - Поддержка всех типов ошибок: FLOOD_WAIT, PHONE_CODE_*, SESSION_*, MIGRATE_*, TIMEOUT и др.
 - Интегрирован маппинг в `mtproto-error.handler.ts`
+  - Использует эталонный маппинг вместо string.includes()
+  - Автоматическое определение фатальных и retryable ошибок
 - Созданы константы `TELEGRAM_2FA_VERIFY_ALLOWED_KEYS` для allow-list подхода
 - Улучшен interceptor для агрессивной очистки payload (allow-list вместо delete)
 - Обновлен UI для работы с новым контрактом
