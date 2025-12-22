@@ -5,7 +5,12 @@
  */
 
 import { ErrorResponse } from '../../../common/interfaces/error-response.interface';
-import { mapTelegramError, mapTelegramErrorToResponse } from './telegram-error-mapper';
+import { 
+  mapTelegramError, 
+  mapTelegramErrorToResponse,
+  isFatalTelegramError,
+  isRetryableTelegramError,
+} from './telegram-error-mapper';
 
 export enum MtprotoErrorAction {
   INVALIDATE_SESSION = 'invalidate_session',
@@ -33,17 +38,8 @@ export function handleMtprotoError(e: any): MtprotoErrorResult {
   const errorResponse = mapTelegramErrorToResponse(e);
 
   // 🔴 FATAL - инвалидировать сессию немедленно
-  if (
-    message.includes('AUTH_KEY_UNREGISTERED') ||
-    message.includes('SESSION_REVOKED') ||
-    message.includes('SESSION_EXPIRED') ||
-    message.includes('AUTH_KEY_DUPLICATED') ||
-    message.includes('USER_DEACTIVATED') ||
-    message.includes('PHONE_NUMBER_BANNED') ||
-    message.includes('USER_DEACTIVATED_BAN') ||
-    message.includes('ACCOUNT_DISABLED') ||
-    message.includes('CONNECTION_LAYER_INVALID')
-  ) {
+  // Используем эталонный маппинг для определения фатальных ошибок
+  if (isFatalTelegramError(e)) {
     return {
       action: MtprotoErrorAction.INVALIDATE_SESSION,
       reason: message,
@@ -85,16 +81,13 @@ export function handleMtprotoError(e: any): MtprotoErrorResult {
   }
 
   // 🟡 RETRYABLE - временные ошибки
-  if (
-    message.includes('INTERNAL_SERVER_ERROR') ||
-    message.includes('RPC_CALL_FAIL') ||
-    message.includes('NETWORK_MIGRATE') ||
-    message.includes('PHONE_MIGRATE')
-  ) {
+  // Используем эталонный маппинг для определения retryable ошибок
+  if (isRetryableTelegramError(e)) {
     return {
       action: MtprotoErrorAction.RETRY,
       reason: message,
       errorResponse,
+      retryAfter: errorResponse.retryAfter,
     };
   }
 

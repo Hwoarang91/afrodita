@@ -92,6 +92,9 @@ interface ErrorDetail {
 - `PHONE_CODE_INVALID` - Неверный код подтверждения
 - `PHONE_NUMBER_INVALID` - Неверный номер телефона
 - `PHONE_NUMBER_BANNED` - Номер телефона заблокирован
+- `DC_MIGRATE` - Перенаправление на другой дата-центр
+- `TIMEOUT` - Превышено время ожидания
+- `RETRY` - Требуется повтор запроса
 
 ## Использование на Backend
 

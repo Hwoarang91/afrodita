@@ -55,5 +55,14 @@ export enum ErrorCode {
   PHONE_CODE_INVALID = 'PHONE_CODE_INVALID',
   PHONE_NUMBER_INVALID = 'PHONE_NUMBER_INVALID',
   PHONE_NUMBER_BANNED = 'PHONE_NUMBER_BANNED',
+  
+  // Telegram migration errors
+  DC_MIGRATE = 'DC_MIGRATE',
+  
+  // Timeout errors
+  TIMEOUT = 'TIMEOUT',
+  
+  // Retry errors
+  RETRY = 'RETRY',
 }
 
