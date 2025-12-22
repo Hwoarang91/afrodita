@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Client, Storage, StorageKeyPart, StorageMemory } from '@mtkruto/node';
+import { Client, Storage, StorageKeyPart } from '@mtkruto/node';
 import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
 import { SessionEncryptionService } from './session-encryption.service';
 import { User, UserRole } from '../../../entities/user.entity';
@@ -296,7 +296,7 @@ class DatabaseStorage implements Partial<Storage> {
 @Injectable()
 export class TelegramUserClientService implements OnModuleDestroy {
   private readonly logger = new Logger(TelegramUserClientService.name);
-  private clients: Map<string, Client> = new Map(); // userId -> Client
+  private clients: Map<string, Client> = new Map(); // sessionId -> Client (ИЗМЕНЕНО: было userId -> Client)
 
   constructor(
     private configService: ConfigService,
@@ -310,28 +310,28 @@ export class TelegramUserClientService implements OnModuleDestroy {
   }
 
   /**
-   * Получает или создает MTProto клиент
-   * Если передан sessionId, использует конкретную сессию
-   * Иначе ищет любую активную сессию со статусом 'active'
+   * Получает или создает MTProto клиент для конкретной сессии
+   * КРИТИЧЕСКИ ВАЖНО: Требует sessionId - не выбирает "любую активную сессию"
+   * Это гарантирует детерминированное поведение и правильный lifecycle
    */
-  async getClient(userId?: string, sessionId?: string): Promise<Client | null> {
-    // Если передан sessionId, используем детерминированный метод
-    if (sessionId) {
-      return this.getClientBySession(sessionId);
-    }
-    try {
-      this.logger.log(`Looking for any active Telegram session (requested by userId: ${userId || 'none'})`);
+  async getClient(sessionId: string): Promise<Client | null> {
+    // Используем детерминированный метод по sessionId
+    return this.getClientBySession(sessionId);
+  }
 
-      // Сначала проверяем общее количество сессий в БД (для отладки)
-      const allSessions = await this.sessionRepository.find();
-      this.logger.log(`Total sessions in database: ${allSessions.length}`);
-      allSessions.forEach((s, index) => {
-        this.logger.log(`Session ${index + 1}: id=${s.id}, userId=${s.userId}, phoneNumber=${s.phoneNumber}, isActive=${s.isActive}, lastUsedAt=${s.lastUsedAt}`);
-      });
+  /**
+   * @deprecated Используйте getClient(sessionId) вместо этого метода
+   * Получает клиент по userId (для обратной совместимости)
+   * ВАЖНО: Этот метод будет удален в будущем, используйте getClient(sessionId)
+   */
+  async getClientByUserId(userId: string): Promise<Client | null> {
+    try {
+      this.logger.log(`Looking for active Telegram session for userId: ${userId}`);
 
       // Ищем активные сессии со статусом 'active' (валидные сессии)
       const activeSessions = await this.sessionRepository.find({
         where: {
+          userId,
           isActive: true,
           status: 'active', // Только валидные сессии
         },
@@ -359,18 +359,19 @@ export class TelegramUserClientService implements OnModuleDestroy {
         });
       }
 
-      // Используем userId из найденной сессии
-      const sessionUserId = session.userId;
+      // КРИТИЧЕСКИ ВАЖНО: Используем sessionId для кеша, не userId
+      // Один клиент = одна сессия
+      const sessionId = session.id;
       
       // Проверяем, есть ли уже активный клиент для этой сессии
-      if (this.clients.has(sessionUserId)) {
-        const client = this.clients.get(sessionUserId)!;
+      if (this.clients.has(sessionId)) {
+        const client = this.clients.get(sessionId)!;
         if (client.connected) {
-          this.logger.debug(`Using cached client for session userId ${sessionUserId}`);
+          this.logger.debug(`Using cached client for session ${sessionId}`);
           return client;
         }
         // Если клиент отключен, удаляем его
-        this.clients.delete(sessionUserId);
+        this.clients.delete(sessionId);
       }
 
       // Получаем API credentials
@@ -420,7 +421,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
       const storage = new DatabaseStorage(
         this.sessionRepository,
         this.encryptionService,
-        sessionUserId, // Используем userId из сессии
+        session.userId, // Используем userId из сессии для DatabaseStorage
         apiId,
         apiHash,
       );
@@ -436,14 +437,14 @@ export class TelegramUserClientService implements OnModuleDestroy {
         storage: storage as any,
       });
 
-      // Сохраняем клиент под sessionUserId
-      this.clients.set(sessionUserId, client);
+      // Сохраняем клиент под sessionId
+      this.clients.set(sessionId, client);
 
       // Подключаемся к Telegram (storage загрузит данные при connect)
       if (!client.connected) {
-        this.logger.log(`Connecting client for session userId ${sessionUserId} (phone: ${session.phoneNumber})...`);
+        this.logger.log(`Connecting client for session ${sessionId} (phone: ${session.phoneNumber})...`);
         await client.connect();
-        this.logger.log(`Client connected successfully for session userId ${sessionUserId} (phone: ${session.phoneNumber})`);
+        this.logger.log(`Client connected successfully for session ${sessionId} (phone: ${session.phoneNumber})`);
       }
 
       // КРИТИЧЕСКИ ВАЖНО: Выполняем контрольный getMe() для валидации сессии
@@ -468,9 +469,9 @@ export class TelegramUserClientService implements OnModuleDestroy {
           } catch (disconnectError) {
             // Игнорируем ошибки отключения
           }
-          this.clients.delete(sessionUserId);
+          this.clients.delete(sessionId);
           
-          this.logger.warn(`Session ${session.id} invalidated due to ${errorResult.reason}`);
+          this.logger.warn(`Session ${sessionId} invalidated due to ${errorResult.reason}`);
           
           // Пробуем найти другую активную сессию
           const otherActiveSessions = await this.sessionRepository.find({
@@ -486,7 +487,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
           
           if (otherActiveSessions.length > 0 && otherActiveSessions[0].id !== session.id) {
             this.logger.log(`Trying alternative session: ${otherActiveSessions[0].id}`);
-            return this.getClient(userId);
+            return this.getClientBySession(otherActiveSessions[0].id);
           }
           
           return null;
@@ -504,101 +505,112 @@ export class TelegramUserClientService implements OnModuleDestroy {
   }
 
   /**
-   * Создает новый клиент для авторизации (без сохраненной сессии)
-   * Использует StorageMemory с методами getMany, setMany, delete для совместимости
+   * Создает новый клиент для авторизации с DatabaseStorage
+   * КРИТИЧЕСКИ ВАЖНО: Используем DatabaseStorage сразу, не StorageMemory
+   * Это гарантирует, что auth_key будет сохранен правильно и не будет копирования
    */
-  async createClientForAuth(apiId: number, apiHash: string): Promise<Client> {
-    // Используем StorageMemory, который имеет все необходимые методы
-    const storage = new StorageMemory();
+  async createClientForAuth(userId: string, apiId: number, apiHash: string): Promise<{ client: Client; sessionId: string }> {
+    this.logger.log(`Creating auth client with DatabaseStorage for user ${userId}`);
     
+    // Создаем или находим сессию в БД со статусом 'initializing'
+    let session = await this.sessionRepository.findOne({
+      where: { userId, apiId, status: 'initializing' },
+    });
+
+    if (!session) {
+      // Создаем новую сессию со статусом 'initializing'
+      session = this.sessionRepository.create({
+        userId,
+        apiId,
+        apiHash,
+        encryptedSessionData: null, // Будет заполнено через DatabaseStorage
+        isActive: false,
+        status: 'initializing',
+        invalidReason: null,
+        dcId: null,
+      });
+      await this.sessionRepository.save(session);
+      this.logger.log(`Created new initializing session ${session.id} for user ${userId}`);
+    } else {
+      this.logger.log(`Reusing existing initializing session ${session.id} for user ${userId}`);
+    }
+
+    // Создаем DatabaseStorage для этой сессии
+    const storage = new DatabaseStorage(
+      this.sessionRepository,
+      this.encryptionService,
+      userId,
+      apiId,
+      apiHash,
+    );
+
+    // Инициализируем storage
+    await storage.initialize();
+
+    // Создаем клиент с DatabaseStorage
     const client = new Client({
       apiId,
       apiHash,
       storage: storage as any,
     });
 
+    // Подключаемся к Telegram
     await client.connect();
-    return client;
+    
+    this.logger.log(`Auth client created and connected for session ${session.id}`);
+    
+    return { client, sessionId: session.id };
   }
 
   /**
    * Сохраняет сессию после успешной авторизации
-   * Создает новый клиент с нашим DatabaseStorage и копирует данные сессии
+   * КРИТИЧЕСКИ ВАЖНО: Используем тот же клиент, который использовался для авторизации
+   * НЕ создаем новый клиент, НЕ копируем данные - DatabaseStorage уже работает
    */
   async saveSession(
     userId: string,
     client: Client,
+    sessionId: string,
     phoneNumber: string,
     ipAddress?: string,
     userAgent?: string,
   ): Promise<void> {
     try {
-      this.logger.log(`Starting saveSession for user ${userId}, phone: ${phoneNumber}`);
+      this.logger.log(`Starting saveSession for user ${userId}, sessionId: ${sessionId}, phone: ${phoneNumber}`);
       
-      const apiIdStr = this.configService.get<string>('TELEGRAM_API_ID');
-      const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
-
-      if (!apiIdStr || !apiHash) {
-        throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH must be set');
-      }
-
-      const apiId = parseInt(apiIdStr, 10);
-      if (isNaN(apiId)) {
-        throw new Error('TELEGRAM_API_ID must be a valid number');
-      }
-
-      this.logger.debug(`Creating DatabaseStorage for user ${userId}, apiId: ${apiId}`);
-
-      // Создаем наш DatabaseStorage для этого пользователя
-      const storage = new DatabaseStorage(
-        this.sessionRepository,
-        this.encryptionService,
-        userId,
-        apiId,
-        apiHash,
-      );
-
-      // ВАЖНО: Сначала копируем данные сессии напрямую в DatabaseStorage
-      // Это сохранит их в БД до создания нового клиента
-      this.logger.debug(`Copying session data to DatabaseStorage for user ${userId}`);
-      await this.copySessionDataToStorage(client, storage);
-      this.logger.debug(`Session data copied successfully for user ${userId}`);
-
-      // Создаем новый клиент с нашим storage (данные уже в БД)
-      this.logger.debug(`Creating new Client with DatabaseStorage for user ${userId}`);
-      const newClient = new Client({
-        apiId,
-        apiHash,
-        storage: storage as any,
+      // Находим сессию в БД
+      let session = await this.sessionRepository.findOne({
+        where: { id: sessionId, userId },
       });
 
-      // Подключаем новый клиент (он загрузит данные из нашего storage)
-      this.logger.debug(`Connecting new client for user ${userId}`);
-      await newClient.connect();
-      this.logger.debug(`New client connected successfully for user ${userId}`);
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found for user ${userId}`);
+      }
 
-      // КРИТИЧЕСКИ ВАЖНО: Делаем контрольный запрос getMe() перед сохранением
+      // КРИТИЧЕСКИ ВАЖНО: Используем тот же клиент, который использовался для авторизации
+      // НЕ создаем новый клиент - это нарушает lifecycle MTKruto
+      // DatabaseStorage уже работает и сохраняет данные автоматически через set()
+      
+      // КРИТИЧЕСКИ ВАЖНО: Делаем контрольный запрос getMe() для финализации auth_key
       // Это гарантирует, что auth_key финальный и зарегистрирован в Telegram
-      this.logger.debug(`Performing getMe() check for user ${userId} to ensure auth_key is final`);
+      this.logger.debug(`Performing getMe() check for session ${sessionId} to ensure auth_key is final`);
       try {
-        await newClient.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
-        this.logger.log(`✅ getMe() successful - auth_key is valid and registered for user ${userId}`);
+        await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        this.logger.log(`✅ getMe() successful - auth_key is valid and registered for session ${sessionId}`);
       } catch (getMeError: any) {
-        this.logger.error(`❌ getMe() failed for user ${userId}: ${getMeError.message}`);
-        // Если getMe() не прошел, сессия невалидна - не сохраняем
+        this.logger.error(`❌ getMe() failed for session ${sessionId}: ${getMeError.message}`);
+        // Если getMe() не прошел, сессия невалидна
+        session.status = 'invalid';
+        session.isActive = false;
+        session.invalidReason = `Session validation failed: ${getMeError.message}`;
+        await this.sessionRepository.save(session);
         throw new Error(`Session validation failed: ${getMeError.message}`);
       }
-
-      // Сохраняем метаданные сессии в БД
-      this.logger.debug(`Saving session metadata for user ${userId}`);
-      let session = await this.sessionRepository.findOne({
-        where: { userId, apiId },
-      });
 
       // Получаем DC ID из сессии для сохранения
       let dcId: number | null = null;
       try {
-        const dcValue = await newClient.storage.get(['dc']);
+        const dcValue = await client.storage.get(['dc']);
         if (dcValue && typeof dcValue === 'object' && 'dcId' in (dcValue as any)) {
           dcId = (dcValue as any).dcId;
         }
@@ -606,49 +618,22 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.debug(`Could not extract DC ID: ${(e as Error).message}`);
       }
 
-      if (session) {
-        this.logger.debug(`Updating existing session ${session.id} for user ${userId}`);
-        session.phoneNumber = phoneNumber;
-        session.isActive = true;
-        session.status = 'active'; // Сессия валидна после успешного getMe()
-        session.invalidReason = null; // Очищаем причину невалидности
-        session.dcId = dcId;
-        session.lastUsedAt = new Date();
-        session.ipAddress = ipAddress || null;
-        session.userAgent = userAgent || null;
-        await this.sessionRepository.save(session);
-        this.logger.debug(`Session ${session.id} updated successfully with status=active`);
-      } else {
-        this.logger.debug(`Creating new session for user ${userId}`);
-        // КРИТИЧЕСКИ ВАЖНО: НЕ создаем сессию с пустым encryptedSessionData
-        // DatabaseStorage уже сохранил все данные через set()
-        // Создаем сессию БЕЗ encryptedSessionData - она будет заполнена через storage
-        session = this.sessionRepository.create({
-          userId,
-          apiId,
-          apiHash,
-          encryptedSessionData: null, // Будет заполнено через DatabaseStorage
-          phoneNumber,
-          isActive: true,
-          status: 'active', // Сессия валидна после успешного getMe()
-          invalidReason: null,
-          dcId: dcId,
-          lastUsedAt: new Date(),
-          ipAddress: ipAddress || null,
-          userAgent: userAgent || null,
-        });
-        await this.sessionRepository.save(session);
-        this.logger.debug(`New session ${session.id} created successfully with status=active`);
-      }
+      // Обновляем метаданные сессии
+      this.logger.debug(`Updating session ${session.id} metadata for user ${userId}`);
+      session.phoneNumber = phoneNumber;
+      session.isActive = true;
+      session.status = 'active'; // Сессия валидна после успешного getMe()
+      session.invalidReason = null; // Очищаем причину невалидности
+      session.dcId = dcId;
+      session.lastUsedAt = new Date();
+      session.ipAddress = ipAddress || null;
+      session.userAgent = userAgent || null;
+      await this.sessionRepository.save(session);
+      this.logger.debug(`Session ${session.id} updated successfully with status=active`);
 
-      // Отключаем старый клиент и сохраняем новый в кэше
-      try {
-        await client.disconnect();
-      } catch (e) {
-        this.logger.warn(`Error disconnecting old client: ${(e as Error).message}`);
-      }
-
-      this.clients.set(userId, newClient);
+      // КРИТИЧЕСКИ ВАЖНО: Сохраняем тот же клиент в кеш по sessionId
+      // НЕ создаем новый клиент - используем тот, который уже прошел авторизацию
+      this.clients.set(sessionId, client);
 
       this.logger.log(`✅ Session saved successfully for user ${userId}, session id: ${session.id}, phoneNumber: ${phoneNumber}, isActive: ${session.isActive}`);
       
@@ -697,105 +682,21 @@ export class TelegramUserClientService implements OnModuleDestroy {
   }
 
   /**
-   * Копирует данные сессии из клиента напрямую в DatabaseStorage
-   * Это сохраняет данные в БД до создания нового клиента
-   */
-  private async copySessionDataToStorage(sourceClient: Client, targetStorage: DatabaseStorage): Promise<void> {
-    try {
-      // Получаем storage исходного клиента
-      const sourceStorage = (sourceClient as any).storage as Storage;
-
-      // Проверяем, что sourceStorage имеет метод get
-      if (!sourceStorage || typeof sourceStorage.get !== 'function') {
-        this.logger.warn('Source storage does not have get method, skipping copy');
-        return;
-      }
-
-      // MTKruto хранит сессию в определенных ключах
-      // Основные ключи для сессии (из документации MTKruto):
-      const sessionKeys: readonly StorageKeyPart[][] = [
-        ['dc'],
-        ['auth_key'],
-        ['auth_key_id'],
-        ['server_salt'],
-        ['session_id'],
-        ['takeout_id'],
-      ];
-
-      // Копируем данные по каждому ключу напрямую в DatabaseStorage
-      // Это сохранит их в БД через метод set
-      let copiedCount = 0;
-      const copiedKeys: string[] = [];
-      for (const key of sessionKeys) {
-        try {
-          const value = await sourceStorage.get(key);
-          // Проверяем, что value - это Uint8Array (бинарные данные)
-          if (value && value instanceof Uint8Array && value.length > 0) {
-            await targetStorage.set(key, value);
-            copiedCount++;
-            copiedKeys.push(`${key.join('.')} (${value.length} bytes)`);
-            this.logger.log(`✅ Copied session key to DatabaseStorage: ${key.join('.')} (${value.length} bytes)`);
-          } else if (value !== null && value !== undefined) {
-            // Если значение не Uint8Array, но существует - это может быть другой тип данных
-            // Логируем, но не копируем (MTKruto Storage должен возвращать только Uint8Array)
-            const valueStr = value instanceof BigInt ? value.toString() : (typeof value === 'object' ? JSON.stringify(value).substring(0, 50) : String(value).substring(0, 50));
-            this.logger.warn(`⚠️ Key ${key.join('.')} is not Uint8Array: type=${value?.constructor?.name || typeof value}, value=${valueStr}`);
-          } else {
-            this.logger.debug(`ℹ️ Key ${key.join('.')} is null or undefined (may not exist yet)`);
-          }
-        } catch (e) {
-          // Игнорируем ошибки для отдельных ключей, но логируем
-          this.logger.error(`❌ Failed to copy key ${key.join('.')}: ${(e as Error).message}`);
-        }
-      }
-      
-      this.logger.log(`📊 Session data copy summary: ${copiedCount}/${sessionKeys.length} keys copied successfully`);
-      if (copiedKeys.length > 0) {
-        this.logger.log(`📋 Copied keys: ${copiedKeys.join(', ')}`);
-      }
-      if (copiedCount === 0) {
-        this.logger.error(`❌ CRITICAL: No session keys were copied! Session will be invalid.`);
-      }
-
-      // Также копируем данные о DC (datacenter)
-      // MTKruto может хранить несколько DC (обычно 1-5)
-      for (let dcId = 1; dcId <= 5; dcId++) {
-        try {
-          const dcKey: readonly StorageKeyPart[] = ['dc', dcId.toString()];
-          const value = await sourceStorage.get(dcKey);
-          if (value && value instanceof Uint8Array && value.length > 0) {
-            await targetStorage.set(dcKey, value);
-            copiedCount++;
-            this.logger.debug(`Copied DC key to DatabaseStorage: ${dcKey.join('.')} (${value.length} bytes)`);
-          }
-        } catch (e) {
-          // Игнорируем ошибки
-        }
-      }
-
-      if (copiedCount === 0) {
-        this.logger.warn('No session keys were copied - session may be empty');
-      } else {
-        this.logger.log(`Copied ${copiedCount} session keys to DatabaseStorage successfully`);
-      }
-    } catch (error: any) {
-      this.logger.error(`Failed to copy session data to DatabaseStorage: ${error.message}`, error.stack);
-      // Бросаем ошибку, так как без данных сессии клиент не сможет работать
-      throw error;
-    }
-  }
-
-
-  /**
    * Удаляет сессию пользователя
    */
   async deleteSession(userId: string): Promise<void> {
     try {
-      // Отключаем клиент
-      const client = this.clients.get(userId);
-      if (client) {
-        await client.disconnect();
-        this.clients.delete(userId);
+      // Находим все сессии пользователя и отключаем клиенты
+      const userSessions = await this.sessionRepository.find({
+        where: { userId, isActive: true },
+      });
+      
+      for (const session of userSessions) {
+        const client = this.clients.get(session.id);
+        if (client) {
+          await client.disconnect();
+          this.clients.delete(session.id);
+        }
       }
 
       // Деактивируем сессию в БД
@@ -809,6 +710,22 @@ export class TelegramUserClientService implements OnModuleDestroy {
       this.logger.error(`Error deleting session for user ${userId}: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+  /**
+   * Получает сессию по ID
+   */
+  async getSessionById(sessionId: string): Promise<TelegramUserSession | null> {
+    return await this.sessionRepository.findOne({
+      where: { id: sessionId },
+    });
+  }
+
+  /**
+   * Обновляет сессию
+   */
+  async updateSession(session: TelegramUserSession): Promise<TelegramUserSession> {
+    return await this.sessionRepository.save(session);
   }
 
   /**
@@ -864,15 +781,15 @@ export class TelegramUserClientService implements OnModuleDestroy {
       throw new Error('Session not found');
     }
 
-    // Отключаем клиент, если он активен
-    const client = this.clients.get(session.userId);
+    // Отключаем клиент, если он активен (используем sessionId для кеша)
+    const client = this.clients.get(sessionId);
     if (client) {
       try {
         await client.disconnect();
       } catch (e) {
         this.logger.warn(`Error disconnecting client for session ${sessionId}: ${(e as Error).message}`);
       }
-      this.clients.delete(session.userId);
+      this.clients.delete(sessionId);
     }
 
     // Полностью удаляем сессию из БД
@@ -891,15 +808,15 @@ export class TelegramUserClientService implements OnModuleDestroy {
       });
 
       for (const session of activeSessions) {
-        // Отключаем клиент, если он активен
-        const client = this.clients.get(session.userId);
+        // Отключаем клиент, если он активен (используем sessionId для кеша)
+        const client = this.clients.get(session.id);
         if (client) {
           try {
             await client.disconnect();
           } catch (e) {
             this.logger.warn(`Error disconnecting client for session ${session.id}: ${(e as Error).message}`);
           }
-          this.clients.delete(session.userId);
+          this.clients.delete(session.id);
         }
 
         // Инвалидируем сессию с указанием причины
@@ -1022,7 +939,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
           } catch (disconnectError) {
             // Игнорируем ошибки отключения
           }
-          this.clients.delete(sessionUserId);
+          this.clients.delete(sessionId);
           
           this.logger.warn(`Session ${sessionId} invalidated due to ${errorResult.reason}`);
           return null;
@@ -1067,13 +984,12 @@ export class TelegramUserClientService implements OnModuleDestroy {
       throw new Error('Session not found');
     }
 
-    // Если это текущая активная сессия, отключаем клиент
+    // Если это текущая активная сессия, отключаем клиент (используем sessionId для кеша)
     if (session.isActive) {
-      const sessionOwnerId = session.userId;
-      const client = this.clients.get(sessionOwnerId);
+      const client = this.clients.get(sessionId);
       if (client) {
         await client.disconnect();
-        this.clients.delete(sessionOwnerId);
+        this.clients.delete(sessionId);
       }
     }
 

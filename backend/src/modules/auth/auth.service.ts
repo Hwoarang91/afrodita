@@ -39,7 +39,8 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   // Временное хранилище для phone code hash (в production лучше использовать Redis)
-  private phoneCodeHashStore: Map<string, { hash: string; client: Client; expiresAt: Date }> = new Map();
+  // Теперь храним sessionId для правильного lifecycle
+  private phoneCodeHashStore: Map<string, { hash: string; client: Client; sessionId: string; expiresAt: Date }> = new Map();
 
   // Временное хранилище для QR токенов (в production лучше использовать Redis)
   private qrTokenStore: Map<
@@ -55,10 +56,12 @@ export class AuthService {
   > = new Map();
 
   // Временное хранилище для 2FA данных (в production лучше использовать Redis)
+  // Теперь храним sessionId для правильного lifecycle
   private twoFactorStore: Map<
     string,
     {
       client: Client;
+      sessionId: string;
       phoneCodeHash: string;
       expiresAt: Date;
       passwordHint?: string;
@@ -416,11 +419,13 @@ export class AuthService {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
-      // Создаем клиент для авторизации
-      const client = await this.telegramUserClientService.createClientForAuth(apiId, apiHash);
-
-      // Ждем подключения клиента
-      await client.connect();
+      // КРИТИЧЕСКИ ВАЖНО: Создаем клиент с DatabaseStorage сразу
+      // НЕ используем StorageMemory - это нарушает lifecycle MTKruto
+      // Для авторизации нужен userId - используем временный на основе номера телефона
+      const tempUserId = `temp_${phoneNumber.replace(/[^0-9]/g, '')}`;
+      const { client, sessionId } = await this.telegramUserClientService.createClientForAuth(tempUserId, apiId, apiHash);
+      
+      // Клиент уже подключен в createClientForAuth
 
       // Вызываем auth.sendCode
       const result: any = await client.invoke({
@@ -440,10 +445,11 @@ export class AuthService {
       const phoneCodeHash = result.phone_code_hash;
       const expiresAt = new Date(Date.now() + (result.timeout || 60) * 1000);
 
-      // Сохраняем phone code hash и клиент (временное решение, лучше использовать Redis)
+      // Сохраняем phone code hash, клиент и sessionId (временное решение, лучше использовать Redis)
       this.phoneCodeHashStore.set(phoneNumber, {
         hash: phoneCodeHash,
         client,
+        sessionId,
         expiresAt,
       });
 
@@ -570,8 +576,15 @@ export class AuthService {
           // Нормализуем номер телефона для хранения
           const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
           
+          // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore
+          const phoneCodeStored = this.phoneCodeHashStore.get(phoneNumber);
+          if (!phoneCodeStored || !phoneCodeStored.sessionId) {
+            throw new Error('Session ID not found in phoneCodeHashStore for 2FA');
+          }
+          
           this.twoFactorStore.set(normalizedPhone, {
             client,
+            sessionId: phoneCodeStored.sessionId,
             phoneCodeHash,
             expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 минут
             passwordHint,
@@ -630,11 +643,25 @@ export class AuthService {
         this.logger.log(`Updated existing user for Telegram auth: ${user.id}, phone: ${normalizedPhone}`);
       }
 
+      // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore
+      if (!sessionId) {
+        throw new Error('Session ID not found in phoneCodeHashStore');
+      }
+
+      // Обновляем сессию в БД - меняем userId с временного на реальный
+      // Находим сессию по sessionId и обновляем userId
+      const session = await this.telegramUserClientService.getSessionById(sessionId);
+      if (session) {
+        session.userId = user.id;
+        await this.telegramUserClientService.updateSession(session);
+      }
+
       // Сохраняем сессию MTProto для пользователя, найденного/созданного по телефону
-      this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId})`);
+      this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}), sessionId: ${sessionId}`);
       await this.telegramUserClientService.saveSession(
         user.id,
         client,
+        sessionId,
         normalizedPhone,
         ipAddress,
         userAgent,
@@ -679,8 +706,12 @@ export class AuthService {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
-      // Создаем клиент для авторизации
-      const client = await this.telegramUserClientService.createClientForAuth(apiId, apiHash);
+      // КРИТИЧЕСКИ ВАЖНО: Создаем клиент с DatabaseStorage сразу
+      // Для QR-кода используем временный userId (будет обновлен после авторизации)
+      const tempUserId = `temp_qr_${Date.now()}`;
+      const { client, sessionId } = await this.telegramUserClientService.createClientForAuth(tempUserId, apiId, apiHash);
+      
+      // Клиент уже подключен в createClientForAuth
 
       // Вызываем auth.exportLoginToken
       const result = await client.invoke({
@@ -703,10 +734,11 @@ export class AuthService {
       // Создаем URL для QR-кода
       const qrUrl = `tg://login?token=${Buffer.from(token).toString('base64url')}`;
 
-      // Сохраняем токен
+      // Сохраняем токен, клиент и sessionId
       this.qrTokenStore.set(tokenId, {
         token,
         client,
+        sessionId,
         expiresAt,
         status: 'pending',
       });
@@ -998,7 +1030,7 @@ export class AuthService {
     normalizedPhone: string,
     password: string,
     phoneCodeHash: string,
-    stored: { client: Client; phoneCodeHash: string; expiresAt: Date; passwordHint?: string },
+    stored: { client: Client; sessionId: string; phoneCodeHash: string; expiresAt: Date; passwordHint?: string },
     ipAddress?: string,
     userAgent?: string,
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
@@ -1383,11 +1415,24 @@ export class AuthService {
         this.logger.log(`[2FA] Updated existing user: ${user.id}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}`);
       }
 
+      // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из stored
+      if (!stored.sessionId) {
+        throw new Error('Session ID not found in twoFactorStore');
+      }
+
+      // Обновляем сессию в БД - меняем userId с временного на реальный
+      const session = await this.telegramUserClientService.getSessionById(stored.sessionId);
+      if (session) {
+        session.userId = user.id;
+        await this.telegramUserClientService.updateSession(session);
+      }
+
       // Сохраняем сессию MTProto для пользователя, найденного/созданного по телефону
-      this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId})`);
+      this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}), sessionId: ${stored.sessionId}`);
       await this.telegramUserClientService.saveSession(
         user.id,
         client,
+        stored.sessionId,
         normalizedPhone,
         ipAddress,
         userAgent,

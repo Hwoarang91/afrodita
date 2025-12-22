@@ -26,6 +26,15 @@ export class TelegramUserController {
 
   constructor(private readonly telegramUserClientService: TelegramUserClientService) {}
 
+  /**
+   * Вспомогательный метод для получения активной сессии пользователя
+   */
+  private async getActiveSessionId(userId: string): Promise<string | null> {
+    const sessions = await this.telegramUserClientService.getUserSessions(userId);
+    const activeSession = sessions.find(s => s.status === 'active' && s.isActive);
+    return activeSession?.id || null;
+  }
+
   @Post('send-message')
   @ApiOperation({ summary: 'Отправка текстового сообщения от лица авторизованного пользователя' })
   @ApiResponse({ status: 200, description: 'Сообщение отправлено' })
@@ -35,10 +44,17 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Отправка сообщения от пользователя ${userId} в чат ${dto.chatId}`);
 
-      // Получаем клиент - просто используем любую активную сессию
-      const client = await this.telegramUserClientService.getClient();
-      if (!client) {
+      // Получаем активную сессию пользователя
+      const sessions = await this.telegramUserClientService.getUserSessions(userId);
+      const activeSession = sessions.find(s => s.status === 'active' && s.isActive);
+      if (!activeSession) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
+      }
+
+      // Получаем клиент для конкретной сессии
+      const client = await this.telegramUserClientService.getClient(activeSession.id);
+      if (!client) {
+        throw new UnauthorizedException('Failed to get Telegram client for active session.');
       }
 
       // Преобразуем chatId в число (Telegram использует числа для ID)
@@ -119,10 +135,16 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Отправка медиа от пользователя ${userId} в чат ${dto.chatId}`);
 
-      // Получаем клиент - просто используем любую активную сессию
-      const client = await this.telegramUserClientService.getClient();
-      if (!client) {
+      // Получаем активную сессию пользователя
+      const sessionId = await this.getActiveSessionId(userId);
+      if (!sessionId) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
+      }
+
+      // Получаем клиент для конкретной сессии
+      const client = await this.telegramUserClientService.getClient(sessionId);
+      if (!client) {
+        throw new UnauthorizedException('Failed to get Telegram client for active session.');
       }
 
       // Преобразуем chatId в число
@@ -211,10 +233,16 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение списка чатов для пользователя ${userId}`);
 
-      // Получаем клиент - просто используем любую активную сессию
-      const client = await this.telegramUserClientService.getClient();
-      if (!client) {
+      // Получаем активную сессию пользователя
+      const sessionId = await this.getActiveSessionId(userId);
+      if (!sessionId) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
+      }
+
+      // Получаем клиент для конкретной сессии
+      const client = await this.telegramUserClientService.getClient(sessionId);
+      if (!client) {
+        throw new UnauthorizedException('Failed to get Telegram client for active session.');
       }
 
       // Вызываем messages.getDialogs для получения списка диалогов
@@ -305,10 +333,16 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение списка контактов для пользователя ${userId}`);
 
-      // Получаем клиент - просто используем любую активную сессию
-      const client = await this.telegramUserClientService.getClient();
-      if (!client) {
+      // Получаем активную сессию пользователя
+      const sessionId = await this.getActiveSessionId(userId);
+      if (!sessionId) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
+      }
+
+      // Получаем клиент для конкретной сессии
+      const client = await this.telegramUserClientService.getClient(sessionId);
+      if (!client) {
+        throw new UnauthorizedException('Failed to get Telegram client for active session.');
       }
 
       // Вызываем contacts.getContacts для получения списка контактов
@@ -378,10 +412,16 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение истории сообщений для пользователя ${userId} из чата ${chatId}`);
 
-      // Получаем клиент - просто используем любую активную сессию
-      const client = await this.telegramUserClientService.getClient();
-      if (!client) {
+      // Получаем активную сессию пользователя
+      const sessionId = await this.getActiveSessionId(userId);
+      if (!sessionId) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
+      }
+
+      // Получаем клиент для конкретной сессии
+      const client = await this.telegramUserClientService.getClient(sessionId);
+      if (!client) {
+        throw new UnauthorizedException('Failed to get Telegram client for active session.');
       }
 
       // Преобразуем chatId в число
