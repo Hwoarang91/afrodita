@@ -472,8 +472,12 @@ export class AuthService {
       const phoneCodeHash = result.phone_code_hash;
       const expiresAt = new Date(Date.now() + (result.timeout || 60) * 1000);
 
+      // КРИТИЧНО: Нормализуем номер телефона для единообразного хранения
+      const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
+
       // Сохраняем phone code hash, клиент и sessionId (временное решение, лучше использовать Redis)
-      this.phoneCodeHashStore.set(phoneNumber, {
+      // Используем normalizedPhone как ключ для единообразия с twoFactorStore
+      this.phoneCodeHashStore.set(normalizedPhone, {
         hash: phoneCodeHash,
         client,
         sessionId,
@@ -547,18 +551,31 @@ export class AuthService {
     userAgent?: string,
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null; requires2FA: boolean; passwordHint?: string }> {
     try {
-      this.logger.debug(`Проверка кода для телефона: ${phoneNumber}, phoneCodeHash: ${phoneCodeHash}`);
+      // КРИТИЧНО: Нормализуем номер телефона для поиска в хранилище
+      const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
+      
+      this.logger.debug(`Проверка кода для телефона: ${phoneNumber} (normalized: ${normalizedPhone}), phoneCodeHash: ${phoneCodeHash}`);
       this.logger.debug(`Current phoneCodeHashStore size: ${this.phoneCodeHashStore.size}`);
       this.logger.debug(`Stored phones in phoneCodeHashStore: ${Array.from(this.phoneCodeHashStore.keys()).join(', ')}`);
 
-      // Получаем сохраненный клиент и hash
-      const stored = this.phoneCodeHashStore.get(phoneNumber);
+      // Получаем сохраненный клиент и hash по нормализованному номеру
+      let stored = this.phoneCodeHashStore.get(normalizedPhone);
       if (!stored || stored.hash !== phoneCodeHash) {
-        throw new UnauthorizedException('Invalid phone code hash');
+        // Пробуем найти по оригинальному номеру (для обратной совместимости)
+        const altStored = this.phoneCodeHashStore.get(phoneNumber);
+        if (altStored && altStored.hash === phoneCodeHash) {
+          // Мигрируем на нормализованный ключ
+          this.phoneCodeHashStore.delete(phoneNumber);
+          this.phoneCodeHashStore.set(normalizedPhone, altStored);
+          stored = this.phoneCodeHashStore.get(normalizedPhone);
+        }
+        if (!stored || stored.hash !== phoneCodeHash) {
+          throw new UnauthorizedException('Invalid phone code hash');
+        }
       }
 
       if (stored.expiresAt < new Date()) {
-        this.phoneCodeHashStore.delete(phoneNumber);
+        this.phoneCodeHashStore.delete(normalizedPhone);
         throw new UnauthorizedException('Phone code hash expired');
       }
 
@@ -579,7 +596,7 @@ export class AuthService {
           throw new UnauthorizedException('Invalid verification code');
         }
         if (error.message?.includes('PHONE_CODE_EXPIRED')) {
-          this.phoneCodeHashStore.delete(phoneNumber);
+          this.phoneCodeHashStore.delete(normalizedPhone);
           throw new UnauthorizedException('Verification code expired');
         }
         if (error.message?.includes('SESSION_PASSWORD_NEEDED')) {
@@ -603,8 +620,8 @@ export class AuthService {
           // Нормализуем номер телефона для хранения
           const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
           
-          // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore
-          const phoneCodeStored = this.phoneCodeHashStore.get(phoneNumber);
+          // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore по нормализованному номеру
+          const phoneCodeStored = this.phoneCodeHashStore.get(normalizedPhone);
           if (!phoneCodeStored || !phoneCodeStored.sessionId) {
             throw new Error('Session ID not found in phoneCodeHashStore for 2FA');
           }
@@ -637,8 +654,7 @@ export class AuthService {
         throw new UnauthorizedException('Invalid user data');
       }
 
-      // Нормализуем номер телефона
-      const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
+      // normalizedPhone уже определен выше в начале метода
 
       // Ищем или создаем пользователя по телефону
       let user: User = await this.userRepository.findOne({
@@ -670,8 +686,8 @@ export class AuthService {
         this.logger.log(`Updated existing user for Telegram auth: ${user.id}, phone: ${normalizedPhone}`);
       }
 
-      // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore
-      const phoneCodeStored = this.phoneCodeHashStore.get(phoneNumber);
+      // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore по нормализованному номеру
+      const phoneCodeStored = this.phoneCodeHashStore.get(normalizedPhone);
       if (!phoneCodeStored || !phoneCodeStored.sessionId) {
         throw new Error('Session ID not found in phoneCodeHashStore');
       }
@@ -696,8 +712,8 @@ export class AuthService {
         userAgent,
       );
 
-      // Удаляем временные данные
-      this.phoneCodeHashStore.delete(phoneNumber);
+      // Удаляем временные данные по нормализованному номеру
+      this.phoneCodeHashStore.delete(normalizedPhone);
 
       // НЕ генерируем JWT токены - авторизация Telegram не должна авторизовывать в дашборде
       // Только сохраняем Telegram сессию для работы с Telegram API
