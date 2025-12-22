@@ -881,7 +881,10 @@ export class TelegramUserClientService implements OnModuleDestroy {
       if (this.clients.has(sessionId)) {
         const client = this.clients.get(sessionId)!;
         if (client.connected) {
-          this.logger.debug(`Using cached client for session ${sessionId}`);
+          this.logger.debug(`Using cached client for session ${sessionId} - skipping getMe() validation`);
+          // КРИТИЧНО: Если клиент из кеша и подключен, не делаем getMe()
+          // getMe() уже был выполнен при создании клиента из БД
+          // Это оптимизация - избегаем лишних RPC вызовов
           return client;
         }
         // Если клиент отключен, удаляем его
