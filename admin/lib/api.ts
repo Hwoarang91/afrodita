@@ -41,11 +41,27 @@ apiClient.interceptors.request.use((config) => {
 
   // КРИТИЧНО: Удаляем userId из запросов к /auth/telegram/2fa/verify
   // Это поле не должно быть в DTO
-  if (config.url?.includes('/auth/telegram/2fa/verify') && config.data && typeof config.data === 'object') {
-    const { userId, ...restData } = config.data;
-    if (userId !== undefined) {
-      console.warn('[API] Removed userId from 2FA verify request:', userId);
-      config.data = restData;
+  if (config.url?.includes('/auth/telegram/2fa/verify') && config.data) {
+    // Обрабатываем как объект
+    if (typeof config.data === 'object' && config.data !== null && !Array.isArray(config.data)) {
+      if ('userId' in config.data) {
+        const { userId, ...restData } = config.data;
+        console.warn('[API] Removed userId from 2FA verify request:', userId);
+        config.data = restData;
+      }
+    }
+    // Обрабатываем как строку (JSON)
+    else if (typeof config.data === 'string') {
+      try {
+        const parsed = JSON.parse(config.data);
+        if (parsed && typeof parsed === 'object' && 'userId' in parsed) {
+          const { userId, ...restData } = parsed;
+          console.warn('[API] Removed userId from 2FA verify request (string):', userId);
+          config.data = JSON.stringify(restData);
+        }
+      } catch (e) {
+        // Не JSON, пропускаем
+      }
     }
   }
 
