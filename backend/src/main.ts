@@ -1,8 +1,9 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, BadRequestException } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { HttpAdapterHost } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { ValidationExceptionFilter } from './common/filters/validation-exception.filter';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { AppDataSource } from './config/data-source';
@@ -168,8 +169,24 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      exceptionFactory: (errors) => {
+        const logger = new Logger('ValidationPipe');
+        logger.error(`Validation failed: ${JSON.stringify(errors, null, 2)}`);
+        return new BadRequestException({
+          message: errors.map((err) => ({
+            property: err.property,
+            constraints: err.constraints,
+            value: err.value,
+          })),
+          error: 'Bad Request',
+          statusCode: 400,
+        });
+      },
     }),
   );
+
+  // Exception filter для логирования ValidationPipe ошибок
+  app.useGlobalFilters(new ValidationExceptionFilter());
 
   // API prefix (исключаем health endpoint и корневые API роуты)
   app.setGlobalPrefix('api/v1', {
