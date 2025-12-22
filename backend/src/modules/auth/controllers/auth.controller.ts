@@ -457,7 +457,9 @@ export class AuthController {
   ): Promise<{ phoneCodeHash: string }> {
     this.logger.debug(`Запрос кода для телефона: ${dto.phoneNumber}`);
     try {
-      return await this.authService.requestPhoneCode(dto.phoneNumber);
+      // Передаем userId авторизованного пользователя, если он есть
+      const authenticatedUserId = req.user?.sub || undefined;
+      return await this.authService.requestPhoneCode(dto.phoneNumber, authenticatedUserId);
     } catch (error: any) {
       this.logger.error(`Ошибка запроса кода: ${error.message}`);
       throw error;

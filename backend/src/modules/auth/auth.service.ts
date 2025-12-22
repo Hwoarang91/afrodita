@@ -400,9 +400,9 @@ export class AuthService {
   /**
    * Запрашивает код подтверждения для авторизации по номеру телефона
    */
-  async requestPhoneCode(phoneNumber: string): Promise<{ phoneCodeHash: string }> {
+  async requestPhoneCode(phoneNumber: string, authenticatedUserId?: string): Promise<{ phoneCodeHash: string }> {
     try {
-      this.logger.debug(`Запрос кода для телефона: ${phoneNumber}`);
+      this.logger.debug(`Запрос кода для телефона: ${phoneNumber}, authenticatedUserId: ${authenticatedUserId || 'none'}`);
 
       // Валидация номера телефона
       if (!(await this.validatePhone(phoneNumber))) {
@@ -422,11 +422,35 @@ export class AuthService {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
+      // КРИТИЧЕСКИ ВАЖНО: Определяем userId для создания сессии
+      // Если пользователь авторизован - используем его ID
+      // Если нет - создаем временного пользователя в БД
+      let userId: string;
+      if (authenticatedUserId) {
+        // Проверяем, что пользователь существует
+        const user = await this.userRepository.findOne({ where: { id: authenticatedUserId } });
+        if (!user) {
+          throw new UnauthorizedException('Authenticated user not found');
+        }
+        userId = authenticatedUserId;
+        this.logger.debug(`Using authenticated user ID: ${userId}`);
+      } else {
+        // Создаем временного пользователя в БД для сессии
+        // Этот пользователь будет обновлен после успешной авторизации
+        const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
+        const tempUser = this.userRepository.create({
+          phone: normalizedPhone,
+          role: UserRole.CLIENT,
+          isActive: true,
+        });
+        const savedTempUser = await this.userRepository.save(tempUser);
+        userId = savedTempUser.id;
+        this.logger.debug(`Created temporary user for session: ${userId}, phone: ${normalizedPhone}`);
+      }
+
       // КРИТИЧЕСКИ ВАЖНО: Создаем клиент с DatabaseStorage сразу
       // НЕ используем StorageMemory - это нарушает lifecycle MTKruto
-      // Для авторизации нужен userId - используем временный UUID (будет обновлен после авторизации)
-      const tempUserId = uuidv4();
-      const { client, sessionId } = await this.telegramUserClientService.createClientForAuth(tempUserId, apiId, apiHash);
+      const { client, sessionId } = await this.telegramUserClientService.createClientForAuth(userId, apiId, apiHash);
       
       // Клиент уже подключен в createClientForAuth
 
