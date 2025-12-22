@@ -11,6 +11,7 @@ import { JwtAuthService } from './services/jwt.service';
 import { TelegramUserClientService } from '../telegram/services/telegram-user-client.service';
 import { Client } from '@mtkruto/node';
 import { validate, parse } from '@tma.js/init-data-node';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface TelegramAuthData {
   id: string;
@@ -424,7 +425,6 @@ export class AuthService {
       // КРИТИЧЕСКИ ВАЖНО: Создаем клиент с DatabaseStorage сразу
       // НЕ используем StorageMemory - это нарушает lifecycle MTKruto
       // Для авторизации нужен userId - используем временный UUID (будет обновлен после авторизации)
-      const { v4: uuidv4 } = await import('uuid');
       const tempUserId = uuidv4();
       const { client, sessionId } = await this.telegramUserClientService.createClientForAuth(tempUserId, apiId, apiHash);
       
@@ -713,7 +713,6 @@ export class AuthService {
 
       // КРИТИЧЕСКИ ВАЖНО: Создаем клиент с DatabaseStorage сразу
       // Для QR-кода используем временный UUID (будет обновлен после авторизации)
-      const { v4: uuidv4 } = await import('uuid');
       const tempUserId = uuidv4();
       const { client, sessionId } = await this.telegramUserClientService.createClientForAuth(tempUserId, apiId, apiHash);
       
