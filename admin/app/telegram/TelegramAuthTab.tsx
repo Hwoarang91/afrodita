@@ -314,39 +314,48 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         }
       }
     } catch (error: any) {
-      // КРИТИЧНО: Правильная обработка ошибок валидации
-      // Защита от React error #31 - никогда не пытаемся отрендерить объект
-      const msg = error.response?.data?.message;
-      
-      let errorMessage = 'Ошибка проверки 2FA пароля';
-      
-      if (Array.isArray(msg)) {
-        // Массив ошибок валидации - извлекаем сообщения
-        errorMessage = msg
-          .map((e: any) => {
-            if (typeof e === 'string') return e;
-            if (e.message && typeof e.message === 'string') return e.message;
-            if (e.constraints && typeof e.constraints === 'object') {
-              return Object.values(e.constraints).join(', ');
-            }
-            return `${e.property || 'field'}: invalid value`;
-          })
-          .join('\n');
-      } else if (typeof msg === 'string') {
-        // Строка - используем как есть
-        errorMessage = msg;
-      } else if (msg && typeof msg === 'object') {
-        // Объект - извлекаем constraints или message
-        if (msg.constraints && typeof msg.constraints === 'object') {
-          errorMessage = Object.values(msg.constraints).join(', ');
-        } else if (msg.message && typeof msg.message === 'string') {
-          errorMessage = msg.message;
+      // КРИТИЧНО: Нормализация ошибок для предотвращения React error #31
+      // Функция извлечения сообщения об ошибке из ответа backend
+      // Обрабатывает все возможные форматы ошибок: массив объектов, строку, объект
+      const extractErrorMessage = (err: any): string => {
+        const msg = err?.response?.data?.message;
+
+        // Если message - массив (ValidationPipe ошибки)
+        if (Array.isArray(msg)) {
+          return msg
+            .map((e: any) => {
+              if (typeof e === 'string') return e;
+              // Извлекаем constraints из объекта ошибки валидации
+              if (e?.constraints && typeof e.constraints === 'object') {
+                return Object.values(e.constraints).join(', ');
+              }
+              return 'Ошибка валидации';
+            })
+            .join('\n');
         }
-      } else if (error.response?.data?.error && typeof error.response.data.error === 'string') {
-        errorMessage = error.response.data.error;
-      }
-      
-      toast.error(errorMessage);
+
+        // Если message - строка (нормальный случай)
+        if (typeof msg === 'string') return msg;
+
+        // Если message - объект (fallback)
+        if (msg && typeof msg === 'object') {
+          if (msg.constraints && typeof msg.constraints === 'object') {
+            return Object.values(msg.constraints).join(', ');
+          }
+          if (msg.message && typeof msg.message === 'string') {
+            return msg.message;
+          }
+        }
+
+        // Fallback на error поле или общее сообщение
+        if (err?.response?.data?.error && typeof err.response.data.error === 'string') {
+          return err.response.data.error;
+        }
+
+        return 'Ошибка проверки 2FA';
+      };
+
+      toast.error(extractErrorMessage(error));
     } finally {
       setIsLoading(false);
     }

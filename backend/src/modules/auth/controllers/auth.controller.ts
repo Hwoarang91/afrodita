@@ -613,7 +613,8 @@ export class AuthController {
     @Request() req,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramAuthResponseDto> {
-    // КРИТИЧНО: Логируем ДО валидации, чтобы увидеть что приходит
+    // КРИТИЧНО: Диагностическое логирование - если этот лог не появляется, значит запрос не дошел до контроллера (ValidationPipe отклонил)
+    this.logger.log(`[2FA] ✅ Controller entered - запрос дошел до контроллера`);
     this.logger.log(`[2FA] Запрос получен. Raw body keys: ${Object.keys(dto || {}).join(', ')}`);
     this.logger.log(`[2FA] phoneNumber: ${dto?.phoneNumber ? 'present' : 'missing'}, phoneCodeHash: ${dto?.phoneCodeHash ? 'present' : 'missing'}, password: ${dto?.password ? 'present' : 'missing'}`);
     

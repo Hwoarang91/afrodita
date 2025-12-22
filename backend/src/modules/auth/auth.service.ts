@@ -1045,11 +1045,13 @@ export class AuthService {
       // Получаем сохраненные данные по нормализованному номеру
       const stored = this.twoFactorStore.get(normalizedPhone);
       if (!stored) {
-        this.logger.error(`2FA session not found for phone: ${normalizedPhone}`);
+        this.logger.error(`[2FA] ❌ twoFactorStore entry not found for normalized phone: ${normalizedPhone}`);
+        this.logger.error(`[2FA] Available keys in twoFactorStore: ${Array.from(this.twoFactorStore.keys()).join(', ')}`);
+        this.logger.error(`[2FA] Original phoneNumber: ${phoneNumber}, normalized: ${normalizedPhone}`);
         // Пробуем найти по исходному номеру (для обратной совместимости)
         const altStored = this.twoFactorStore.get(phoneNumber);
         if (altStored) {
-          this.logger.warn(`Found 2FA session by original phone number, migrating to normalized`);
+          this.logger.warn(`[2FA] Found 2FA session by original phone number, migrating to normalized`);
           this.twoFactorStore.delete(phoneNumber);
           this.twoFactorStore.set(normalizedPhone, altStored);
           // Используем найденную сессию
@@ -1058,8 +1060,10 @@ export class AuthService {
             return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent);
           }
         }
-        throw new UnauthorizedException('2FA session not found. Please restart the authorization process.');
+        throw new BadRequestException('2FA session not found. Please restart the authentication process.');
       }
+      
+      this.logger.log(`[2FA] ✅ twoFactorStore entry found for normalized phone: ${normalizedPhone}`);
       
       if (stored.phoneCodeHash !== phoneCodeHash) {
         this.logger.error(`Phone code hash mismatch for phone: ${normalizedPhone}. Expected: ${stored.phoneCodeHash}, Received: ${phoneCodeHash}`);
