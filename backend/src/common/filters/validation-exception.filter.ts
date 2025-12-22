@@ -6,7 +6,14 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { buildValidationErrorResponse } from '../utils/error-response.builder';
 
+/**
+ * Exception filter для обработки ошибок валидации
+ * Преобразует ValidationError[] в стандартизированный ErrorResponse
+ * Гарантирует, что message всегда строка, а не объект или массив
+ * Это предотвращает React error #31
+ */
 @Catch(BadRequestException)
 export class ValidationExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ValidationExceptionFilter.name);
@@ -29,37 +36,38 @@ export class ValidationExceptionFilter implements ExceptionFilter {
       },
     );
 
-    // Если это ошибка ValidationPipe, логируем детали
+    // Если это ошибка ValidationPipe (массив ValidationError)
     if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
       const responseObj = exceptionResponse as any;
+      
+      // Проверяем, является ли message массивом ValidationError
       if (responseObj.message && Array.isArray(responseObj.message)) {
         this.logger.error(
           `[ValidationPipe] Validation errors: ${JSON.stringify(responseObj.message)}`,
         );
         
-        // Преобразуем массив ошибок в читаемое сообщение для фронтенда
-        const errorMessages = responseObj.message.map((err: any) => {
-          if (err.constraints) {
-            return Object.values(err.constraints).join(', ');
-          }
-          if (typeof err === 'string') {
-            return err;
-          }
-          return `${err.property || 'field'}: invalid value`;
-        });
+        // Преобразуем ValidationError[] в стандартизированный ErrorResponse
+        const errorResponse = buildValidationErrorResponse(responseObj.message);
         
-        // КРИТИЧНО: Возвращаем строку в message, а не массив объектов
-        // Это предотвращает React error #31
+        // КРИТИЧНО: Возвращаем стандартизированный формат
+        // message всегда строка, details - массив ErrorDetail
+        response.status(status).json(errorResponse);
+        return;
+      }
+      
+      // Если message уже строка, но нет стандартного формата - преобразуем
+      if (typeof responseObj.message === 'string') {
         response.status(status).json({
-          message: errorMessages.join('; '), // Строка, а не массив
-          errors: responseObj.message, // Детальная информация для отладки
-          error: responseObj.error || 'Bad Request',
-          statusCode: responseObj.statusCode || 400,
+          success: false,
+          statusCode: status,
+          errorCode: 'VALIDATION_ERROR',
+          message: responseObj.message,
         });
         return;
       }
     }
 
+    // Fallback: возвращаем как есть (для совместимости)
     response.status(status).json(exceptionResponse);
   }
 }

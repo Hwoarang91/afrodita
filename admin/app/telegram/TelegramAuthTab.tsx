@@ -323,30 +323,58 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         }
       }
     } catch (error: any) {
-      // КРИТИЧНО: Нормализация ошибок для предотвращения React error #31
-      // Функция извлечения сообщения об ошибке из ответа backend
-      // Обрабатывает все возможные форматы ошибок: массив объектов, строку, объект
+      // КРИТИЧНО: Нормализация ошибок для работы с единым ErrorResponse контрактом
+      // Backend теперь всегда возвращает стандартизированный формат:
+      // { success: false, statusCode, errorCode, message: string, details?: ErrorDetail[] }
+      // Это гарантирует, что message всегда строка, а не объект или массив
       const extractErrorMessage = (err: any): string => {
-        const msg = err?.response?.data?.message;
+        const data = err?.response?.data;
 
-        // Если message - массив (ValidationPipe ошибки)
+        if (!data) {
+          return 'Неизвестная ошибка';
+        }
+
+        // Новый стандартизированный формат ErrorResponse
+        if (data.message && typeof data.message === 'string') {
+          // Если есть details, добавляем их к сообщению
+          if (Array.isArray(data.details) && data.details.length > 0) {
+            const detailsMessages = data.details
+              .map((detail: any) => {
+                if (typeof detail === 'string') return detail;
+                if (detail?.message && typeof detail.message === 'string') {
+                  return detail.message;
+                }
+                return null;
+              })
+              .filter(Boolean);
+            
+            if (detailsMessages.length > 0) {
+              return `${data.message}\n${detailsMessages.join('\n')}`;
+            }
+          }
+          return data.message;
+        }
+
+        // Fallback для старых форматов (обратная совместимость)
+        const msg = data.message;
+        
+        // Если message - массив (старый формат ValidationPipe)
         if (Array.isArray(msg)) {
           return msg
             .map((e: any) => {
               if (typeof e === 'string') return e;
-              // Извлекаем constraints из объекта ошибки валидации
               if (e?.constraints && typeof e.constraints === 'object') {
                 return Object.values(e.constraints).join(', ');
+              }
+              if (e?.message && typeof e.message === 'string') {
+                return e.message;
               }
               return 'Ошибка валидации';
             })
             .join('\n');
         }
 
-        // Если message - строка (нормальный случай)
-        if (typeof msg === 'string') return msg;
-
-        // Если message - объект (fallback)
+        // Если message - объект (старый формат)
         if (msg && typeof msg === 'object') {
           if (msg.constraints && typeof msg.constraints === 'object') {
             return Object.values(msg.constraints).join(', ');
@@ -356,9 +384,9 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
           }
         }
 
-        // Fallback на error поле или общее сообщение
-        if (err?.response?.data?.error && typeof err.response.data.error === 'string') {
-          return err.response.data.error;
+        // Fallback на error поле
+        if (data.error && typeof data.error === 'string') {
+          return data.error;
         }
 
         return 'Ошибка проверки 2FA';

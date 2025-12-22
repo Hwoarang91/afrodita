@@ -172,6 +172,9 @@ async function bootstrap() {
       exceptionFactory: (errors) => {
         const logger = new Logger('ValidationPipe');
         logger.error(`Validation failed: ${JSON.stringify(errors, null, 2)}`);
+        
+        // Возвращаем BadRequestException с массивом ValidationError
+        // ValidationExceptionFilter преобразует это в стандартизированный ErrorResponse
         return new BadRequestException({
           message: errors.map((err) => ({
             property: err.property,
