@@ -78,17 +78,8 @@ class DatabaseStorage implements Partial<Storage> {
     }
   }
 
-  async set(key: readonly StorageKeyPart[], value: Uint8Array): Promise<void> {
+  async set(key: readonly StorageKeyPart[], value: any): Promise<void> {
     try {
-      // Проверяем, что value действительно Uint8Array
-      if (!(value instanceof Uint8Array)) {
-        const valueType = typeof value;
-        const constructorName = value && typeof value === 'object' && 'constructor' in value 
-          ? (value as any).constructor?.name || 'unknown'
-          : 'unknown';
-        throw new Error(`Expected Uint8Array, got ${valueType} (${constructorName})`);
-      }
-
       let session = await this.sessionRepository.findOne({
         where: {
           userId: this.userId,
@@ -124,9 +115,27 @@ class DatabaseStorage implements Partial<Storage> {
       }
 
       const lastKey = String(key[key.length - 1]);
-      // Сохраняем бинарные данные как base64 для правильной работы с MTProto
-      // Buffer.from() принимает Uint8Array, ArrayBuffer, Array или Array-like Object
-      current[lastKey] = Buffer.from(value).toString('base64');
+      
+      // Обрабатываем разные типы данных, которые может сохранять MTKruto
+      if (value instanceof Uint8Array) {
+        // Бинарные данные (auth_key, server_salt и т.д.) - сохраняем как base64
+        current[lastKey] = Buffer.from(value).toString('base64');
+      } else if (typeof value === 'bigint') {
+        // BigInt нельзя сериализовать в JSON напрямую - конвертируем в строку
+        current[lastKey] = value.toString();
+      } else if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean' || value === null) {
+        // Примитивные типы - сохраняем как есть
+        current[lastKey] = value;
+      } else {
+        // Для других типов пытаемся сериализовать
+        // Если это объект, который можно сериализовать - сохраняем как JSON
+        try {
+          current[lastKey] = JSON.parse(JSON.stringify(value));
+        } catch {
+          // Если не удалось сериализовать - конвертируем в строку
+          current[lastKey] = String(value);
+        }
+      }
 
       const encrypted = this.encryptionService.encrypt(JSON.stringify(data));
 
