@@ -315,45 +315,35 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       }
     } catch (error: any) {
       // КРИТИЧНО: Правильная обработка ошибок валидации
-      // Backend возвращает message как строку (благодаря ValidationExceptionFilter)
-      // Но на всякий случай защищаемся от массива объектов
+      // Защита от React error #31 - никогда не пытаемся отрендерить объект
+      const msg = error.response?.data?.message;
+      
       let errorMessage = 'Ошибка проверки 2FA пароля';
       
-      if (error.response?.data) {
-        const errorData = error.response.data;
-        const msg = errorData.message;
-        
-        // Если message - строка (нормальный случай)
-        if (typeof msg === 'string') {
-          errorMessage = msg;
+      if (Array.isArray(msg)) {
+        // Массив ошибок валидации - извлекаем сообщения
+        errorMessage = msg
+          .map((e: any) => {
+            if (typeof e === 'string') return e;
+            if (e.message && typeof e.message === 'string') return e.message;
+            if (e.constraints && typeof e.constraints === 'object') {
+              return Object.values(e.constraints).join(', ');
+            }
+            return `${e.property || 'field'}: invalid value`;
+          })
+          .join('\n');
+      } else if (typeof msg === 'string') {
+        // Строка - используем как есть
+        errorMessage = msg;
+      } else if (msg && typeof msg === 'object') {
+        // Объект - извлекаем constraints или message
+        if (msg.constraints && typeof msg.constraints === 'object') {
+          errorMessage = Object.values(msg.constraints).join(', ');
+        } else if (msg.message && typeof msg.message === 'string') {
+          errorMessage = msg.message;
         }
-        // Если message - массив объектов (защита на случай, если filter не сработал)
-        else if (Array.isArray(msg)) {
-          errorMessage = msg
-            .map((err: any) => {
-              if (typeof err === 'string') return err;
-              if (err.constraints && typeof err.constraints === 'object') {
-                return Object.values(err.constraints).join(', ');
-              }
-              if (err.message && typeof err.message === 'string') {
-                return err.message;
-              }
-              return `${err.property || 'field'}: invalid value`;
-            })
-            .join('; ');
-        }
-        // Если message - объект (не должно быть, но на всякий случай)
-        else if (msg && typeof msg === 'object') {
-          if (msg.constraints && typeof msg.constraints === 'object') {
-            errorMessage = Object.values(msg.constraints).join(', ');
-          } else if (msg.message && typeof msg.message === 'string') {
-            errorMessage = msg.message;
-          }
-        }
-        // Fallback на error поле
-        else if (errorData.error && typeof errorData.error === 'string') {
-          errorMessage = errorData.error;
-        }
+      } else if (error.response?.data?.error && typeof error.response.data.error === 'string') {
+        errorMessage = error.response.data.error;
       }
       
       toast.error(errorMessage);
