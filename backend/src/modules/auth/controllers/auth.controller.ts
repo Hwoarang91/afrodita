@@ -614,7 +614,9 @@ export class AuthController {
   ): Promise<TelegramAuthResponseDto> {
     this.logger.log(`[2FA] Запрос на проверку 2FA для телефона: ${dto.phoneNumber}, phoneCodeHash: ${dto.phoneCodeHash}`);
     this.logger.log(`[2FA] Пароль получен: ${dto.password ? 'да' : 'нет'}, длина: ${dto.password?.length || 0}`);
-    this.logger.debug(`[2FA] Получен DTO: ${JSON.stringify(dto)}`); // Добавлено логирование DTO
+    // КРИТИЧНО: НЕ логируем пароль - это безопасность
+    const { password, ...safeDto } = dto;
+    this.logger.debug(`[2FA] Получен DTO: ${JSON.stringify(safeDto)}`);
     try {
       // Сессия сохраняется для пользователя, найденного/созданного по телефону
       const result = await this.authService.verify2FAPassword(

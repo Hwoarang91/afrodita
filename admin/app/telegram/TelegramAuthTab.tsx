@@ -50,8 +50,12 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
     retry: false,
   });
 
-  // Проверяем наличие активной сессии со статусом 'active'
-  const activeSession = sessionsData?.sessions?.find((s: any) => s.status === 'active');
+  // КРИТИЧНО: Используем currentSessionId из backend, а не первую попавшуюся активную сессию
+  // Это гарантирует, что UI показывает правильную сессию при наличии нескольких активных
+  const currentSessionId = sessionsData?.currentSessionId;
+  const activeSession = currentSessionId
+    ? sessionsData?.sessions?.find((s: any) => s.id === currentSessionId && s.status === 'active')
+    : sessionsData?.sessions?.find((s: any) => s.status === 'active'); // Fallback для обратной совместимости
   const isConnected = Boolean(activeSession);
 
   const generateQrCode = useCallback(async () => {
