@@ -43,11 +43,13 @@ export class AuthService {
   private phoneCodeHashStore: Map<string, { hash: string; client: Client; sessionId: string; expiresAt: Date }> = new Map();
 
   // Временное хранилище для QR токенов (в production лучше использовать Redis)
+  // Теперь храним sessionId для правильного lifecycle
   private qrTokenStore: Map<
     string,
     {
       token: Uint8Array;
       client: Client;
+      sessionId: string;
       expiresAt: Date;
       status: 'pending' | 'accepted' | 'expired';
       user?: User;
@@ -644,9 +646,11 @@ export class AuthService {
       }
 
       // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore
-      if (!sessionId) {
+      const phoneCodeStored = this.phoneCodeHashStore.get(phoneNumber);
+      if (!phoneCodeStored || !phoneCodeStored.sessionId) {
         throw new Error('Session ID not found in phoneCodeHashStore');
       }
+      const sessionId = phoneCodeStored.sessionId;
 
       // Обновляем сессию в БД - меняем userId с временного на реальный
       // Находим сессию по sessionId и обновляем userId
