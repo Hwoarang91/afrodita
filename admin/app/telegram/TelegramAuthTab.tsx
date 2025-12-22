@@ -101,7 +101,11 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         }
       }, 1000);
       
-      // Проверяем статус каждые 2 секунды
+      // Проверяем статус с max retries и обработкой ошибок
+      let retryCount = 0;
+      const maxRetries = 30; // Максимум 30 попыток (около 60 секунд при интервале 2 сек)
+      const pollInterval = 2000; // Интервал 2 секунды
+      
       const interval = setInterval(async () => {
         try {
           const response = await apiClient.get(`/auth/telegram/qr/status/${qrTokenId}`);
@@ -117,6 +121,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
           }
 
           if (status === 'accepted' && response.data.user) {
+            clearInterval(interval);
             toast.success('Telegram аккаунт успешно подключен!');
             refetchSessions();
             // Сброс формы
@@ -129,17 +134,53 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
               onAuthSuccess();
             }
           } else if (status === 'expired') {
+            clearInterval(interval);
             toast.error('QR-код истек. Генерируем новый...');
             setQrTokenId('');
             setQrUrl('');
             setQrStatus('pending');
             setQrTimeRemaining(0);
             generateQrCode();
+          } else {
+            // Увеличиваем счетчик попыток
+            retryCount++;
+            if (retryCount >= maxRetries) {
+              clearInterval(interval);
+              toast.error('Превышено время ожидания. Генерируем новый QR-код...');
+              setQrTokenId('');
+              setQrUrl('');
+              setQrStatus('pending');
+              setQrTimeRemaining(0);
+              generateQrCode();
+            }
           }
         } catch (error: any) {
           console.error('Error checking QR status:', error);
+          
+          // Останавливаем polling при критических ошибках
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            clearInterval(interval);
+            toast.error('Ошибка авторизации. Пожалуйста, попробуйте снова.');
+            setQrTokenId('');
+            setQrUrl('');
+            setQrStatus('pending');
+            setQrTimeRemaining(0);
+            return;
+          }
+          
+          // Увеличиваем счетчик попыток при ошибках
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            clearInterval(interval);
+            toast.error('Превышено время ожидания. Генерируем новый QR-код...');
+            setQrTokenId('');
+            setQrUrl('');
+            setQrStatus('pending');
+            setQrTimeRemaining(0);
+            generateQrCode();
+          }
         }
-      }, 2000);
+      }, pollInterval);
 
       return () => {
         clearInterval(interval);
@@ -200,7 +241,15 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         }
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Ошибка проверки кода');
+      const errorMessage = error.response?.data?.message || 'Ошибка проверки кода';
+      toast.error(errorMessage);
+      
+      // Автоматический сброс при PHONE_CODE_EXPIRED
+      if (errorMessage.includes('PHONE_CODE_EXPIRED') || errorMessage.includes('expired') || errorMessage.includes('истек')) {
+        setPhoneCodeHash('');
+        setCode('');
+        toast.info('Код истек. Пожалуйста, запросите новый код.');
+      }
     } finally {
       setIsLoading(false);
     }
