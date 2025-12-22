@@ -118,6 +118,30 @@ throw new BadRequestException(
 );
 ```
 
+### Обработка Telegram MTProto ошибок
+
+```typescript
+import { mapTelegramErrorToResponse } from '../modules/telegram/utils/telegram-error-mapper';
+
+try {
+  await client.invoke({ _: 'auth.signIn', ... });
+} catch (error) {
+  // Автоматически преобразует Telegram ошибку в ErrorResponse
+  const errorResponse = mapTelegramErrorToResponse(error);
+  throw new HttpException(errorResponse, errorResponse.statusCode);
+}
+```
+
+### Глобальная обработка всех HttpException
+
+Все `HttpException` автоматически преобразуются в `ErrorResponse` через `HttpExceptionFilter`:
+
+```typescript
+// Любое HttpException автоматически преобразуется
+throw new UnauthorizedException('Требуется авторизация');
+// → { success: false, statusCode: 401, errorCode: 'UNAUTHORIZED', message: 'Требуется авторизация' }
+```
+
 ## Использование на Frontend
 
 ### Извлечение сообщения об ошибке
@@ -152,6 +176,21 @@ toast.error(errorMessage);
 - ❌ `constraints` напрямую
 - ❌ `class-validator ValidationError` целиком
 - ❌ Разные форматы ошибок в разных эндпоинтах
+
+## Contract Testing
+
+Для защиты от регрессий используйте `validateErrorResponse()`:
+
+```typescript
+import { validateErrorResponse } from './error-response.contract.spec';
+
+// В тестах
+const response = await request(app).post('/api/v1/auth/telegram/2fa/verify').send({});
+expect(validateErrorResponse(response.body)).toBe(true);
+expect(typeof response.body.message).toBe('string');
+```
+
+Это гарантирует, что все ошибки соответствуют контракту.
 
 ## Гарантии
 

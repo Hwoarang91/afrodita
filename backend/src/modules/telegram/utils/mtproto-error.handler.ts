@@ -1,7 +1,11 @@
 /**
  * Централизованная обработка MTProto ошибок
  * Определяет тип ошибки и возвращает действие для обработки
+ * Интегрирован с ErrorResponse contract для единообразной обработки ошибок
  */
+
+import { ErrorResponse } from '../../../common/interfaces/error-response.interface';
+import { mapTelegramError, mapTelegramErrorToResponse } from './telegram-error-mapper';
 
 export enum MtprotoErrorAction {
   INVALIDATE_SESSION = 'invalidate_session',
@@ -14,13 +18,19 @@ export interface MtprotoErrorResult {
   action: MtprotoErrorAction;
   reason: string;
   retryAfter?: number;
+  errorResponse?: ErrorResponse; // Стандартизированный ErrorResponse для возврата в контроллере
 }
 
 /**
  * Обрабатывает MTProto ошибку и возвращает действие для обработки
+ * Теперь также возвращает стандартизированный ErrorResponse для использования в контроллерах
  */
 export function handleMtprotoError(e: any): MtprotoErrorResult {
   const message = e?.errorMessage || e?.message || String(e || '');
+  
+  // Используем маппинг для получения стандартизированного ErrorResponse
+  const errorMapping = mapTelegramError(e);
+  const errorResponse = mapTelegramErrorToResponse(e);
 
   // 🔴 FATAL - инвалидировать сессию немедленно
   if (
@@ -37,6 +47,7 @@ export function handleMtprotoError(e: any): MtprotoErrorResult {
     return {
       action: MtprotoErrorAction.INVALIDATE_SESSION,
       reason: message,
+      errorResponse,
     };
   }
 
@@ -45,6 +56,7 @@ export function handleMtprotoError(e: any): MtprotoErrorResult {
     return {
       action: MtprotoErrorAction.REQUIRE_2FA,
       reason: '2FA password required',
+      errorResponse,
     };
   }
 
@@ -57,6 +69,7 @@ export function handleMtprotoError(e: any): MtprotoErrorResult {
     return {
       action: MtprotoErrorAction.REQUIRE_2FA,
       reason: message,
+      errorResponse,
     };
   }
 
@@ -67,6 +80,7 @@ export function handleMtprotoError(e: any): MtprotoErrorResult {
       action: MtprotoErrorAction.RETRY,
       reason: message,
       retryAfter: parseInt(floodMatch[1], 10),
+      errorResponse,
     };
   }
 
@@ -80,6 +94,7 @@ export function handleMtprotoError(e: any): MtprotoErrorResult {
     return {
       action: MtprotoErrorAction.RETRY,
       reason: message,
+      errorResponse,
     };
   }
 
@@ -87,6 +102,7 @@ export function handleMtprotoError(e: any): MtprotoErrorResult {
   return {
     action: MtprotoErrorAction.SAFE_ERROR,
     reason: message,
+    errorResponse,
   };
 }
 

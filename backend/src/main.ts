@@ -4,6 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { HttpAdapterHost } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationExceptionFilter } from './common/filters/validation-exception.filter';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { AppDataSource } from './config/data-source';
@@ -188,8 +189,13 @@ async function bootstrap() {
     }),
   );
 
-  // Exception filter для логирования ValidationPipe ошибок
-  app.useGlobalFilters(new ValidationExceptionFilter());
+  // Exception filters для стандартизации всех ошибок
+  // ВАЖНО: порядок регистрации имеет значение
+  // ValidationExceptionFilter обрабатывает BadRequestException ПЕРЕД HttpExceptionFilter
+  app.useGlobalFilters(
+    new ValidationExceptionFilter(), // Обрабатывает BadRequestException (ValidationPipe)
+    new HttpExceptionFilter(), // Обрабатывает все остальные HttpException
+  );
 
   // API prefix (исключаем health endpoint и корневые API роуты)
   app.setGlobalPrefix('api/v1', {
