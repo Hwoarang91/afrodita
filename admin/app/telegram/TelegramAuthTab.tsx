@@ -276,27 +276,34 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         return;
       }
 
-      // КРИТИЧНО: Убеждаемся, что userId НЕ отправляется
-      // Создаем объект БЕЗ userId явно - используем Object.assign для гарантии чистоты
-      const requestBody = Object.assign({}, {
+      // КРИТИЧНО: Создаем СТРОГО типизированный payload БЕЗ userId
+      // Используем JSON.parse(JSON.stringify()) для полной изоляции от прототипов
+      const cleanPayload = {
         phoneNumber: phoneNumber.trim(),
         password: passwordToSend,
         phoneCodeHash,
-      });
+      };
       
-      // КРИТИЧНО: Удаляем userId если он каким-то образом попал в объект (двойная защита)
-      if ('userId' in requestBody) {
+      // Дополнительная защита: создаем новый объект через JSON для гарантии чистоты
+      const requestBody = JSON.parse(JSON.stringify(cleanPayload)) as {
+        phoneNumber: string;
+        password: string;
+        phoneCodeHash: string;
+      };
+      
+      // Финальная проверка - убеждаемся что userId отсутствует
+      if ('userId' in requestBody || (requestBody as any).userId !== undefined) {
         delete (requestBody as any).userId;
         if (process.env.NODE_ENV === 'development') {
-          console.warn('[2FA] userId was present in requestBody and was removed');
+          console.error('[2FA] ⚠️ userId was detected and removed from requestBody');
         }
       }
       
       // Логируем для отладки (только в dev режиме)
       if (process.env.NODE_ENV === 'development') {
-        console.log('[2FA] Request body keys:', Object.keys(requestBody));
-        console.log('[2FA] userId in body?', 'userId' in requestBody);
-        console.log('[2FA] Full body:', JSON.stringify(requestBody));
+        console.log('[2FA] ✅ Clean request body keys:', Object.keys(requestBody));
+        console.log('[2FA] ✅ userId in body?', 'userId' in requestBody);
+        console.log('[2FA] ✅ Full body:', JSON.stringify(requestBody));
       }
       
       const response = await apiClient.post('/auth/telegram/2fa/verify', requestBody);

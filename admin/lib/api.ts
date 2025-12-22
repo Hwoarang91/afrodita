@@ -41,32 +41,58 @@ apiClient.interceptors.request.use((config) => {
 
   // КРИТИЧНО: Удаляем userId из запросов к /auth/telegram/2fa/verify
   // Это поле не должно быть в DTO из-за forbidNonWhitelisted: true
+  // Проверяем полный URL (baseURL + url) для надежности
   const url = config.url || '';
-  const fullUrl = url.includes('/auth/telegram/2fa/verify') || 
-                  config.baseURL?.includes('/auth/telegram/2fa/verify') ||
-                  (config.baseURL + url).includes('/auth/telegram/2fa/verify');
+  const baseUrl = config.baseURL || '';
+  const fullUrl = (baseUrl + url).includes('/auth/telegram/2fa/verify');
   
   if (fullUrl && config.data) {
     // Обрабатываем как объект (самый частый случай)
     if (typeof config.data === 'object' && config.data !== null && !Array.isArray(config.data) && !(config.data instanceof FormData)) {
-      if ('userId' in config.data) {
-        const { userId, ...restData } = config.data;
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('[API Interceptor] Removed userId from 2FA verify request:', userId);
+      // Агрессивная очистка: удаляем все запрещенные поля
+      const forbiddenFields = ['userId', 'sessionId', 'client', 'user'];
+      let hasForbiddenFields = false;
+      
+      for (const field of forbiddenFields) {
+        if (field in config.data) {
+          hasForbiddenFields = true;
+          delete (config.data as any)[field];
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(`[API Interceptor] Removed forbidden field '${field}' from 2FA verify request`);
+          }
         }
-        config.data = restData;
+      }
+      
+      // Если были запрещенные поля, создаем новый чистый объект
+      if (hasForbiddenFields) {
+        const { phoneNumber, password, phoneCodeHash } = config.data as any;
+        config.data = {
+          phoneNumber: phoneNumber?.trim(),
+          password: password,
+          phoneCodeHash: phoneCodeHash,
+        };
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[API Interceptor] ✅ Created clean payload for 2FA verify');
+        }
       }
     }
     // Обрабатываем как строку (JSON)
     else if (typeof config.data === 'string') {
       try {
         const parsed = JSON.parse(config.data);
-        if (parsed && typeof parsed === 'object' && parsed !== null && 'userId' in parsed) {
-          const { userId, ...restData } = parsed;
+        if (parsed && typeof parsed === 'object' && parsed !== null) {
+          const { userId, sessionId, client, user, phoneNumber, password, phoneCodeHash } = parsed;
+          // Создаем чистый объект только с разрешенными полями
+          config.data = JSON.stringify({
+            phoneNumber: phoneNumber?.trim(),
+            password: password,
+            phoneCodeHash: phoneCodeHash,
+          });
           if (process.env.NODE_ENV === 'development') {
-            console.warn('[API Interceptor] Removed userId from 2FA verify request (JSON string):', userId);
+            if (userId || sessionId || client || user) {
+              console.warn('[API Interceptor] Removed forbidden fields from 2FA verify request (JSON string)');
+            }
           }
-          config.data = JSON.stringify(restData);
         }
       } catch (e) {
         // Не JSON, пропускаем
