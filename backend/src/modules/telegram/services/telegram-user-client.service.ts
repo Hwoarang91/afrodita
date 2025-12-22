@@ -871,14 +871,10 @@ export class TelegramUserClientService implements OnModuleDestroy {
       }
 
       // Проверяем, что сессия имеет валидные данные
+      // Для активных сессий данные должны быть валидны
       if (!this.isSessionDataValid(session.encryptedSessionData)) {
-        // NULL допустим только в статусе initializing
-        if (session.encryptedSessionData === null && session.status === 'initializing') {
-          this.logger.debug(`Session ${sessionId} has null encryptedSessionData (initializing) - will load from storage`);
-        } else {
-          this.logger.error(`Session ${sessionId} has empty or invalid encryptedSessionData`);
-          return null;
-        }
+        this.logger.error(`Session ${sessionId} has empty or invalid encryptedSessionData`);
+        return null;
       }
 
       // КРИТИЧЕСКИ ВАЖНО: Используем sessionId для кеша, не userId
