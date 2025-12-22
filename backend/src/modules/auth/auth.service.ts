@@ -919,10 +919,12 @@ export class AuthService {
             // Сохраняем сессию MTProto
             // Используем userId из параметра (если передан админом) или создаем нового пользователя
             const sessionUserId = userId || user.id;
-            this.logger.log(`Saving Telegram session for user ${sessionUserId} (role: ${user.role}, phone: ${normalizedPhone})`);
+            this.logger.log(`Saving Telegram session for user ${sessionUserId} (role: ${user.role}, phone: ${normalizedPhone}), sessionId: ${stored.sessionId}`);
+            // КРИТИЧНО: Передаем sessionId в saveSession
             await this.telegramUserClientService.saveSession(
               sessionUserId,
               stored.client,
+              stored.sessionId, // КРИТИЧНО: передаем sessionId из qrTokenStore
               normalizedPhone || '',
               undefined, // ipAddress не доступен в этом контексте
               undefined, // userAgent не доступен в этом контексте

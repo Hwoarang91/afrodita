@@ -16,9 +16,7 @@ class DatabaseStorage implements Partial<Storage> {
   constructor(
     private sessionRepository: Repository<TelegramUserSession>,
     private encryptionService: SessionEncryptionService,
-    private userId: string,
-    private apiId: number,
-    private apiHash: string,
+    private sessionId: string, // КРИТИЧНО: Storage привязан к sessionId, а не userId
   ) {}
 
   async initialize(): Promise<void> {
@@ -30,9 +28,7 @@ class DatabaseStorage implements Partial<Storage> {
     try {
       const session = await this.sessionRepository.findOne({
         where: {
-          userId: this.userId,
-          apiId: this.apiId,
-          isActive: true,
+          id: this.sessionId, // КРИТИЧНО: ищем по sessionId, не userId
         },
       });
 
@@ -98,12 +94,18 @@ class DatabaseStorage implements Partial<Storage> {
     }
   }
 
-  async set(key: readonly StorageKeyPart[], value: any): Promise<void> {
+  async set(key: readonly StorageKeyPart[], value: Uint8Array): Promise<void> {
     try {
+      // КРИТИЧНО: Storage хранит ТОЛЬКО Uint8Array (transport/crypto state)
+      // MTKruto НЕ использует Storage для бизнес-данных
+      if (!(value instanceof Uint8Array)) {
+        // Игнорируем не-Uint8Array значения (MTKruto не должен их сохранять)
+        return;
+      }
+
       let session = await this.sessionRepository.findOne({
         where: {
-          userId: this.userId,
-          apiId: this.apiId,
+          id: this.sessionId, // КРИТИЧНО: ищем по sessionId, не userId
         },
       });
 
@@ -136,26 +138,9 @@ class DatabaseStorage implements Partial<Storage> {
 
       const lastKey = String(key[key.length - 1]);
       
-      // Обрабатываем разные типы данных, которые может сохранять MTKruto
-      if (value instanceof Uint8Array) {
-        // Бинарные данные (auth_key, server_salt и т.д.) - сохраняем как base64
-        current[lastKey] = Buffer.from(value).toString('base64');
-      } else if (typeof value === 'bigint') {
-        // BigInt нельзя сериализовать в JSON напрямую - конвертируем в строку
-        current[lastKey] = value.toString();
-      } else if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean' || value === null) {
-        // Примитивные типы - сохраняем как есть
-        current[lastKey] = value;
-      } else {
-        // Для других типов пытаемся сериализовать
-        // Если это объект, который можно сериализовать - сохраняем как JSON
-        try {
-          current[lastKey] = JSON.parse(JSON.stringify(value));
-        } catch {
-          // Если не удалось сериализовать - конвертируем в строку
-          current[lastKey] = String(value);
-        }
-      }
+      // КРИТИЧНО: Сохраняем ТОЛЬКО Uint8Array как base64
+      // MTKruto использует Storage только для transport/crypto state (auth_key, server_salt, etc.)
+      current[lastKey] = Buffer.from(value).toString('base64');
 
       const encrypted = this.encryptionService.encrypt(JSON.stringify(data));
 
@@ -168,16 +153,9 @@ class DatabaseStorage implements Partial<Storage> {
         }
         await this.sessionRepository.save(session);
       } else {
-        // Создаем новую сессию, если её еще нет
-        session = this.sessionRepository.create({
-          userId: this.userId,
-          apiId: this.apiId,
-          apiHash: this.apiHash,
-          encryptedSessionData: encrypted,
-          isActive: true,
-          lastUsedAt: new Date(),
-        });
-        await this.sessionRepository.save(session);
+        // КРИТИЧНО: Не создаем сессию в set() - она должна быть создана заранее
+        // set() только обновляет данные существующей сессии
+        throw new Error(`Session ${this.sessionId} not found. Session must be created before using DatabaseStorage.`);
       }
     } catch (error: any) {
       throw new Error(`Failed to save session data: ${error.message}`);
@@ -188,8 +166,7 @@ class DatabaseStorage implements Partial<Storage> {
     try {
       const session = await this.sessionRepository.findOne({
         where: {
-          userId: this.userId,
-          apiId: this.apiId,
+          id: this.sessionId, // КРИТИЧНО: ищем по sessionId, не userId
         },
       });
 
@@ -231,9 +208,7 @@ class DatabaseStorage implements Partial<Storage> {
     try {
       const session = await this.sessionRepository.findOne({
         where: {
-          userId: this.userId,
-          apiId: this.apiId,
-          isActive: true,
+          id: this.sessionId, // КРИТИЧНО: ищем по sessionId, не userId
         },
       });
 
@@ -287,7 +262,8 @@ class DatabaseStorage implements Partial<Storage> {
               const value = obj[key];
               const fullPath = [...currentPath, key] as readonly StorageKeyPart[];
               
-              // Обрабатываем разные типы данных
+              // КРИТИЧНО: getMany() возвращает ТОЛЬКО Uint8Array (бинарные данные)
+              // MTKruto ожидает Uint8Array для всех ключей из Storage
               if (typeof value === 'string') {
                 // Проверяем, является ли это base64 строкой (бинарные данные)
                 if (value.length > 20 && /^[A-Za-z0-9+/=]+$/.test(value)) {
@@ -296,15 +272,10 @@ class DatabaseStorage implements Partial<Storage> {
                     const uint8Array = new Uint8Array(decoded) as T;
                     results.push([fullPath, uint8Array]);
                   } catch {
-                    // Если не base64, пропускаем
+                    // Если не base64, пропускаем (не бинарные данные)
                   }
-                } else {
-                  // Обычная строка или BigInt сохраненный как строка - возвращаем как есть
-                  results.push([fullPath, value as T]);
                 }
-              } else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
-                // Примитивные типы - возвращаем как есть
-                results.push([fullPath, value as T]);
+                // Короткие строки или не-base64 - пропускаем (не бинарные данные)
               } else if (Array.isArray(value)) {
                 // Массив чисел (старый формат) - конвертируем в Uint8Array
                 const uint8Array = new Uint8Array(value) as T;
@@ -312,15 +283,13 @@ class DatabaseStorage implements Partial<Storage> {
               } else if (value instanceof Uint8Array) {
                 // Уже Uint8Array - возвращаем как есть
                 results.push([fullPath, value as T]);
-              } else if (typeof value === 'object') {
-                // Объекты - рекурсивно обрабатываем
+              } else if (typeof value === 'object' && value !== null) {
+                // Объекты - рекурсивно обрабатываем (может содержать вложенные бинарные данные)
                 const nestedResults = findKeys(value, [...fullPath] as StorageKeyPart[]);
                 results.push(...nestedResults);
-              } else if (Array.isArray(value)) {
-                // Старый формат (массив чисел) - конвертируем в Uint8Array
-                const uint8Array = new Uint8Array(value) as T;
-                results.push([fullPath, uint8Array]);
               }
+              // Все остальные типы (number, boolean, null) - пропускаем
+              // MTKruto не использует Storage для бизнес-данных
             }
           }
         }
@@ -370,10 +339,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
   /**
    * @deprecated Используйте getClient(sessionId) вместо этого метода
-   * Получает клиент по userId (для обратной совместимости)
-   * ВАЖНО: Этот метод будет удален в будущем, используйте getClient(sessionId)
+   * Этот метод нарушает принцип "один client = одна sessionId"
+   * и может вернуть не ту сессию при наличии нескольких активных сессий
    */
   async getClientByUserId(userId: string): Promise<Client | null> {
+    throw new Error('getClientByUserId is deprecated. Use getClient(sessionId) instead. This method violates the "one client = one sessionId" principle.');
     try {
       this.logger.log(`Looking for active Telegram session for userId: ${userId}`);
 
@@ -465,14 +435,12 @@ export class TelegramUserClientService implements OnModuleDestroy {
       
       this.logger.log(`Session ${session.id} found with data, creating storage and client...`);
 
-      // Создаем Storage адаптер с userId из сессии
+      // КРИТИЧНО: Создаем Storage адаптер привязанный к sessionId
       // Storage будет загружать данные из БД при вызове get/getMany
       const storage = new DatabaseStorage(
         this.sessionRepository,
         this.encryptionService,
-        session.userId, // Используем userId из сессии для DatabaseStorage
-        apiId,
-        apiHash,
+        session.id, // КРИТИЧНО: передаем sessionId, не userId
       );
 
       // Инициализируем storage (если требуется)
@@ -584,13 +552,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
       this.logger.log(`Reusing existing initializing session ${session.id} for user ${userId}`);
     }
 
-    // Создаем DatabaseStorage для этой сессии
+    // КРИТИЧНО: Создаем DatabaseStorage для этой сессии (привязан к sessionId)
     const storage = new DatabaseStorage(
       this.sessionRepository,
       this.encryptionService,
-      userId,
-      apiId,
-      apiHash,
+      session.id, // КРИТИЧНО: передаем sessionId, не userId
     );
 
     // Инициализируем storage
@@ -935,13 +901,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
 
-      // Создаем Storage адаптер с userId из сессии
+      // КРИТИЧНО: Создаем Storage адаптер привязанный к sessionId
       const storage = new DatabaseStorage(
         this.sessionRepository,
         this.encryptionService,
-        session.userId,
-        apiId,
-        apiHash,
+        session.id, // КРИТИЧНО: передаем sessionId, не userId
       );
 
       // Инициализируем storage
