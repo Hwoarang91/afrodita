@@ -287,15 +287,35 @@ class DatabaseStorage implements Partial<Storage> {
               const value = obj[key];
               const fullPath = [...currentPath, key] as readonly StorageKeyPart[];
               
-              // Обрабатываем base64 строки (бинарные данные)
+              // Обрабатываем разные типы данных
               if (typeof value === 'string') {
-                try {
-                  const decoded = Buffer.from(value, 'base64');
-                  const uint8Array = new Uint8Array(decoded) as T;
-                  results.push([fullPath, uint8Array]);
-                } catch {
-                  // Если не base64, пропускаем
+                // Проверяем, является ли это base64 строкой (бинарные данные)
+                if (value.length > 20 && /^[A-Za-z0-9+/=]+$/.test(value)) {
+                  try {
+                    const decoded = Buffer.from(value, 'base64');
+                    const uint8Array = new Uint8Array(decoded) as T;
+                    results.push([fullPath, uint8Array]);
+                  } catch {
+                    // Если не base64, пропускаем
+                  }
+                } else {
+                  // Обычная строка или BigInt сохраненный как строка - возвращаем как есть
+                  results.push([fullPath, value as T]);
                 }
+              } else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+                // Примитивные типы - возвращаем как есть
+                results.push([fullPath, value as T]);
+              } else if (Array.isArray(value)) {
+                // Массив чисел (старый формат) - конвертируем в Uint8Array
+                const uint8Array = new Uint8Array(value) as T;
+                results.push([fullPath, uint8Array]);
+              } else if (value instanceof Uint8Array) {
+                // Уже Uint8Array - возвращаем как есть
+                results.push([fullPath, value as T]);
+              } else if (typeof value === 'object') {
+                // Объекты - рекурсивно обрабатываем
+                const nestedResults = findKeys(value, fullPath);
+                results.push(...nestedResults);
               } else if (Array.isArray(value)) {
                 // Старый формат (массив чисел) - конвертируем в Uint8Array
                 const uint8Array = new Uint8Array(value) as T;
