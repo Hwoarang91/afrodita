@@ -40,13 +40,20 @@ apiClient.interceptors.request.use((config) => {
   }
 
   // КРИТИЧНО: Удаляем userId из запросов к /auth/telegram/2fa/verify
-  // Это поле не должно быть в DTO
-  if (config.url?.includes('/auth/telegram/2fa/verify') && config.data) {
-    // Обрабатываем как объект
-    if (typeof config.data === 'object' && config.data !== null && !Array.isArray(config.data)) {
+  // Это поле не должно быть в DTO из-за forbidNonWhitelisted: true
+  const url = config.url || '';
+  const fullUrl = url.includes('/auth/telegram/2fa/verify') || 
+                  config.baseURL?.includes('/auth/telegram/2fa/verify') ||
+                  (config.baseURL + url).includes('/auth/telegram/2fa/verify');
+  
+  if (fullUrl && config.data) {
+    // Обрабатываем как объект (самый частый случай)
+    if (typeof config.data === 'object' && config.data !== null && !Array.isArray(config.data) && !(config.data instanceof FormData)) {
       if ('userId' in config.data) {
         const { userId, ...restData } = config.data;
-        console.warn('[API] Removed userId from 2FA verify request:', userId);
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[API Interceptor] Removed userId from 2FA verify request:', userId);
+        }
         config.data = restData;
       }
     }
@@ -54,9 +61,11 @@ apiClient.interceptors.request.use((config) => {
     else if (typeof config.data === 'string') {
       try {
         const parsed = JSON.parse(config.data);
-        if (parsed && typeof parsed === 'object' && 'userId' in parsed) {
+        if (parsed && typeof parsed === 'object' && parsed !== null && 'userId' in parsed) {
           const { userId, ...restData } = parsed;
-          console.warn('[API] Removed userId from 2FA verify request (string):', userId);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[API Interceptor] Removed userId from 2FA verify request (JSON string):', userId);
+          }
           config.data = JSON.stringify(restData);
         }
       } catch (e) {

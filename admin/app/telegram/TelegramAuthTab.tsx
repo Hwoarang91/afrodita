@@ -277,24 +277,26 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       }
 
       // КРИТИЧНО: Убеждаемся, что userId НЕ отправляется
-      // Создаем объект БЕЗ userId явно
-      const requestBody: {
-        phoneNumber: string;
-        password: string;
-        phoneCodeHash: string;
-      } = {
+      // Создаем объект БЕЗ userId явно - используем Object.assign для гарантии чистоты
+      const requestBody = Object.assign({}, {
         phoneNumber: phoneNumber.trim(),
         password: passwordToSend,
         phoneCodeHash,
-      };
+      });
       
-      // КРИТИЧНО: Удаляем userId если он каким-то образом попал в объект
-      delete (requestBody as any).userId;
+      // КРИТИЧНО: Удаляем userId если он каким-то образом попал в объект (двойная защита)
+      if ('userId' in requestBody) {
+        delete (requestBody as any).userId;
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[2FA] userId was present in requestBody and was removed');
+        }
+      }
       
       // Логируем для отладки (только в dev режиме)
       if (process.env.NODE_ENV === 'development') {
-        console.log('[2FA] Request body:', requestBody);
+        console.log('[2FA] Request body keys:', Object.keys(requestBody));
         console.log('[2FA] userId in body?', 'userId' in requestBody);
+        console.log('[2FA] Full body:', JSON.stringify(requestBody));
       }
       
       const response = await apiClient.post('/auth/telegram/2fa/verify', requestBody);
