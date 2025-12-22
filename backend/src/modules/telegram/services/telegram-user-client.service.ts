@@ -871,9 +871,14 @@ export class TelegramUserClientService implements OnModuleDestroy {
       }
 
       // Проверяем, что сессия имеет валидные данные
-      if (!session.encryptedSessionData || session.encryptedSessionData === '{}' || session.encryptedSessionData.trim() === '') {
-        this.logger.error(`Session ${sessionId} has empty or invalid encryptedSessionData`);
-        return null;
+      if (!this.isSessionDataValid(session.encryptedSessionData)) {
+        // NULL допустим только в статусе initializing
+        if (session.encryptedSessionData === null && session.status === 'initializing') {
+          this.logger.debug(`Session ${sessionId} has null encryptedSessionData (initializing) - will load from storage`);
+        } else {
+          this.logger.error(`Session ${sessionId} has empty or invalid encryptedSessionData`);
+          return null;
+        }
       }
 
       // КРИТИЧЕСКИ ВАЖНО: Используем sessionId для кеша, не userId
@@ -1034,6 +1039,40 @@ export class TelegramUserClientService implements OnModuleDestroy {
     }
 
     this.logger.log(`All other sessions deactivated for user ${userId}`);
+  }
+
+  /**
+   * Проверяет валидность данных сессии
+   * @param encryptedSessionData Зашифрованные данные сессии
+   * @returns true если данные валидны, false иначе
+   */
+  private isSessionDataValid(encryptedSessionData: string | null): boolean {
+    if (!encryptedSessionData) {
+      return false; // null допустим только в статусе initializing
+    }
+    
+    const trimmed = encryptedSessionData.trim();
+    if (trimmed === '' || trimmed === '{}') {
+      return false; // Пустые данные недопустимы
+    }
+    
+    try {
+      // Пытаемся расшифровать и проверить структуру
+      const decrypted = this.encryptionService.decrypt(encryptedSessionData);
+      if (!decrypted || decrypted.trim() === '' || decrypted === '{}') {
+        return false;
+      }
+      
+      const data = JSON.parse(decrypted);
+      
+      // Проверяем наличие критических ключей
+      const hasAuthKey = data.auth_key && typeof data.auth_key === 'string' && data.auth_key.length > 0;
+      const hasDc = data.dc !== undefined;
+      
+      return hasAuthKey && hasDc;
+    } catch {
+      return false; // Ошибка расшифровки/парсинга = невалидные данные
+    }
   }
 
   /**
