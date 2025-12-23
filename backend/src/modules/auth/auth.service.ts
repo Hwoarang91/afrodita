@@ -1,4 +1,7 @@
-import { Injectable, UnauthorizedException, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import { mapTelegramErrorToResponse } from '../telegram/utils/telegram-error-mapper';
+import { buildErrorResponse } from '../../common/utils/error-response.builder';
+import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -494,49 +497,10 @@ export class AuthService {
       this.logger.error(`Error requesting phone code: ${error.message}`, error.stack);
 
       // Обработка специфичных ошибок Telegram
-      if (error.message?.includes('FLOOD_WAIT')) {
-        // Извлекаем время ожидания из ошибки
-        // FLOOD_WAIT может возвращать время в секундах или миллисекундах
-        // Обычно если значение > 1000, это миллисекунды, иначе секунды
-        const waitMatch = error.message.match(/FLOOD_WAIT_(\d+)/);
-        if (waitMatch) {
-          const waitValue = parseInt(waitMatch[1], 10);
-          // Если значение больше 1000, это скорее всего миллисекунды
-          // Если значение меньше 1000, это скорее всего секунды
-          const waitSeconds = waitValue > 1000 ? Math.ceil(waitValue / 1000) : waitValue;
-          const waitMinutes = Math.floor(waitSeconds / 60);
-          const waitSecondsRemainder = waitSeconds % 60;
-          
-          let message = `Too many requests. Please try again in `;
-          if (waitMinutes > 0) {
-            message += `${waitMinutes} minute(s)`;
-            if (waitSecondsRemainder > 0) {
-              message += ` and ${waitSecondsRemainder} second(s)`;
-            }
-          } else {
-            message += `${waitSeconds} second(s)`;
-          }
-          message += '.';
-          
-          this.logger.warn(`FLOOD_WAIT detected: ${waitValue} (interpreted as ${waitSeconds} seconds)`);
-          throw new UnauthorizedException(message);
-        } else {
-          throw new UnauthorizedException('Too many requests. Please try again later.');
-        }
-      }
-      if (error.message?.includes('FLOOD')) {
-        throw new UnauthorizedException('Too many requests. Please try again later.');
-      }
-      if (error.message?.includes('PHONE_NUMBER_INVALID')) {
-        throw new UnauthorizedException('Invalid phone number');
-      }
-      if (error.message?.includes('PHONE_NUMBER_BANNED')) {
-        throw new UnauthorizedException('Phone number is banned');
-      }
-
-      // Логируем полную ошибку для отладки
-      this.logger.error(`Full error details:`, JSON.stringify(error, null, 2));
-      throw new UnauthorizedException(`Failed to send verification code: ${error.message || 'Unknown error'}`);
+      // КРИТИЧНО: Все Telegram ошибки обрабатываются через mapper
+      // НИКАКИХ error.message.includes() - это нарушает архитектурные принципы
+      const errorResponse = mapTelegramErrorToResponse(error);
+      throw new HttpException(errorResponse, errorResponse.statusCode);
     }
   }
 
@@ -591,15 +555,18 @@ export class AuthService {
           phone_code: code,
         });
       } catch (error: any) {
-        // Обработка ошибок
-        if (error.message?.includes('PHONE_CODE_INVALID')) {
-          throw new UnauthorizedException('Invalid verification code');
-        }
-        if (error.message?.includes('PHONE_CODE_EXPIRED')) {
-          this.phoneCodeHashStore.delete(normalizedPhone);
-          throw new UnauthorizedException('Verification code expired');
-        }
-        if (error.message?.includes('SESSION_PASSWORD_NEEDED')) {
+        // КРИТИЧНО: Все Telegram ошибки обрабатываются через mapper
+        // НИКАКИХ error.message.includes() - это нарушает архитектурные принципы
+        
+        // Специальная обработка для SESSION_PASSWORD_NEEDED (это не ошибка, а требование 2FA)
+        // Проверяем через mapper
+        const errorResponse = mapTelegramErrorToResponse(error);
+        
+        // Если это SESSION_PASSWORD_NEEDED (маппится в INVALID_2FA_PASSWORD, но это не ошибка в данном контексте),
+        // обрабатываем как требование 2FA (не ошибка)
+        // Проверяем исходное сообщение об ошибке
+        const errorMessage = error?.errorMessage || error?.message || String(error || '').trim();
+        if (errorMessage.toUpperCase().includes('SESSION_PASSWORD_NEEDED')) {
           // Требуется 2FA - получаем подсказку пароля и сохраняем клиент
           this.logger.debug(`2FA required for phone: ${phoneNumber}, saving phoneCodeHash: ${phoneCodeHash}`);
           
@@ -1060,15 +1027,29 @@ export class AuthService {
             return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent);
           }
         }
-        throw new BadRequestException('2FA session not found. Please restart the authentication process.');
+          throw new HttpException(
+            buildErrorResponse(
+              HttpStatus.BAD_REQUEST,
+              ErrorCode.SESSION_NOT_FOUND,
+              '2FA session not found. Please restart the authentication process.',
+            ),
+            HttpStatus.BAD_REQUEST,
+          );
       }
       
       this.logger.log(`[2FA] ✅ twoFactorStore entry found for normalized phone: ${normalizedPhone}`);
       
-      if (stored.phoneCodeHash !== phoneCodeHash) {
-        this.logger.error(`Phone code hash mismatch for phone: ${normalizedPhone}. Expected: ${stored.phoneCodeHash}, Received: ${phoneCodeHash}`);
-        throw new UnauthorizedException('Invalid phone code hash. Please restart the authorization process.');
-      }
+        if (stored.phoneCodeHash !== phoneCodeHash) {
+          this.logger.error(`Phone code hash mismatch for phone: ${normalizedPhone}. Expected: ${stored.phoneCodeHash}, Received: ${phoneCodeHash}`);
+          throw new HttpException(
+            buildErrorResponse(
+              HttpStatus.UNAUTHORIZED,
+              ErrorCode.SESSION_INVALID,
+              'Invalid phone code hash. Please restart the authorization process.',
+            ),
+            HttpStatus.UNAUTHORIZED,
+          );
+        }
       
       return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent);
     } catch (error: any) {
@@ -1087,13 +1068,20 @@ export class AuthService {
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
 
-      if (stored.expiresAt < new Date()) {
-        this.twoFactorStore.delete(normalizedPhone);
-        stored.client.disconnect().catch((err) => {
-          this.logger.error(`Error disconnecting client: ${err.message}`);
-        });
-        throw new UnauthorizedException('2FA session expired');
-      }
+        if (stored.expiresAt < new Date()) {
+          this.twoFactorStore.delete(normalizedPhone);
+          stored.client.disconnect().catch((err) => {
+            this.logger.error(`Error disconnecting client: ${err.message}`);
+          });
+          throw new HttpException(
+            buildErrorResponse(
+              HttpStatus.UNAUTHORIZED,
+              ErrorCode.SESSION_INVALID,
+              '2FA session expired',
+            ),
+            HttpStatus.UNAUTHORIZED,
+          );
+        }
 
       const client = stored.client;
 
@@ -1145,7 +1133,14 @@ export class AuthService {
       // Вычисляем SRP проверку
       const srpB = passwordResult.current_algo;
       if (srpB._ !== 'passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow') {
-        throw new UnauthorizedException('Unsupported password algorithm');
+        throw new HttpException(
+          buildErrorResponse(
+            HttpStatus.UNAUTHORIZED,
+            ErrorCode.INTERNAL_SERVER_ERROR,
+            'Unsupported password algorithm',
+          ),
+          HttpStatus.UNAUTHORIZED,
+        );
       }
 
       const srpId = passwordResult.srp_id;
@@ -1213,11 +1208,25 @@ export class AuthService {
           }, 2),
         };
         this.logger.error('Missing srp_B in password result', debugInfo);
-        throw new UnauthorizedException('Failed to get SRP parameters: missing srp_B');
+        throw new HttpException(
+          buildErrorResponse(
+            HttpStatus.UNAUTHORIZED,
+            ErrorCode.INTERNAL_SERVER_ERROR,
+            'Failed to get SRP parameters: missing srp_B',
+          ),
+          HttpStatus.UNAUTHORIZED,
+        );
       }
       if (!g || !p || !salt1 || !salt2) {
         this.logger.error('Missing SRP parameters', { g, p, salt1: !!salt1, salt2: !!salt2 });
-        throw new UnauthorizedException('Failed to get SRP parameters: missing required fields');
+        throw new HttpException(
+          buildErrorResponse(
+            HttpStatus.UNAUTHORIZED,
+            ErrorCode.INTERNAL_SERVER_ERROR,
+            'Failed to get SRP parameters: missing required fields',
+          ),
+          HttpStatus.UNAUTHORIZED,
+        );
       }
 
       // Вычисляем SRP параметры по алгоритму MTKruto (не используем tssrp6a)
@@ -1504,15 +1513,10 @@ export class AuthService {
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
 
-      // Обработка специфичных ошибок
-      if (error.message?.includes('PASSWORD_HASH_INVALID')) {
-        throw new UnauthorizedException('Invalid 2FA password');
-      }
-      if (error.message?.includes('PASSWORD_EMPTY')) {
-        throw new UnauthorizedException('Password is required');
-      }
-
-      throw new UnauthorizedException('2FA verification failed');
+      // КРИТИЧНО: Все Telegram ошибки обрабатываются через mapper
+      // НИКАКИХ error.message.includes() - это нарушает архитектурные принципы
+      const errorResponse = mapTelegramErrorToResponse(error);
+      throw new HttpException(errorResponse, errorResponse.statusCode);
     }
   }
 
