@@ -577,12 +577,9 @@ export class AuthService {
           this.phoneCodeHashStore.delete(normalizedPhone);
         }
         
-        throw new HttpException(errorResponse, errorResponse.statusCode);
-      }
-      
-      // Проверяем, требуется ли 2FA
-      if (errorResponse.errorCode === ErrorCode.SESSION_PASSWORD_NEEDED || 
-          (error.message && typeof error.message === 'string' && error.message.includes('SESSION_PASSWORD_NEEDED'))) {
+        // Проверяем, требуется ли 2FA
+        if (errorResponse.errorCode === ErrorCode.INVALID_2FA_PASSWORD || 
+            (error.message && typeof error.message === 'string' && error.message.includes('SESSION_PASSWORD_NEEDED'))) {
           // Требуется 2FA - получаем подсказку пароля и сохраняем клиент
           this.logger.debug(`2FA required for phone: ${phoneNumber}, saving phoneCodeHash: ${phoneCodeHash}`);
           
@@ -600,19 +597,16 @@ export class AuthService {
             this.logger.warn(`Failed to get password hint: ${hintError.message}`);
           }
           
-          // Нормализуем номер телефона для хранения
-          const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
-          
           // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore по нормализованному номеру
           const phoneCodeStored = this.phoneCodeHashStore.get(normalizedPhone);
           if (!phoneCodeStored || !phoneCodeStored.sessionId) {
             // КРИТИЧНО: Используем HttpException с ErrorResponse вместо throw new Error
-            const errorResponse = buildErrorResponse(
+            const sessionErrorResponse = buildErrorResponse(
               HttpStatus.BAD_REQUEST,
               ErrorCode.SESSION_NOT_FOUND,
               'Session ID not found in phoneCodeHashStore for 2FA',
             );
-            throw new HttpException(errorResponse, HttpStatus.BAD_REQUEST);
+            throw new HttpException(sessionErrorResponse, HttpStatus.BAD_REQUEST);
           }
           
           this.twoFactorStore.set(normalizedPhone, {
@@ -630,8 +624,7 @@ export class AuthService {
             passwordHint,
           };
         }
-        // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо прямого throw error
-        const errorResponse = mapTelegramErrorToResponse(error);
+        
         throw new HttpException(errorResponse, errorResponse.statusCode);
       }
 
