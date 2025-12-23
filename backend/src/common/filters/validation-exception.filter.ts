@@ -8,6 +8,7 @@ import {
 import { Response } from 'express';
 import { buildValidationErrorResponse } from '../utils/error-response.builder';
 import { maskSensitiveData } from '../utils/sensitive-data-masker';
+import { ErrorResponse } from '../interfaces/error-response.interface';
 
 /**
  * Exception filter для обработки ошибок валидации
@@ -76,7 +77,7 @@ export class ValidationExceptionFilter implements ExceptionFilter {
 
       // КРИТИЧНО: Создаем новый объект для защиты от прототипного загрязнения
       // НИКОГДА не возвращаем exceptionResponse напрямую
-      const safeResponse = {
+      const safeResponse: ErrorResponse = {
         success: false,
         statusCode: (exceptionResponse as any).statusCode || status,
         errorCode: (exceptionResponse as any).errorCode,
