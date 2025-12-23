@@ -7,7 +7,8 @@ import { WorkSchedule } from '../../entities/work-schedule.entity';
 import { BlockInterval } from '../../entities/block-interval.entity';
 import { Appointment } from '../../entities/appointment.entity';
 import { CacheService } from '../../common/cache/cache.service';
-import { buildErrorResponse, ErrorCode } from '../../common/interfaces/error-response.interface';
+import { ErrorCode } from '../../common/interfaces/error-response.interface';
+import { buildErrorResponse } from '../../common/utils/error-response.builder';
 
 @Injectable()
 export class MastersService {
