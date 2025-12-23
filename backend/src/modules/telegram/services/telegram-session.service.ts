@@ -1,145 +1,123 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TelegramUserClientService } from './telegram-user-client.service';
-import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
+import { SessionEncryptionService } from './session-encryption.service';
+
+export interface TelegramSessionPayload {
+  userId: string;
+  sessionId: string; // ID сессии из БД
+  sessionData: any; // MTProto session data (опционально, для совместимости)
+  phoneNumber?: string;
+  createdAt: number;
+}
+
+const SESSION_KEY = 'telegramSession';
 
 /**
  * Единый сервис для управления Telegram сессиями
  * 
- * Является центральной точкой для:
- * - Сохранения сессий после авторизации
- * - Загрузки активных сессий
- * - Очистки сессий
- * - Интеграции с guard и контроллерами
+ * Является ЕДИНСТВЕННЫМ владельцем сессии в request.session
+ * 
+ * Архитектурные гарантии:
+ * - НИКТО кроме этого сервиса не трогает request.session.telegramSession
+ * - Guard не знает про encryption
+ * - Controller не знает, где хранится session
+ * - Один ключ: request.session.telegramSession
  * 
  * Внутри использует:
- * - TelegramUserClientService для работы с БД
- * - SessionEncryptionService для шифрования (через TelegramUserClientService)
+ * - SessionEncryptionService для шифрования/дешифрования
+ * - request.session для хранения (Express session)
  */
 @Injectable()
 export class TelegramSessionService {
   private readonly logger = new Logger(TelegramSessionService.name);
 
-  constructor(private readonly telegramUserClientService: TelegramUserClientService) {}
+  constructor(
+    private readonly encryption: SessionEncryptionService,
+  ) {}
 
   /**
-   * Сохраняет Telegram сессию после успешной авторизации
+   * Сохраняет Telegram сессию в request.session
    * 
-   * @param userId ID пользователя
-   * @param client MTKruto Client (уже авторизованный)
-   * @param sessionId ID сессии
-   * @param phoneNumber Номер телефона
-   * @param ipAddress IP адрес (опционально)
-   * @param userAgent User Agent (опционально)
+   * @param request Express request объект
+   * @param payload Данные сессии для сохранения
    */
-  async save(
-    userId: string,
-    client: any, // Client from @mtkruto/node
-    sessionId: string,
-    phoneNumber: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
-    this.logger.log(`[TELEGRAM] session save requested for user ${userId}, sessionId: ${sessionId}, phone: ${phoneNumber}`);
-    
+  save(request: any, payload: TelegramSessionPayload): void {
     try {
-      await this.telegramUserClientService.saveSession(
-        userId,
-        client,
-        sessionId,
-        phoneNumber,
-        ipAddress,
-        userAgent,
+      // КРИТИЧНО: Инициализируем request.session если его нет
+      if (!request.session) {
+        this.logger.warn('[TELEGRAM] ⚠️ request.session is not available. Session middleware may not be configured.');
+        return;
+      }
+
+      const encrypted = this.encryption.encrypt(JSON.stringify(payload));
+
+      request.session[SESSION_KEY] = encrypted;
+
+      this.logger.log(
+        `[TELEGRAM] ✅ Session saved (userId=${payload.userId}, sessionId=${payload.sessionId})`,
       );
-      
-      this.logger.log(`[TELEGRAM] ✅ session saved successfully for user ${userId}, sessionId: ${sessionId}`);
     } catch (error: any) {
-      this.logger.error(`[TELEGRAM] ❌ session save failed for user ${userId}, sessionId: ${sessionId}: ${error.message}`, error.stack);
+      this.logger.error(`[TELEGRAM] ❌ Failed to save session: ${error.message}`, error.stack);
       throw error;
     }
   }
 
   /**
-   * Загружает активную Telegram сессию для пользователя
+   * Загружает Telegram сессию из request.session
    * 
-   * @param userId ID пользователя
-   * @returns Активная сессия или null если не найдена
+   * @param request Express request объект
+   * @returns Расшифрованные данные сессии или null если не найдена
    */
-  async load(userId: string): Promise<TelegramUserSession | null> {
-    this.logger.debug(`[TELEGRAM] session load requested for user ${userId}`);
-    
+  load(request: any): TelegramSessionPayload | null {
     try {
-      const sessions = await this.telegramUserClientService.getUserSessions(userId);
-      
-      // Ищем активную сессию (status === 'active' && isActive === true)
-      const activeSession = sessions.find(s => s.status === 'active' && s.isActive);
-      
-      if (activeSession) {
-        this.logger.log(`[TELEGRAM] ✅ session loaded for user ${userId}, sessionId: ${activeSession.id}`);
-        return activeSession;
-      } else {
-        this.logger.warn(`[TELEGRAM] ⚠️ session missing for user ${userId}. Всего сессий: ${sessions.length}`);
-        if (sessions.length > 0) {
-          const statuses = sessions.map(s => `${s.id}: ${s.status}/${s.isActive}`).join(', ');
-          this.logger.debug(`[TELEGRAM] Статусы сессий: ${statuses}`);
-        }
+      if (!request.session) {
+        this.logger.warn('[TELEGRAM] ⚠️ request.session is not available');
         return null;
       }
+
+      const encrypted = request.session?.[SESSION_KEY];
+
+      if (!encrypted) {
+        this.logger.warn('[TELEGRAM] ❌ Session not found in request.session');
+        return null;
+      }
+
+      const decryptedString = this.encryption.decrypt(encrypted);
+      const decrypted = JSON.parse(decryptedString) as TelegramSessionPayload;
+
+      this.logger.log(
+        `[TELEGRAM] ✅ Session loaded (userId=${decrypted.userId}, sessionId=${decrypted.sessionId})`,
+      );
+
+      return decrypted;
     } catch (error: any) {
-      this.logger.error(`[TELEGRAM] ❌ session load failed for user ${userId}: ${error.message}`, error.stack);
-      throw error;
+      this.logger.error(`[TELEGRAM] ❌ Failed to decrypt session: ${error.message}`, error.stack);
+      return null;
     }
   }
 
   /**
-   * Очищает (деактивирует) Telegram сессию
+   * Очищает Telegram сессию из request.session
    * 
-   * @param userId ID пользователя
-   * @param sessionId ID сессии для деактивации (опционально, если не указан - деактивирует все сессии пользователя)
+   * @param request Express request объект
    */
-  async clear(userId: string, sessionId?: string): Promise<void> {
-    this.logger.log(`[TELEGRAM] session clear requested for user ${userId}, sessionId: ${sessionId || 'all'}`);
-    
+  clear(request: any): void {
     try {
-      if (sessionId) {
-        // Деактивируем конкретную сессию
-        await this.telegramUserClientService.deactivateSession(userId, sessionId, false);
-        this.logger.log(`[TELEGRAM] ✅ session cleared for user ${userId}, sessionId: ${sessionId}`);
-      } else {
-        // Деактивируем все сессии пользователя
-        const sessions = await this.telegramUserClientService.getUserSessions(userId);
-        for (const session of sessions) {
-          if (session.isActive) {
-            await this.telegramUserClientService.deactivateSession(userId, session.id, false);
-          }
-        }
-        this.logger.log(`[TELEGRAM] ✅ all sessions cleared for user ${userId}`);
+      if (request.session && request.session[SESSION_KEY]) {
+        delete request.session[SESSION_KEY];
+        this.logger.warn('[TELEGRAM] 🧹 Session cleared');
       }
     } catch (error: any) {
-      this.logger.error(`[TELEGRAM] ❌ session clear failed for user ${userId}, sessionId: ${sessionId || 'all'}: ${error.message}`, error.stack);
-      throw error;
+      this.logger.error(`[TELEGRAM] ❌ Failed to clear session: ${error.message}`, error.stack);
     }
   }
 
   /**
-   * Проверяет наличие активной сессии для пользователя
+   * Проверяет наличие сессии в request.session
    * 
-   * @param userId ID пользователя
-   * @returns true если есть активная сессия, false иначе
+   * @param request Express request объект
+   * @returns true если сессия существует, false иначе
    */
-  async hasActiveSession(userId: string): Promise<boolean> {
-    const session = await this.load(userId);
-    return session !== null;
-  }
-
-  /**
-   * Получает ID активной сессии для пользователя
-   * 
-   * @param userId ID пользователя
-   * @returns ID активной сессии или null если не найдена
-   */
-  async getActiveSessionId(userId: string): Promise<string | null> {
-    const session = await this.load(userId);
-    return session?.id || null;
+  has(request: any): boolean {
+    return !!(request.session?.[SESSION_KEY]);
   }
 }
-

@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { JwtAuthService } from './services/jwt.service';
 import { TelegramUserClientService } from '../telegram/services/telegram-user-client.service';
+import { TelegramSessionService } from '../telegram/services/telegram-session.service';
 import { Client } from '@mtkruto/node';
 import { validate, parse } from '@tma.js/init-data-node';
 import { v4 as uuidv4 } from 'uuid';
@@ -84,6 +85,7 @@ export class AuthService {
     private usersService: UsersService,
     private jwtAuthService: JwtAuthService,
     private telegramUserClientService: TelegramUserClientService,
+    private telegramSessionService: TelegramSessionService,
   ) {}
 
   async validateEmailPassword(email: string, password: string): Promise<User> {
@@ -1096,7 +1098,7 @@ export class AuthService {
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
       
-      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent);
+      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent, request);
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
       
@@ -1122,6 +1124,7 @@ export class AuthService {
     stored: { client: Client; sessionId: string; phoneCodeHash: string; expiresAt: Date; passwordHint?: string },
     ipAddress?: string,
     userAgent?: string,
+    request?: any, // Express request для сохранения сессии в request.session
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
 
@@ -1557,7 +1560,7 @@ export class AuthService {
         await this.telegramUserClientService.updateSession(session);
       }
 
-      // Сохраняем сессию MTProto для пользователя, найденного/созданного по телефону
+      // Сохраняем сессию MTProto в БД
       this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}), sessionId: ${stored.sessionId}`);
       await this.telegramUserClientService.saveSession(
         user.id,
@@ -1567,6 +1570,18 @@ export class AuthService {
         ipAddress,
         userAgent,
       );
+
+      // КРИТИЧНО: Также сохраняем сессию в request.session через TelegramSessionService
+      // Это нужно для guard который проверяет request.session.telegramSession
+      if (request) {
+        this.telegramSessionService.save(request, {
+          userId: user.id,
+          sessionId: stored.sessionId,
+          phoneNumber: normalizedPhone,
+          sessionData: null, // MTProto данные уже в БД через DatabaseStorage
+          createdAt: Date.now(),
+        });
+      }
 
       // Удаляем временные данные
       this.twoFactorStore.delete(normalizedPhone);

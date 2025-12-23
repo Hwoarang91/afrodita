@@ -4,13 +4,10 @@ import { TelegramSessionService } from '../services/telegram-session.service';
 /**
  * Guard для проверки наличия активной Telegram сессии
  * 
- * Проверяет:
- * 1. Пользователь авторизован (req.user существует)
- * 2. У пользователя есть активная Telegram сессия (status === 'active' && isActive === true)
+ * Проверяет наличие сессии в request.session через TelegramSessionService
  * 
- * Если хотя бы одно условие не выполнено - выбрасывает UnauthorizedException
- * 
- * Использует TelegramSessionService как единую точку доступа к сессиям
+ * КРИТИЧНО: Использует TelegramSessionService.load(request) для расшифровки сессии из request.session
+ * НЕ обращается напрямую к request.session.telegramSession
  */
 @Injectable()
 export class TelegramSessionGuard implements CanActivate {
@@ -18,48 +15,27 @@ export class TelegramSessionGuard implements CanActivate {
 
   constructor(private readonly telegramSessionService: TelegramSessionService) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
-    
-    // КРИТИЧНО: Проверяем что пользователь авторизован (JWT)
-    if (!request.user?.sub) {
-      this.logger.warn('TelegramSessionGuard: Пользователь не авторизован (нет req.user.sub)');
-      throw new UnauthorizedException('Authentication required. Please log in first.');
-    }
 
-    const userId = request.user.sub;
-    this.logger.debug(`TelegramSessionGuard: Проверка активной Telegram сессии для пользователя ${userId}`);
+    // КРИТИЧНО: Используем TelegramSessionService для загрузки сессии из request.session
+    // Сервис сам расшифрует данные из request.session.telegramSession
+    const session = this.telegramSessionService.load(request);
 
-    try {
-      // КРИТИЧНО: Используем TelegramSessionService как единую точку доступа
-      const activeSession = await this.telegramSessionService.load(userId);
-      
-      if (!activeSession) {
-        this.logger.warn(`TelegramSessionGuard: У пользователя ${userId} нет активной Telegram сессии`);
-        throw new UnauthorizedException(
-          'No active Telegram session found. Please authorize via phone or QR code.',
-        );
-      }
-
-      this.logger.debug(`TelegramSessionGuard: ✅ Активная сессия найдена: ${activeSession.id} для пользователя ${userId}`);
-      
-      // Сохраняем информацию о сессии в request для использования в контроллере
-      request.telegramSession = activeSession;
-      request.telegramSessionId = activeSession.id;
-      
-      return true;
-    } catch (error: any) {
-      // Если это уже UnauthorizedException - пробрасываем как есть
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      
-      // Для остальных ошибок логируем и выбрасываем UnauthorizedException
-      this.logger.error(`TelegramSessionGuard: Ошибка при проверке сессии для пользователя ${userId}: ${error.message}`, error.stack);
+    if (!session) {
+      this.logger.warn('TelegramSessionGuard: No active Telegram session found in request.session');
       throw new UnauthorizedException(
-        'Failed to verify Telegram session. Please try again or re-authorize.',
+        'No active Telegram session found. Please authorize via phone or QR code.',
       );
     }
+
+    // Кладём расшифрованную сессию в request для использования в контроллерах
+    request.telegramSession = session;
+    request.telegramSessionId = session.sessionId;
+
+    this.logger.debug(`TelegramSessionGuard: ✅ Session validated for userId=${session.userId}, sessionId=${session.sessionId}`);
+
+    return true;
   }
 }
 

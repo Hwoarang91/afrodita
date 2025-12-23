@@ -485,12 +485,14 @@ export class AuthController {
     this.logger.log(`[Phone Verify] Полученные данные: phoneNumber=${dto?.phoneNumber || 'не указан'}, code=${dto?.code ? '***' : 'не указан'}, phoneCodeHash=${dto?.phoneCodeHash ? dto.phoneCodeHash.substring(0, 20) + '...' : 'не указан'}`);
     try {
       // Сессия сохраняется для пользователя, найденного/созданного по телефону
+      // КРИТИЧНО: Передаем req для сохранения сессии в request.session
       const result = await this.authService.verifyPhoneCode(
         dto.phoneNumber,
         dto.code,
         dto.phoneCodeHash,
         req.ip,
         req.get('user-agent'),
+        req, // Передаем request для сохранения сессии в request.session
       );
 
       if (result.requires2FA) {
@@ -622,12 +624,14 @@ export class AuthController {
     this.logger.log('[2FA] verify2FA called');
 
     // Сессия сохраняется для пользователя, найденного/созданного по телефону
+    // КРИТИЧНО: Передаем req для сохранения сессии в request.session
     const result = await this.authService.verify2FAPassword(
       dto.phoneNumber,
       dto.password,
       dto.phoneCodeHash,
       req.ip,
       req.get('user-agent'),
+      req, // Передаем request для сохранения сессии в request.session
     );
 
     // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде

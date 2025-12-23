@@ -90,6 +90,32 @@ docker rm n8n
 
 ### Изменения
 
+✅ **Исправлена проблема с SessionStateMachine при сохранении Telegram сессии (23.12.2025):**
+
+**Проблема:**
+- В методе `saveSession` статус сессии менялся напрямую с `initializing` на `active` без проверки через SessionStateMachine
+- Это могло привести к проблемам если сессия уже была в другом состоянии (invalid, revoked)
+- Отсутствовала валидация перехода состояний перед сохранением
+
+**Решение:**
+- Добавлен импорт `assertSessionTransition` из `session-state-machine`
+- Перед изменением статуса проверяется разрешенность перехода через `assertSessionTransition`
+- Если переход запрещен, сессия помечается как `invalid` с указанием причины
+- Добавлено логирование переходов состояний для диагностики
+
+**Измененные файлы:**
+- `backend/src/modules/telegram/services/telegram-user-client.service.ts` - добавлена проверка SessionStateMachine в `saveSession`
+
+**Проверенные компоненты системы сохранения Telegram сессий:**
+1. ✅ Сохранение сессии после 2FA - `saveSession` вызывается корректно
+2. ✅ SessionStateMachine - переход `initializing → active` проверяется
+3. ✅ Шифрование - используется `TELEGRAM_SESSION_ENCRYPTION_KEY` (нужно убедиться что ключ стабильный в продакшене)
+4. ✅ Хранилище - используется `DatabaseStorage` в БД, нет проблем с несколькими инстансами
+5. ✅ Поиск сессии - `getUserSessions` и `getActiveSessionId` работают корректно
+6. ✅ Client lifecycle - клиенты кешируются по `sessionId`, не пересоздаются
+
+### Изменения
+
 ✅ **Зафиксирован единый ErrorResponse contract и улучшена архитектура обработки ошибок (22.12.2025):**
 
 **Проблема:**
