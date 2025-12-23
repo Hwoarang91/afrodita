@@ -129,7 +129,7 @@ export class ErrorMetricsService implements OnModuleInit {
     // ============================================================================
     // Это означает регрессию в session storage или lifecycle
     if (errorCode === ErrorCode.AUTH_KEY_UNREGISTERED && metric.count > 0) {
-      this.logger.critical(
+      this.logger.error(
         `🔥 CRITICAL ALERT: Обнаружена ошибка AUTH_KEY_UNREGISTERED (count: ${metric.count})! ` +
         `Это может быть регрессия в session storage или lifecycle. ` +
         `Проверьте: DatabaseStorage, saveSession(), getClient().`,
