@@ -139,6 +139,12 @@ docker rm n8n
   - ErrorMetricsService для сбора статистики
   - Алерты для критичных ошибок (SESSION_INVALID, AUTH_KEY_UNREGISTERED)
   - Интегрирован в HttpExceptionFilter
+- Исправлены ошибки компиляции и запуска на сервере
+  - Добавлен AUTH_KEY_UNREGISTERED в ErrorCode enum
+  - Добавлен AUTH_KEY_UNREGISTERED в ERROR_HTTP_MAP
+  - Исправлены импорты ErrorMetricsService в main.ts и http-exception.filter.ts
+  - Добавлен TelegramModule в SchedulerModule для доступа к TelegramUserSessionRepository
+  - Cleanup job для сессий успешно зарегистрирован (7 cron задач)
 - Созданы константы `TELEGRAM_2FA_VERIFY_ALLOWED_KEYS` для allow-list подхода
 - Улучшен interceptor для агрессивной очистки payload (allow-list вместо delete)
 - Обновлен UI для работы с новым контрактом
