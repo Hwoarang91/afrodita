@@ -613,55 +613,40 @@ export class AuthController {
     @Request() req,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramAuthResponseDto> {
-    // КРИТИЧНО: Диагностическое логирование - если этот лог не появляется, значит запрос не дошел до контроллера (ValidationPipe отклонил)
-    this.logger.log(`[2FA] ✅ Controller entered - запрос дошел до контроллера`);
-    this.logger.log(`[2FA] Запрос получен. Raw body keys: ${Object.keys(dto || {}).join(', ')}`);
-    this.logger.log(`[2FA] phoneNumber: ${dto?.phoneNumber ? 'present' : 'missing'}, phoneCodeHash: ${dto?.phoneCodeHash ? 'present' : 'missing'}, password: ${dto?.password ? 'present' : 'missing'}`);
+    // КРИТИЧНО: Контроллер = ТРУБА
+    // Он НЕ проверяет поля (это делает ValidationPipe через DTO)
+    // Он НЕ обрабатывает ошибки (это делают фильтры)
+    // Он НЕ форматирует ответы (это делает сервис)
+    // Он только: принимает DTO → вызывает сервис → возвращает результат
     
-    // КРИТИЧНО: НЕ логируем пароль - это безопасность
-    const { password, ...safeDto } = dto;
-    this.logger.debug(`[2FA] Получен DTO (без пароля): ${JSON.stringify(safeDto)}`);
-    
-    // Проверяем наличие обязательных полей
-    if (!dto?.phoneNumber || !dto?.phoneCodeHash || !dto?.password) {
-      this.logger.error(`[2FA] Отсутствуют обязательные поля: phoneNumber=${!!dto?.phoneNumber}, phoneCodeHash=${!!dto?.phoneCodeHash}, password=${!!dto?.password}`);
-      throw new BadRequestException('Missing required fields: phoneNumber, phoneCodeHash, password');
-    }
-    
-    this.logger.log(`[2FA] Запрос на проверку 2FA для телефона: ${dto.phoneNumber}, phoneCodeHash: ${dto.phoneCodeHash}`);
-    this.logger.log(`[2FA] Пароль получен: длина: ${dto.password?.length || 0}`);
-    try {
-      // Сессия сохраняется для пользователя, найденного/созданного по телефону
-      const result = await this.authService.verify2FAPassword(
-        dto.phoneNumber,
-        dto.password,
-        dto.phoneCodeHash,
-        req.ip,
-        req.get('user-agent'),
-      );
+    this.logger.log('[2FA] verify2FA called');
 
-      // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
-      // Только создаем Telegram сессию для работы с Telegram API
+    // Сессия сохраняется для пользователя, найденного/созданного по телефону
+    const result = await this.authService.verify2FAPassword(
+      dto.phoneNumber,
+      dto.password,
+      dto.phoneCodeHash,
+      req.ip,
+      req.get('user-agent'),
+    );
 
-      this.logger.log(`Telegram сессия создана с 2FA: ${dto.phoneNumber}`);
+    // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
+    // Только создаем Telegram сессию для работы с Telegram API
 
-      return {
-        success: true,
-        requires2FA: false,
-        user: {
-          id: result.user.id,
-          phoneNumber: result.user.phone,
-          firstName: result.user.firstName,
-          lastName: result.user.lastName,
-          username: result.user.username,
-        },
-        tokens: null, // Не возвращаем токены для дашборда
-      };
-    } catch (error: any) {
-      this.logger.error(`Ошибка проверки 2FA: ${error.message}`, error.stack);
-      this.logger.error(`Request data: phoneNumber=${dto.phoneNumber}, phoneCodeHash=${dto.phoneCodeHash}`);
-      throw error;
-    }
+    this.logger.log(`Telegram сессия создана с 2FA: ${dto.phoneNumber}`);
+
+    return {
+      success: true,
+      requires2FA: false,
+      user: {
+        id: result.user.id,
+        phoneNumber: result.user.phone,
+        firstName: result.user.firstName,
+        lastName: result.user.lastName,
+        username: result.user.username,
+      },
+      tokens: null, // Не возвращаем токены для дашборда
+    };
   }
 
   private async getAuthAction(action: string) {
