@@ -41,6 +41,11 @@ export class TelegramUserController {
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async sendMessage(@Body() dto: UserSendMessageDto, @Request() req) {
     try {
+      // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      
       const userId = req.user.sub;
       this.logger.debug(`Отправка сообщения от пользователя ${userId} в чат ${dto.chatId}`);
 
@@ -132,6 +137,11 @@ export class TelegramUserController {
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async sendMedia(@Body() dto: UserSendMediaDto, @Request() req) {
     try {
+      // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      
       const userId = req.user.sub;
       this.logger.debug(`Отправка медиа от пользователя ${userId} в чат ${dto.chatId}`);
 
@@ -409,6 +419,11 @@ export class TelegramUserController {
     @Query('offset') offset?: number,
   ) {
     try {
+      // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      
       const userId = req.user.sub;
       this.logger.debug(`Получение истории сообщений для пользователя ${userId} из чата ${chatId}`);
 
@@ -503,6 +518,11 @@ export class TelegramUserController {
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
   async getSessions(@Request() req): Promise<{ success: boolean; currentSessionId: string | null; sessions: SessionInfoDto[] }> {
     try {
+      // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      
       const userId = req.user.sub;
       this.logger.debug(`Получение сессий для пользователя ${userId}`);
 
@@ -574,6 +594,11 @@ export class TelegramUserController {
     @Query('permanent') permanent?: string,
   ): Promise<{ success: boolean }> {
     try {
+      // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      
       const userId = req.user.sub;
       const isPermanent = permanent === 'true' || permanent === '1';
       this.logger.debug(`${isPermanent ? 'Удаление' : 'Деактивация'} сессии ${sessionId} для пользователя ${userId}`);
@@ -614,6 +639,11 @@ export class TelegramUserController {
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
   async deactivateOtherSessions(@Request() req, @Query('keepSessionId') keepSessionId?: string): Promise<{ success: boolean }> {
     try {
+      // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      
       const userId = req.user.sub;
       this.logger.debug(`Деактивация всех других сессий для пользователя ${userId}`);
 

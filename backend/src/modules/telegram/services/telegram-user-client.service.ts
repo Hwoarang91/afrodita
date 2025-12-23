@@ -7,6 +7,7 @@ import { TelegramUserSession } from '../../../entities/telegram-user-session.ent
 import { SessionEncryptionService } from './session-encryption.service';
 import { User, UserRole } from '../../../entities/user.entity';
 import { handleMtprotoError, MtprotoErrorAction } from '../utils/mtproto-error.handler';
+import { assertSessionTransition } from '../utils/session-state-machine';
 
 /**
  * Кастомный Storage адаптер для MTKruto, который сохраняет сессии в БД с шифрованием
@@ -647,6 +648,27 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       // Обновляем метаданные сессии
       this.logger.debug(`Updating session ${session.id} metadata for user ${userId}`);
+      
+      // КРИТИЧЕСКИ ВАЖНО: Проверяем переход состояния через SessionStateMachine
+      const currentStatus = session.status;
+      const targetStatus = 'active';
+      
+      if (currentStatus !== targetStatus) {
+        this.logger.log(`[SessionStateMachine] Attempting transition: ${currentStatus} → ${targetStatus} for session ${session.id}`);
+        try {
+          assertSessionTransition(currentStatus, targetStatus, session.id);
+          this.logger.log(`[SessionStateMachine] ✅ Transition allowed: ${currentStatus} → ${targetStatus} for session ${session.id}`);
+        } catch (transitionError: any) {
+          this.logger.error(`[SessionStateMachine] ❌ Transition blocked: ${transitionError.message}`);
+          // Если переход запрещен, помечаем сессию как invalid
+          session.status = 'invalid';
+          session.isActive = false;
+          session.invalidReason = `State transition blocked: ${transitionError.message}`;
+          await this.sessionRepository.save(session);
+          throw new Error(`Cannot activate session ${session.id}: ${transitionError.message}`);
+        }
+      }
+      
       session.phoneNumber = phoneNumber;
       session.isActive = true;
       session.status = 'active'; // Сессия валидна после успешного getMe()
@@ -656,7 +678,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
       session.ipAddress = ipAddress || null;
       session.userAgent = userAgent || null;
       await this.sessionRepository.save(session);
-      this.logger.debug(`Session ${session.id} updated successfully with status=active`);
+      this.logger.log(`✅ Session ${session.id} updated successfully: ${currentStatus} → ${targetStatus}, isActive=true`);
 
       // КРИТИЧЕСКИ ВАЖНО: Сохраняем тот же клиент в кеш по sessionId
       // НЕ создаем новый клиент - используем тот, который уже прошел авторизацию
