@@ -26,6 +26,19 @@ export class ValidationExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
     const exceptionResponse = exception.getResponse();
 
+    // КРИТИЧНО: Логируем попадание в фильтр для диагностики
+    this.logger.error(
+      '[ValidationExceptionFilter] HIT',
+      {
+        url: request.url,
+        method: request.method,
+        exceptionResponseType: typeof exceptionResponse,
+        isArray: Array.isArray(exceptionResponse),
+        hasMessage: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse,
+        messageIsArray: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse && Array.isArray((exceptionResponse as any).message),
+      },
+    );
+
     // Логируем детали ошибки валидации с маскированием sensitive данных
     const maskedBody = maskSensitiveData(request.body || {});
     const maskedQuery = maskSensitiveData(request.query || {});
@@ -74,8 +87,25 @@ export class ValidationExceptionFilter implements ExceptionFilter {
       }
     }
 
-    // Fallback: возвращаем как есть (для совместимости)
-    response.status(status).json(exceptionResponse);
+    // КРИТИЧНО: Fallback - если дошли сюда, значит это не ValidationPipe ошибка
+    // Преобразуем в стандартизированный формат для предотвращения React error #31
+    this.logger.warn(
+      '[ValidationExceptionFilter] Fallback: exceptionResponse не является ValidationError[]',
+      {
+        exceptionResponseType: typeof exceptionResponse,
+        isArray: Array.isArray(exceptionResponse),
+        hasMessage: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse,
+      },
+    );
+    
+    // Преобразуем в стандартизированный ErrorResponse
+    const errorResponse = buildValidationErrorResponse(
+      typeof exceptionResponse === 'object' && exceptionResponse !== null && 'message' in exceptionResponse
+        ? (exceptionResponse as any).message
+        : [exceptionResponse as any],
+    );
+    
+    response.status(status).json(errorResponse);
   }
 }
 

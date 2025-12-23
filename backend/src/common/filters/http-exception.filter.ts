@@ -61,10 +61,31 @@ export class HttpExceptionFilter implements ExceptionFilter {
       exceptionResponse !== null &&
       'success' in exceptionResponse &&
       'errorCode' in exceptionResponse &&
-      'message' in exceptionResponse
+      'message' in exceptionResponse &&
+      typeof (exceptionResponse as any).message === 'string' // КРИТИЧНО: message должен быть строкой
     ) {
       // Уже стандартизирован, возвращаем как есть
       response.status(status).json(exceptionResponse);
+      return;
+    }
+
+    // КРИТИЧНО: Проверяем, не является ли это ValidationError[] (должно было быть обработано ValidationExceptionFilter)
+    if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null &&
+      'message' in exceptionResponse &&
+      Array.isArray((exceptionResponse as any).message)
+    ) {
+      this.logger.error(
+        '[HttpExceptionFilter] Обнаружен массив ValidationError! ' +
+        'Это должно было быть обработано ValidationExceptionFilter. ' +
+        'Преобразуем в ErrorResponse для предотвращения React error #31.',
+      );
+      
+      // Преобразуем ValidationError[] в стандартизированный ErrorResponse
+      const validationErrors = (exceptionResponse as any).message;
+      const errorResponse = buildValidationErrorResponse(validationErrors);
+      response.status(status).json(errorResponse);
       return;
     }
 
@@ -95,9 +116,37 @@ export class HttpExceptionFilter implements ExceptionFilter {
         : (exceptionResponse as any)?.message || 'Слишком много запросов';
     } else if (status === HttpStatus.BAD_REQUEST) {
       errorCode = ErrorCode.VALIDATION_ERROR;
-      message = typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : (exceptionResponse as any)?.message || 'Некорректный запрос';
+      
+      // КРИТИЧНО: Проверяем, не является ли message массивом ValidationError
+      if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+        const responseObj = exceptionResponse as any;
+        
+        // Если message - массив ValidationError, преобразуем в строку
+        if (Array.isArray(responseObj.message)) {
+          this.logger.error(
+            '[HttpExceptionFilter] Обнаружен массив ValidationError в BAD_REQUEST! ' +
+            'Это должно было быть обработано ValidationExceptionFilter. ' +
+            'Преобразуем в строку для предотвращения React error #31.',
+          );
+          
+          // Преобразуем ValidationError[] в строку
+          message = responseObj.message
+            .map((err: any) => {
+              const constraints = err.constraints || {};
+              const constraintMessages = Object.values(constraints).join(', ');
+              return `${err.property}: ${constraintMessages}`;
+            })
+            .join('; ');
+        } else if (typeof responseObj.message === 'string') {
+          message = responseObj.message;
+        } else {
+          message = 'Некорректный запрос';
+        }
+      } else if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else {
+        message = 'Некорректный запрос';
+      }
     } else {
       // Для остальных статусов используем общий код
       message = typeof exceptionResponse === 'string'

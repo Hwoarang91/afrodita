@@ -334,6 +334,18 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
           return 'Неизвестная ошибка';
         }
 
+        // КРИТИЧНО: Аварийный safeguard - если message не строка, логируем и возвращаем безопасное сообщение
+        if (data.message && typeof data.message !== 'string') {
+          console.error('[ErrorContractViolation] message is not a string:', {
+            type: typeof data.message,
+            isArray: Array.isArray(data.message),
+            value: data.message,
+            fullData: data,
+          });
+          // Возвращаем безопасное сообщение вместо объекта
+          return 'Произошла ошибка валидации. Проверьте введенные данные.';
+        }
+
         // Новый стандартизированный формат ErrorResponse
         if (data.message && typeof data.message === 'string') {
           // Если есть details, добавляем их к сообщению
