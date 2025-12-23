@@ -6,6 +6,7 @@ import { Appointment } from '../../entities/appointment.entity';
 import { Transaction } from '../../entities/transaction.entity';
 import { Notification } from '../../entities/notification.entity';
 import { BodyMeasurement } from '../../entities/body-measurement.entity';
+import { buildErrorResponse, ErrorCode } from '../../common/interfaces/error-response.interface';
 
 @Injectable()
 export class UsersService {

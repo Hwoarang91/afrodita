@@ -18,6 +18,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { FinancialService } from '../financial/financial.service';
 import { SettingsService } from '../settings/settings.service';
 import { TelegramBotService } from '../telegram/telegram-bot.service';
+import { buildErrorResponse, ErrorCode } from '../../common/interfaces/error-response.interface';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 
