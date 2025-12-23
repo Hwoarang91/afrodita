@@ -153,6 +153,24 @@ docker rm n8n
   - ❌ Никаких Telegram строк в UI / controller
   - ✅ Единственная точка знания MTProto — telegram-error-mapper.ts
   - ✅ UI работает только с ErrorCode
+- ADR (Architecture Decision Records) документы созданы
+  - ADR-001: Telegram Error Normalization
+    - Почему запрещены string.includes
+    - Почему ErrorCode — единственный контракт
+    - Почему message всегда string
+  - ADR-002: Telegram Session Lifecycle
+    - initializing → active → invalid/revoked
+    - Почему запрещены обратные переходы
+    - Почему one client = one sessionId
+  - ADR-003: Error Handling Strategy
+    - ErrorResponse contract
+    - Глобальные фильтры
+    - UI behavior matrix
+- Canary-алерты для Telegram деградаций
+  - FLOOD_WAIT ↑ x3 за 10 минут → предупреждение
+  - SESSION_INVALID ↑ после деплоя → предупреждение
+  - AUTH_KEY_UNREGISTERED > 0 → критический алерт
+  - Интегрированы в ErrorMetricsService с историей вхождений
 - Исправлены ошибки компиляции и запуска на сервере
   - Добавлен AUTH_KEY_UNREGISTERED в ErrorCode enum
   - Добавлен AUTH_KEY_UNREGISTERED в ERROR_HTTP_MAP

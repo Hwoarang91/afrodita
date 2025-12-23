@@ -17,7 +17,8 @@ interface ErrorMetrics {
   count: number;
   firstOccurrence: Date;
   lastOccurrence: Date;
-  occurrences: Date[];
+  occurrences: Array<{ timestamp: number; context?: any }>; // История вхождений для анализа трендов
+  baselineCount?: number; // Базовый уровень для сравнения (для FLOOD_WAIT)
 }
 
 /**
@@ -50,34 +51,46 @@ export class ErrorMetricsService implements OnModuleInit {
    * @param context - Дополнительный контекст (sessionId, userId и т.д.)
    */
   recordError(errorCode: ErrorCode | string, context?: Record<string, any>): void {
-    const now = new Date();
+    const now = Date.now();
+    const nowDate = new Date(now);
     const existing = this.metrics.get(errorCode);
 
     if (existing) {
       existing.count++;
-      existing.lastOccurrence = now;
+      existing.lastOccurrence = nowDate;
       
-      // Ограничиваем количество сохраненных вхождений
-      if (existing.occurrences.length < this.maxOccurrencesPerError) {
-        existing.occurrences.push(now);
+      // Сохраняем историю вхождений (ограничиваем до 100 последних для экономии памяти)
+      existing.occurrences.push({ timestamp: now, context });
+      if (existing.occurrences.length > this.maxOccurrencesPerError) {
+        existing.occurrences = existing.occurrences.slice(-this.maxOccurrencesPerError);
       }
     } else {
       this.metrics.set(errorCode, {
         errorCode,
         count: 1,
-        firstOccurrence: now,
-        lastOccurrence: now,
-        occurrences: [now],
+        firstOccurrence: nowDate,
+        lastOccurrence: nowDate,
+        occurrences: [{ timestamp: now, context }],
       });
     }
 
-    // Логируем критичные ошибки немедленно
-    if (CRITICAL_ERROR_CODES.includes(errorCode as ErrorCode)) {
-      this.logger.error(
-        `[CRITICAL ERROR] ${errorCode} detected`,
-        context ? { context } : undefined,
-      );
+    // Устанавливаем базовый уровень для FLOOD_WAIT (первые 10 минут)
+    if (errorCode === ErrorCode.FLOOD_WAIT && !existing?.baselineCount) {
+      const tenMinutesAgo = now - 10 * 60 * 1000;
+      const recentCount = this.metrics.get(errorCode)?.occurrences.filter(
+        (occ) => occ.timestamp > tenMinutesAgo,
+      ).length || 0;
+      if (recentCount >= 3) {
+        // Базовый уровень = среднее за первые 10 минут
+        const metric = this.metrics.get(errorCode);
+        if (metric) {
+          metric.baselineCount = Math.max(1, Math.floor(recentCount / 2));
+        }
+      }
     }
+
+    // Проверяем canary-алерты
+    this.checkCanaryAlerts(errorCode, this.metrics.get(errorCode)!);
   }
 
   /**
@@ -104,31 +117,87 @@ export class ErrorMetricsService implements OnModuleInit {
   }
 
   /**
-   * Проверяет критичные ошибки и отправляет алерты
+   * Проверяет canary-алерты для Telegram деградаций
+   */
+  private checkCanaryAlerts(errorCode: ErrorCode | string, metric: ErrorMetrics): void {
+    const now = Date.now();
+    const tenMinutesAgo = now - 10 * 60 * 1000;
+    const thirtyMinutesAgo = now - 30 * 60 * 1000;
+
+    // ============================================================================
+    // 🔴 CRITICAL: AUTH_KEY_UNREGISTERED > 0
+    // ============================================================================
+    // Это означает регрессию в session storage или lifecycle
+    if (errorCode === ErrorCode.AUTH_KEY_UNREGISTERED && metric.count > 0) {
+      this.logger.critical(
+        `🔥 CRITICAL ALERT: Обнаружена ошибка AUTH_KEY_UNREGISTERED (count: ${metric.count})! ` +
+        `Это может быть регрессия в session storage или lifecycle. ` +
+        `Проверьте: DatabaseStorage, saveSession(), getClient().`,
+      );
+      // TODO: Отправить немедленное уведомление в PagerDuty/Slack
+    }
+
+    // ============================================================================
+    // 🟡 WARNING: FLOOD_WAIT ↑ x3 за 10 минут
+    // ============================================================================
+    // Telegram API может быть перегружен или изменились лимиты
+    if (errorCode === ErrorCode.FLOOD_WAIT) {
+      const recentOccurrences = metric.occurrences.filter(
+        (occ) => occ.timestamp > tenMinutesAgo,
+      );
+      const recentCount = recentOccurrences.length;
+
+      // Базовый уровень (первые 10 минут после старта или если нет истории)
+      const baseline = metric.baselineCount || 1;
+
+      if (recentCount >= baseline * 3) {
+        this.logger.warn(
+          `🚨 ALERT: FLOOD_WAIT резко увеличился! ` +
+          `Базовый уровень: ${baseline}, текущий: ${recentCount} за 10 минут (x${(recentCount / baseline).toFixed(1)}). ` +
+          `Telegram API может быть перегружен или изменились rate limits.`,
+        );
+        // TODO: Отправить уведомление в Slack
+      }
+    }
+
+    // ============================================================================
+    // 🟡 WARNING: SESSION_INVALID ↑ после деплоя
+    // ============================================================================
+    // Может указывать на проблему с session lifecycle или storage
+    if (errorCode === ErrorCode.SESSION_INVALID) {
+      const recentOccurrences = metric.occurrences.filter(
+        (occ) => occ.timestamp > thirtyMinutesAgo,
+      );
+      const recentCount = recentOccurrences.length;
+
+      // Если после деплоя резко выросло количество SESSION_INVALID
+      if (recentCount > 10) {
+        this.logger.warn(
+          `🚨 ALERT: SESSION_INVALID резко увеличился после деплоя! ` +
+          `За последние 30 минут: ${recentCount} ошибок. ` +
+          `Проверьте: session lifecycle, DatabaseStorage, getClient().`,
+        );
+        // TODO: Отправить уведомление в Slack
+      }
+
+      // Общий алерт при высоком уровне ошибок
+      if (metric.count > 100) {
+        this.logger.warn(
+          `🚨 ALERT: Высокий уровень ошибок SESSION_INVALID (${metric.count})! ` +
+          `Проверьте состояние сессий в базе данных.`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Периодическая проверка критичных ошибок (вызывается каждые 5 минут)
    */
   private checkCriticalErrors(): void {
     for (const errorCode of CRITICAL_ERROR_CODES) {
       const metrics = this.metrics.get(errorCode);
-      
       if (metrics) {
-        // Алерт если SESSION_INVALID резко вырос (более 10 за последний час)
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        const recentCount = metrics.occurrences.filter(
-          date => date > oneHourAgo,
-        ).length;
-
-        if (recentCount > 10) {
-          this.logger.warn(
-            `[ALERT] ${errorCode} резко вырос: ${recentCount} ошибок за последний час`,
-          );
-        }
-
-        // Алерт если AUTH_KEY_UNREGISTERED > 0 (регрессия)
-        if (errorCode === ErrorCode.AUTH_KEY_UNREGISTERED && metrics.count > 0) {
-          this.logger.error(
-            `[ALERT] AUTH_KEY_UNREGISTERED detected (${metrics.count} total). Это указывает на регрессию в сохранении сессий!`,
-          );
-        }
+        this.checkCanaryAlerts(errorCode, metrics);
       }
     }
   }
