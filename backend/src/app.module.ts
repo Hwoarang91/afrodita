@@ -24,6 +24,7 @@ import { HealthModule } from './modules/health/health.module';
 import { validate } from './config/env.validation';
 
 @Module({
+  providers: [ErrorMetricsService],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
