@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import { buildErrorResponse } from '../../../common/utils/error-response.builder';
+import { ErrorCode } from '../../../common/interfaces/error-response.interface';
 
 @Injectable()
 export class SessionEncryptionService {
@@ -67,15 +69,45 @@ export class SessionEncryptionService {
    * Расшифровывает данные сессии
    * @param encryptedData Зашифрованные данные в формате: iv:tag:encryptedData
    * @returns Расшифрованные данные (обычно JSON строка)
+   * @throws HttpException с ErrorResponse контрактом при ошибках
    */
-  decrypt(encryptedData: string): string {
+  decrypt(encryptedData: string | null | undefined): string {
+    // КРИТИЧНО: Проверка на null/undefined перед split()
+    if (!encryptedData || typeof encryptedData !== 'string' || encryptedData.trim() === '') {
+      this.logger.error('SessionEncryptionService.decrypt: encryptedData is null, undefined, or empty');
+      const errorResponse = buildErrorResponse(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.SESSION_INVALID,
+        'Session data is missing or invalid. Please re-authorize via phone or QR code.',
+      );
+      throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
+    }
+
     try {
       const parts = encryptedData.split(':');
       if (parts.length !== 3) {
-        throw new Error('Invalid encrypted data format');
+        this.logger.error(`SessionEncryptionService.decrypt: Invalid encrypted data format. Expected 3 parts, got ${parts.length}`);
+        const errorResponse = buildErrorResponse(
+          HttpStatus.UNAUTHORIZED,
+          ErrorCode.SESSION_INVALID,
+          'Invalid session data format. Please re-authorize via phone or QR code.',
+        );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
 
       const [ivBase64, tagBase64, encrypted] = parts;
+      
+      // Проверка на пустые части
+      if (!ivBase64 || !tagBase64 || !encrypted) {
+        this.logger.error('SessionEncryptionService.decrypt: Empty parts in encrypted data');
+        const errorResponse = buildErrorResponse(
+          HttpStatus.UNAUTHORIZED,
+          ErrorCode.SESSION_INVALID,
+          'Invalid session data: missing required parts. Please re-authorize via phone or QR code.',
+        );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
+      }
+
       const iv = Buffer.from(ivBase64, 'base64');
       const tag = Buffer.from(tagBase64, 'base64');
 
@@ -87,8 +119,19 @@ export class SessionEncryptionService {
 
       return decrypted;
     } catch (error: any) {
+      // Если это уже HttpException с ErrorResponse - пробрасываем как есть
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      // Для остальных ошибок создаем ErrorResponse
       this.logger.error(`Error decrypting session data: ${error.message}`, error.stack);
-      throw new Error('Failed to decrypt session data');
+      const errorResponse = buildErrorResponse(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.SESSION_INVALID,
+        'Failed to decrypt session data. Please re-authorize via phone or QR code.',
+      );
+      throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
     }
   }
 }

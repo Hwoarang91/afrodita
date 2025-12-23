@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -174,7 +174,21 @@ class DatabaseStorage implements Partial<Storage> {
         return;
       }
 
-      const decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
+      // КРИТИЧНО: Проверка на null и обработка ошибок decrypt
+      if (!session.encryptedSessionData || session.encryptedSessionData.trim() === '') {
+        this.logger.warn(`DatabaseStorage.delete: Session ${this.sessionId} has empty encryptedSessionData`);
+        return;
+      }
+
+      let decrypted: string;
+      try {
+        decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
+      } catch (error: any) {
+        // Если не удалось расшифровать - просто возвращаемся (Storage контракт)
+        this.logger.warn(`DatabaseStorage.delete: Failed to decrypt session ${this.sessionId}: ${error.message}`);
+        return;
+      }
+
       const data = JSON.parse(decrypted);
 
       // Удаляем значение по ключу
