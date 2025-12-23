@@ -55,17 +55,36 @@ export class HttpExceptionFilter implements ExceptionFilter {
       },
     );
 
-    // Если exceptionResponse уже является ErrorResponse (из ValidationExceptionFilter)
+    // КРИТИЧНО: Проверяем, является ли exceptionResponse уже стандартизированным ErrorResponse
+    // НО: даже если это ErrorResponse, мы должны убедиться, что message - строка
+    // и что нет лишних полей, которые могут нарушить контракт
     if (
       typeof exceptionResponse === 'object' &&
       exceptionResponse !== null &&
       'success' in exceptionResponse &&
       'errorCode' in exceptionResponse &&
       'message' in exceptionResponse &&
-      typeof (exceptionResponse as any).message === 'string' // КРИТИЧНО: message должен быть строкой
+      typeof (exceptionResponse as any).message === 'string' && // КРИТИЧНО: message должен быть строкой
+      (exceptionResponse as any).success === false // Дополнительная проверка на соответствие контракту
     ) {
-      // Уже стандартизирован, возвращаем как есть
-      response.status(status).json(exceptionResponse);
+      // Уже стандартизирован и соответствует контракту, возвращаем как есть
+      // НО: создаем новый объект для гарантии чистоты (защита от прототипного загрязнения)
+      const cleanErrorResponse: ErrorResponse = {
+        success: false,
+        statusCode: (exceptionResponse as any).statusCode || status,
+        errorCode: (exceptionResponse as any).errorCode,
+        message: (exceptionResponse as any).message, // Гарантированно строка
+      };
+      
+      if ((exceptionResponse as any).details) {
+        cleanErrorResponse.details = (exceptionResponse as any).details;
+      }
+      
+      if ((exceptionResponse as any).retryAfter !== undefined) {
+        cleanErrorResponse.retryAfter = (exceptionResponse as any).retryAfter;
+      }
+      
+      response.status(status).json(cleanErrorResponse);
       return;
     }
 

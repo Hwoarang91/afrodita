@@ -107,16 +107,61 @@ export class ValidationExceptionFilter implements ExceptionFilter {
         exceptionResponseType: typeof exceptionResponse,
         isArray: Array.isArray(exceptionResponse),
         hasMessage: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse,
+        messageType: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse
+          ? typeof (exceptionResponse as any).message
+          : 'N/A',
       },
     );
     
-    // Преобразуем в стандартизированный ErrorResponse
-    const errorResponse = buildValidationErrorResponse(
-      typeof exceptionResponse === 'object' && exceptionResponse !== null && 'message' in exceptionResponse
-        ? (exceptionResponse as any).message
-        : [exceptionResponse as any],
-    );
+    // КРИТИЧНО: Всегда создаем стандартизированный ErrorResponse
+    // Если exceptionResponse.message - массив, используем buildValidationErrorResponse
+    // Если exceptionResponse.message - строка, создаем ErrorResponse с этой строкой
+    // Если exceptionResponse - строка, создаем ErrorResponse с этой строкой
+    let errorResponse: any;
     
+    if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+      const responseObj = exceptionResponse as any;
+      
+      if (responseObj.message && Array.isArray(responseObj.message)) {
+        // Если message - массив, преобразуем через buildValidationErrorResponse
+        errorResponse = buildValidationErrorResponse(responseObj.message);
+      } else if (typeof responseObj.message === 'string') {
+        // Если message - строка, создаем ErrorResponse
+        errorResponse = {
+          success: false,
+          statusCode: status,
+          errorCode: 'VALIDATION_ERROR',
+          message: responseObj.message,
+        };
+      } else {
+        // Если message отсутствует или не строка/массив, создаем общий ErrorResponse
+        errorResponse = {
+          success: false,
+          statusCode: status,
+          errorCode: 'VALIDATION_ERROR',
+          message: 'Ошибка валидации данных',
+        };
+      }
+    } else if (typeof exceptionResponse === 'string') {
+      // Если exceptionResponse - строка, создаем ErrorResponse
+      errorResponse = {
+        success: false,
+        statusCode: status,
+        errorCode: 'VALIDATION_ERROR',
+        message: exceptionResponse,
+      };
+    } else {
+      // Если exceptionResponse - что-то другое, создаем общий ErrorResponse
+      errorResponse = {
+        success: false,
+        statusCode: status,
+        errorCode: 'VALIDATION_ERROR',
+        message: 'Ошибка валидации данных',
+      };
+    }
+    
+    // КРИТИЧНО: Всегда возвращаем стандартизированный ErrorResponse
+    // НИКОГДА не возвращаем exceptionResponse напрямую
     response.status(status).json(errorResponse);
   }
 }
