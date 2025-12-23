@@ -14,12 +14,13 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
 import { OptionalJwtAuthGuard } from '../../../common/guards/optional-jwt-auth.guard';
+import { TelegramSessionGuard } from '../guards/telegram-session.guard';
 import { UserSendMessageDto, UserSendMediaDto } from '../dto/user-send-message.dto';
 import { DeactivateSessionDto, SessionInfoDto } from '../dto/session-management.dto';
 
 @ApiTags('telegram')
 @Controller('telegram/user')
-@UseGuards(OptionalJwtAuthGuard)
+@UseGuards(OptionalJwtAuthGuard, TelegramSessionGuard)
 @ApiBearerAuth()
 export class TelegramUserController {
   private readonly logger = new Logger(TelegramUserController.name);
@@ -49,15 +50,16 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Отправка сообщения от пользователя ${userId} в чат ${dto.chatId}`);
 
-      // Получаем активную сессию пользователя
-      const sessions = await this.telegramUserClientService.getUserSessions(userId);
-      const activeSession = sessions.find(s => s.status === 'active' && s.isActive);
-      if (!activeSession) {
+      // КРИТИЧНО: TelegramSessionGuard уже проверил наличие активной сессии
+      // Сессия доступна через req.telegramSessionId (установлен guard)
+      const sessionId = req.telegramSessionId;
+      if (!sessionId) {
+        // Это не должно произойти, если guard работает правильно, но на всякий случай
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
 
       // Получаем клиент для конкретной сессии
-      const client = await this.telegramUserClientService.getClient(activeSession.id);
+      const client = await this.telegramUserClientService.getClient(sessionId);
       if (!client) {
         throw new UnauthorizedException('Failed to get Telegram client for active session.');
       }
@@ -145,8 +147,8 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Отправка медиа от пользователя ${userId} в чат ${dto.chatId}`);
 
-      // Получаем активную сессию пользователя
-      const sessionId = await this.getActiveSessionId(userId);
+      // КРИТИЧНО: TelegramSessionGuard уже проверил наличие активной сессии
+      const sessionId = req.telegramSessionId;
       if (!sessionId) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
@@ -243,8 +245,8 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение списка чатов для пользователя ${userId}`);
 
-      // Получаем активную сессию пользователя
-      const sessionId = await this.getActiveSessionId(userId);
+      // КРИТИЧНО: TelegramSessionGuard уже проверил наличие активной сессии
+      const sessionId = req.telegramSessionId;
       if (!sessionId) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
@@ -343,8 +345,8 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение списка контактов для пользователя ${userId}`);
 
-      // Получаем активную сессию пользователя
-      const sessionId = await this.getActiveSessionId(userId);
+      // КРИТИЧНО: TelegramSessionGuard уже проверил наличие активной сессии
+      const sessionId = req.telegramSessionId;
       if (!sessionId) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
@@ -427,8 +429,8 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение истории сообщений для пользователя ${userId} из чата ${chatId}`);
 
-      // Получаем активную сессию пользователя
-      const sessionId = await this.getActiveSessionId(userId);
+      // КРИТИЧНО: TelegramSessionGuard уже проверил наличие активной сессии
+      const sessionId = req.telegramSessionId;
       if (!sessionId) {
         throw new UnauthorizedException('No active Telegram session found. Please authorize via phone or QR code.');
       }
@@ -490,6 +492,7 @@ export class TelegramUserController {
   }
 
   @Get('sessions')
+  @UseGuards(OptionalJwtAuthGuard) // Исключаем TelegramSessionGuard - этот метод показывает все сессии, не только активную
   @ApiOperation({
     summary: 'Получение списка активных сессий пользователя',
     description: 'Возвращает список всех активных Telegram сессий текущего авторизованного пользователя с информацией о IP адресе, устройстве и датах использования',
