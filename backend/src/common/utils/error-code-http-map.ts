@@ -37,6 +37,7 @@ export const ERROR_HTTP_MAP: Record<ErrorCode, number> = {
   PHONE_CODE_INVALID: 400,
   PHONE_NUMBER_INVALID: 400,
   PHONE_NUMBER_BANNED: 403,
+  AUTH_KEY_UNREGISTERED: 401,
 
   // Telegram migration errors
   DC_MIGRATE: 409,

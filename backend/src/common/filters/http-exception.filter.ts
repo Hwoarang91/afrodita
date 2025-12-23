@@ -23,6 +23,12 @@ import { maskSensitiveData } from '../utils/sensitive-data-masker';
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
+  public errorMetricsService: ErrorMetricsService | null = null;
+
+  // Используем опциональную инъекцию через ModuleRef для избежания circular dependencies
+  setErrorMetricsService(service: ErrorMetricsService): void {
+    this.errorMetricsService = service;
+  }
 
   catch(exception: HttpException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();

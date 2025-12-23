@@ -5,6 +5,7 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationExceptionFilter } from './common/filters/validation-exception.filter';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ErrorMetricsService } from './common/utils/error-metrics.service';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { AppDataSource } from './config/data-source';
