@@ -15,6 +15,11 @@ import { maskSensitiveData } from '../utils/sensitive-data-masker';
  * Гарантирует, что message всегда строка, а не объект или массив
  * Это предотвращает React error #31
  */
+/**
+ * КРИТИЧНО: Этот фильтр должен обрабатывать BadRequestException ПЕРЕД HttpExceptionFilter
+ * ValidationPipe создает BadRequestException с массивом ValidationError[] в поле message
+ * Этот фильтр преобразует его в стандартизированный ErrorResponse
+ */
 @Catch(BadRequestException)
 export class ValidationExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ValidationExceptionFilter.name);
@@ -60,10 +65,17 @@ export class ValidationExceptionFilter implements ExceptionFilter {
     if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
       const responseObj = exceptionResponse as any;
       
-      // Проверяем, является ли message массивом ValidationError
+      // КРИТИЧНО: ValidationPipe создает BadRequestException с message как массив ValidationError[]
+      // Структура: { statusCode: 400, message: ValidationError[], error: "Bad Request" }
       if (responseObj.message && Array.isArray(responseObj.message)) {
         this.logger.error(
-          `[ValidationPipe] Validation errors: ${JSON.stringify(responseObj.message)}`,
+          `[ValidationExceptionFilter] ValidationPipe errors detected: ${responseObj.message.length} errors`,
+          {
+            errors: responseObj.message.map((err: any) => ({
+              property: err.property,
+              constraints: Object.keys(err.constraints || {}),
+            })),
+          },
         );
         
         // Преобразуем ValidationError[] в стандартизированный ErrorResponse

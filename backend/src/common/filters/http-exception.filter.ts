@@ -121,22 +121,36 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
         const responseObj = exceptionResponse as any;
         
-        // Если message - массив ValidationError, преобразуем в строку
+        // Если message - массив ValidationError, преобразуем в ErrorResponse
         if (Array.isArray(responseObj.message)) {
           this.logger.error(
             '[HttpExceptionFilter] Обнаружен массив ValidationError в BAD_REQUEST! ' +
             'Это должно было быть обработано ValidationExceptionFilter. ' +
-            'Преобразуем в строку для предотвращения React error #31.',
+            'Преобразуем в ErrorResponse для предотвращения React error #31.',
+            {
+              validationErrorsCount: responseObj.message.length,
+              firstError: responseObj.message[0] ? {
+                property: responseObj.message[0].property,
+                constraints: Object.keys(responseObj.message[0].constraints || {}),
+              } : null,
+            },
           );
           
-          // Преобразуем ValidationError[] в строку
-          message = responseObj.message
-            .map((err: any) => {
-              const constraints = err.constraints || {};
-              const constraintMessages = Object.values(constraints).join(', ');
-              return `${err.property}: ${constraintMessages}`;
-            })
-            .join('; ');
+          // Преобразуем ValidationError[] в стандартизированный ErrorResponse
+          const validationErrors = responseObj.message;
+          const errorResponse = buildValidationErrorResponse(validationErrors);
+          
+          // Регистрируем ошибку в метриках
+          if (this.errorMetricsService) {
+            this.errorMetricsService.recordError(ErrorCode.VALIDATION_ERROR, {
+              statusCode: status,
+              url: request.url,
+              method: request.method,
+            });
+          }
+          
+          response.status(status).json(errorResponse);
+          return;
         } else if (typeof responseObj.message === 'string') {
           message = responseObj.message;
         } else {

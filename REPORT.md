@@ -171,6 +171,11 @@ docker rm n8n
   - SESSION_INVALID ↑ после деплоя → предупреждение
   - AUTH_KEY_UNREGISTERED > 0 → критический алерт
   - Интегрированы в ErrorMetricsService с историей вхождений
+- Исправлен React error #31 (окончательно)
+  - Добавлена проверка ValidationError[] в HttpExceptionFilter
+  - Добавлено логирование в ValidationExceptionFilter для диагностики
+  - Добавлен safeguard в UI (extractErrorMessage) для предотвращения рендеринга объектов
+  - Гарантировано, что message всегда строка, даже если ValidationExceptionFilter не сработал
 - Исправлены ошибки компиляции и запуска на сервере
   - Добавлен AUTH_KEY_UNREGISTERED в ErrorCode enum
   - Добавлен AUTH_KEY_UNREGISTERED в ERROR_HTTP_MAP
