@@ -351,5 +351,68 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
       }
     }
   }
+
+  /**
+   * Cleanup job для Telegram сессий
+   * 
+   * Правила очистки:
+   * 1. initializing > 24 часа → invalid
+   * 2. invalid/revoked > 30 дней → DELETE
+   * 
+   * Запускается раз в день в 3:00 UTC
+   */
+  @Cron('0 3 * * *', {
+    name: 'cleanupTelegramSessions',
+    timeZone: 'UTC',
+  })
+  async cleanupTelegramSessions() {
+    const now = new Date();
+    this.logger.log(`[CRON] 🧹 Запуск очистки Telegram сессий. Время: ${now.toISOString()}`);
+
+    try {
+      // 1. initializing > 24 часа → invalid
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const initializingSessions = await this.telegramSessionRepository.find({
+        where: {
+          status: 'initializing' as any,
+          createdAt: LessThan(twentyFourHoursAgo),
+        },
+      });
+
+      if (initializingSessions.length > 0) {
+        const updateResult = await this.telegramSessionRepository.update(
+          { id: In(initializingSessions.map(s => s.id)) },
+          { status: 'invalid' as any, updatedAt: now },
+        );
+        this.logger.log(`[CRON] ✅ Переведено ${updateResult.affected || 0} сессий из initializing в invalid (старше 24 часов)`);
+      }
+
+      // 2. invalid/revoked > 30 дней → DELETE
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const oldSessions = await this.telegramSessionRepository.find({
+        where: [
+          {
+            status: 'invalid' as any,
+            updatedAt: LessThan(thirtyDaysAgo),
+          },
+          {
+            status: 'revoked' as any,
+            updatedAt: LessThan(thirtyDaysAgo),
+          },
+        ],
+      });
+
+      if (oldSessions.length > 0) {
+        const deleteResult = await this.telegramSessionRepository.delete(
+          oldSessions.map(s => s.id),
+        );
+        this.logger.log(`[CRON] ✅ Удалено ${deleteResult.affected || 0} старых сессий (invalid/revoked старше 30 дней)`);
+      }
+
+      this.logger.log(`[CRON] ✅ Очистка Telegram сессий завершена`);
+    } catch (error) {
+      this.logger.error(`[CRON] ❌ Ошибка при очистке Telegram сессий: ${error.message}`, error.stack);
+    }
+  }
 }
 
