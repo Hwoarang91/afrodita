@@ -61,7 +61,23 @@ export class ValidationExceptionFilter implements ExceptionFilter {
       },
     );
 
-    // Если это ошибка ValidationPipe (массив ValidationError)
+    // КРИТИЧНО: Проверяем, является ли exceptionResponse уже готовым ErrorResponse
+    // Это происходит, если exceptionFactory использует buildValidationErrorResponse
+    if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null &&
+      'success' in exceptionResponse &&
+      'errorCode' in exceptionResponse &&
+      'message' in exceptionResponse &&
+      typeof (exceptionResponse as any).message === 'string' // КРИТИЧНО: message должен быть строкой
+    ) {
+      // Уже стандартизированный ErrorResponse от exceptionFactory
+      this.logger.debug('[ValidationExceptionFilter] Получен готовый ErrorResponse от exceptionFactory');
+      response.status(status).json(exceptionResponse);
+      return;
+    }
+
+    // Если это ошибка ValidationPipe (массив ValidationError) - fallback для старых версий
     if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
       const responseObj = exceptionResponse as any;
       
@@ -69,7 +85,7 @@ export class ValidationExceptionFilter implements ExceptionFilter {
       // Структура: { statusCode: 400, message: ValidationError[], error: "Bad Request" }
       if (responseObj.message && Array.isArray(responseObj.message)) {
         this.logger.error(
-          `[ValidationExceptionFilter] ValidationPipe errors detected: ${responseObj.message.length} errors`,
+          `[ValidationExceptionFilter] ValidationPipe errors detected (fallback): ${responseObj.message.length} errors`,
           {
             errors: responseObj.message.map((err: any) => ({
               property: err.property,

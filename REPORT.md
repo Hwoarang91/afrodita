@@ -171,11 +171,34 @@ docker rm n8n
   - SESSION_INVALID ↑ после деплоя → предупреждение
   - AUTH_KEY_UNREGISTERED > 0 → критический алерт
   - Интегрированы в ErrorMetricsService с историей вхождений
-- Исправлен React error #31 (окончательно)
+- Исправлен React error #31 (окончательно) ✅
   - Добавлена проверка ValidationError[] в HttpExceptionFilter
   - Добавлено логирование в ValidationExceptionFilter для диагностики
   - Добавлен safeguard в UI (extractErrorMessage) для предотвращения рендеринга объектов
   - Гарантировано, что message всегда строка, даже если ValidationExceptionFilter не сработал
+  - **КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ auth.service.ts** ✅:
+    - Заменены ВСЕ `BadRequestException`/`UnauthorizedException` на `HttpException(ErrorResponse)`
+    - Убраны ВСЕ `string.includes()` - используется `mapTelegramErrorToResponse`
+    - Исправлен `throw error` в catch-блоках - добавлена защита от объектов
+    - Все Telegram ошибки обрабатываются через `mapTelegramErrorToResponse`
+    - Заменены ВСЕ `throw new Error(...)` на `HttpException(ErrorResponse)`
+    - Исправлена логика обработки `SESSION_PASSWORD_NEEDED` (не бросает ошибку, а обрабатывает как нормальный сценарий)
+    - Всего исправлено: ~20 мест с проблемными паттернами
+  - **КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ main.ts exceptionFactory** ✅:
+    - **ПРОБЛЕМА**: `exceptionFactory` в `ValidationPipe` создавал `BadRequestException` с массивом объектов в поле `message`, что вызывало React error #31
+    - **РЕШЕНИЕ**: `exceptionFactory` теперь использует `buildValidationErrorResponse(errors)` для создания стандартизированного `ErrorResponse`
+    - Гарантировано, что `message` всегда строка, а не массив объектов
+    - `ValidationExceptionFilter` теперь правильно обрабатывает готовый `ErrorResponse` от `exceptionFactory`
+    - Добавлена проверка: если `exceptionResponse` уже является `ErrorResponse` (с `success`, `errorCode`, `message: string`), возвращается как есть
+    - Это окончательно устраняет React error #31 на уровне источника
+  - **Упрощен auth.controller.ts**:
+    - Убрана ручная проверка полей (делает ValidationPipe)
+    - Убран try/catch (ошибки обрабатываются фильтрами)
+    - Контроллер теперь просто "труба": DTO → service → result
+  - **Улучшены фильтры**:
+    - `HttpExceptionFilter` - убран прямой возврат `exceptionResponse`
+    - `ValidationExceptionFilter` - улучшен fallback с гарантией ErrorResponse
+    - Все пути возвращают только стандартизированный `ErrorResponse`
 - Исправлены ошибки компиляции и запуска на сервере
   - Добавлен AUTH_KEY_UNREGISTERED в ErrorCode enum
   - Добавлен AUTH_KEY_UNREGISTERED в ERROR_HTTP_MAP

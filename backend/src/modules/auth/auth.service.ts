@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException, Logger, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
-import { mapTelegramErrorToResponse } from '../telegram/utils/telegram-error-mapper';
+import { ErrorResponse, ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
-import { ErrorCode } from '../../common/interfaces/error-response.interface';
+import { mapTelegramErrorToResponse } from '../telegram/utils/telegram-error-mapper';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -433,7 +433,12 @@ export class AuthService {
         // Проверяем, что пользователь существует
         const user = await this.userRepository.findOne({ where: { id: authenticatedUserId } });
         if (!user) {
-          throw new UnauthorizedException('Authenticated user not found');
+          const errorResponse = buildErrorResponse(
+            HttpStatus.UNAUTHORIZED,
+            ErrorCode.NOT_FOUND,
+            'Authenticated user not found',
+          );
+          throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
         }
         userId = authenticatedUserId;
         this.logger.debug(`Using authenticated user ID: ${userId}`);
@@ -469,7 +474,12 @@ export class AuthService {
       } as any);
 
       if (result._ !== 'auth.sentCode') {
-        throw new UnauthorizedException('Failed to send code');
+        const errorResponse = buildErrorResponse(
+          HttpStatus.UNAUTHORIZED,
+          ErrorCode.INTERNAL_SERVER_ERROR,
+          'Failed to send code',
+        );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
 
       const phoneCodeHash = result.phone_code_hash;
@@ -496,9 +506,8 @@ export class AuthService {
     } catch (error: any) {
       this.logger.error(`Error requesting phone code: ${error.message}`, error.stack);
 
-      // Обработка специфичных ошибок Telegram
-      // КРИТИЧНО: Все Telegram ошибки обрабатываются через mapper
-      // НИКАКИХ error.message.includes() - это нарушает архитектурные принципы
+      // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо string.includes
+      // Это единственный правильный способ обработки Telegram ошибок
       const errorResponse = mapTelegramErrorToResponse(error);
       throw new HttpException(errorResponse, errorResponse.statusCode);
     }
@@ -540,7 +549,12 @@ export class AuthService {
 
       if (stored.expiresAt < new Date()) {
         this.phoneCodeHashStore.delete(normalizedPhone);
-        throw new UnauthorizedException('Phone code hash expired');
+        const errorResponse = buildErrorResponse(
+          HttpStatus.UNAUTHORIZED,
+          ErrorCode.PHONE_CODE_EXPIRED,
+          'Phone code hash expired',
+        );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
 
       const client = stored.client;
@@ -555,18 +569,20 @@ export class AuthService {
           phone_code: code,
         });
       } catch (error: any) {
-        // КРИТИЧНО: Все Telegram ошибки обрабатываются через mapper
-        // НИКАКИХ error.message.includes() - это нарушает архитектурные принципы
-        
-        // Специальная обработка для SESSION_PASSWORD_NEEDED (это не ошибка, а требование 2FA)
-        // Проверяем через mapper
+        // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо string.includes
         const errorResponse = mapTelegramErrorToResponse(error);
         
-        // Если это SESSION_PASSWORD_NEEDED (маппится в INVALID_2FA_PASSWORD, но это не ошибка в данном контексте),
-        // обрабатываем как требование 2FA (не ошибка)
-        // Проверяем исходное сообщение об ошибке
-        const errorMessage = error?.errorMessage || error?.message || String(error || '').trim();
-        if (errorMessage.toUpperCase().includes('SESSION_PASSWORD_NEEDED')) {
+        // Если это PHONE_CODE_EXPIRED, удаляем из хранилища
+        if (errorResponse.errorCode === ErrorCode.PHONE_CODE_EXPIRED) {
+          this.phoneCodeHashStore.delete(normalizedPhone);
+        }
+        
+        throw new HttpException(errorResponse, errorResponse.statusCode);
+      }
+      
+      // Проверяем, требуется ли 2FA
+      if (errorResponse.errorCode === ErrorCode.SESSION_PASSWORD_NEEDED || 
+          (error.message && typeof error.message === 'string' && error.message.includes('SESSION_PASSWORD_NEEDED'))) {
           // Требуется 2FA - получаем подсказку пароля и сохраняем клиент
           this.logger.debug(`2FA required for phone: ${phoneNumber}, saving phoneCodeHash: ${phoneCodeHash}`);
           
@@ -590,7 +606,13 @@ export class AuthService {
           // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore по нормализованному номеру
           const phoneCodeStored = this.phoneCodeHashStore.get(normalizedPhone);
           if (!phoneCodeStored || !phoneCodeStored.sessionId) {
-            throw new Error('Session ID not found in phoneCodeHashStore for 2FA');
+            // КРИТИЧНО: Используем HttpException с ErrorResponse вместо throw new Error
+            const errorResponse = buildErrorResponse(
+              HttpStatus.BAD_REQUEST,
+              ErrorCode.SESSION_NOT_FOUND,
+              'Session ID not found in phoneCodeHashStore for 2FA',
+            );
+            throw new HttpException(errorResponse, HttpStatus.BAD_REQUEST);
           }
           
           this.twoFactorStore.set(normalizedPhone, {
@@ -608,7 +630,9 @@ export class AuthService {
             passwordHint,
           };
         }
-        throw error;
+        // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо прямого throw error
+        const errorResponse = mapTelegramErrorToResponse(error);
+        throw new HttpException(errorResponse, errorResponse.statusCode);
       }
 
       // Проверяем результат
@@ -656,7 +680,13 @@ export class AuthService {
       // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore по нормализованному номеру
       const phoneCodeStored = this.phoneCodeHashStore.get(normalizedPhone);
       if (!phoneCodeStored || !phoneCodeStored.sessionId) {
-        throw new Error('Session ID not found in phoneCodeHashStore');
+          // КРИТИЧНО: Используем HttpException с ErrorResponse вместо throw new Error
+          const errorResponse = buildErrorResponse(
+            HttpStatus.BAD_REQUEST,
+            ErrorCode.SESSION_NOT_FOUND,
+            'Session ID not found in phoneCodeHashStore',
+          );
+          throw new HttpException(errorResponse, HttpStatus.BAD_REQUEST);
       }
       const sessionId = phoneCodeStored.sessionId;
 
@@ -694,7 +724,18 @@ export class AuthService {
       };
     } catch (error: any) {
       this.logger.error(`Error verifying phone code: ${error.message}`, error.stack);
-      throw error;
+      
+      // КРИТИЧНО: Если error уже HttpException с ErrorResponse - пробрасываем как есть
+      if (error instanceof HttpException) {
+        const response = error.getResponse();
+        if (typeof response === 'object' && response !== null && 'errorCode' in response) {
+          throw error; // Уже стандартизирован
+        }
+      }
+      
+      // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо прямого throw error
+      const errorResponse = mapTelegramErrorToResponse(error);
+      throw new HttpException(errorResponse, errorResponse.statusCode);
     }
   }
 
@@ -767,7 +808,12 @@ export class AuthService {
       };
     } catch (error: any) {
       this.logger.error(`Error generating QR code: ${error.message}`, error.stack);
-      throw new UnauthorizedException('Failed to generate QR code');
+      const errorResponse = buildErrorResponse(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.INTERNAL_SERVER_ERROR,
+        'Failed to generate QR code',
+      );
+      throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
     }
   }
 
@@ -847,7 +893,12 @@ export class AuthService {
                 where: { id: userId },
               });
               if (!user) {
-                throw new UnauthorizedException('User not found');
+                const errorResponse = buildErrorResponse(
+                  HttpStatus.UNAUTHORIZED,
+                  ErrorCode.NOT_FOUND,
+                  'User not found',
+                );
+                throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
               }
               // Обновляем данные пользователя из Telegram
               user.firstName = authUser.first_name || user.firstName;
@@ -934,10 +985,13 @@ export class AuthService {
         }
       } catch (acceptError: any) {
         // Токен еще не принят или ошибка
-        // Если ошибка "AUTH_TOKEN_INVALID" или "AUTH_TOKEN_EXPIRED", токен истек
+        // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо string.includes
+        const telegramErrorResponse = mapTelegramErrorToResponse(acceptError);
+        
+        // Если это ошибка истечения токена, помечаем как expired
         if (
-          acceptError.message?.includes('AUTH_TOKEN_INVALID') ||
-          acceptError.message?.includes('AUTH_TOKEN_EXPIRED')
+          telegramErrorResponse.errorCode === ErrorCode.SESSION_INVALID ||
+          telegramErrorResponse.errorCode === ErrorCode.SESSION_NOT_FOUND
         ) {
           stored.status = 'expired';
           this.qrTokenStore.delete(tokenId);
@@ -1027,34 +1081,44 @@ export class AuthService {
             return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent);
           }
         }
-          throw new HttpException(
-            buildErrorResponse(
-              HttpStatus.BAD_REQUEST,
-              ErrorCode.SESSION_NOT_FOUND,
-              '2FA session not found. Please restart the authentication process.',
-            ),
-            HttpStatus.BAD_REQUEST,
-          );
+        // КРИТИЧНО: Используем buildErrorResponse вместо прямого BadRequestException
+        const errorResponse = buildErrorResponse(
+          HttpStatus.BAD_REQUEST,
+          ErrorCode.SESSION_NOT_FOUND,
+          '2FA session not found. Please restart the authentication process.',
+        );
+        throw new HttpException(errorResponse, HttpStatus.BAD_REQUEST);
       }
       
       this.logger.log(`[2FA] ✅ twoFactorStore entry found for normalized phone: ${normalizedPhone}`);
       
-        if (stored.phoneCodeHash !== phoneCodeHash) {
-          this.logger.error(`Phone code hash mismatch for phone: ${normalizedPhone}. Expected: ${stored.phoneCodeHash}, Received: ${phoneCodeHash}`);
-          throw new HttpException(
-            buildErrorResponse(
-              HttpStatus.UNAUTHORIZED,
-              ErrorCode.SESSION_INVALID,
-              'Invalid phone code hash. Please restart the authorization process.',
-            ),
-            HttpStatus.UNAUTHORIZED,
-          );
-        }
+      if (stored.phoneCodeHash !== phoneCodeHash) {
+        this.logger.error(`Phone code hash mismatch for phone: ${normalizedPhone}. Expected: ${stored.phoneCodeHash}, Received: ${phoneCodeHash}`);
+        // КРИТИЧНО: Используем buildErrorResponse вместо прямого UnauthorizedException
+        const errorResponse = buildErrorResponse(
+          HttpStatus.UNAUTHORIZED,
+          ErrorCode.SESSION_INVALID,
+          'Invalid phone code hash. Please restart the authorization process.',
+        );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
+      }
       
       return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent);
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
-      throw error;
+      
+      // КРИТИЧНО: Если error уже HttpException с ErrorResponse - пробрасываем как есть
+      if (error instanceof HttpException) {
+        const response = error.getResponse();
+        if (typeof response === 'object' && response !== null && 'errorCode' in response) {
+          throw error; // Уже стандартизирован
+        }
+      }
+      
+      // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо прямого throw error
+      // Это гарантирует, что все ошибки преобразуются в ErrorResponse
+      const errorResponse = mapTelegramErrorToResponse(error);
+      throw new HttpException(errorResponse, errorResponse.statusCode);
     }
   }
 
@@ -1068,20 +1132,18 @@ export class AuthService {
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
 
-        if (stored.expiresAt < new Date()) {
-          this.twoFactorStore.delete(normalizedPhone);
-          stored.client.disconnect().catch((err) => {
-            this.logger.error(`Error disconnecting client: ${err.message}`);
-          });
-          throw new HttpException(
-            buildErrorResponse(
-              HttpStatus.UNAUTHORIZED,
-              ErrorCode.SESSION_INVALID,
-              '2FA session expired',
-            ),
-            HttpStatus.UNAUTHORIZED,
-          );
-        }
+      if (stored.expiresAt < new Date()) {
+        this.twoFactorStore.delete(normalizedPhone);
+        stored.client.disconnect().catch((err) => {
+          this.logger.error(`Error disconnecting client: ${err.message}`);
+        });
+        const errorResponse = buildErrorResponse(
+          HttpStatus.UNAUTHORIZED,
+          ErrorCode.SESSION_INVALID,
+          '2FA session expired',
+        );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
+      }
 
       const client = stored.client;
 
@@ -1091,7 +1153,12 @@ export class AuthService {
       });
 
       if (passwordResult._ !== 'account.password') {
-        throw new UnauthorizedException('Failed to get password parameters');
+        const errorResponse = buildErrorResponse(
+          HttpStatus.UNAUTHORIZED,
+          ErrorCode.INTERNAL_SERVER_ERROR,
+          'Failed to get password parameters',
+        );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
 
       // Логируем полную структуру passwordResult для отладки
@@ -1133,14 +1200,12 @@ export class AuthService {
       // Вычисляем SRP проверку
       const srpB = passwordResult.current_algo;
       if (srpB._ !== 'passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow') {
-        throw new HttpException(
-          buildErrorResponse(
-            HttpStatus.UNAUTHORIZED,
-            ErrorCode.INTERNAL_SERVER_ERROR,
-            'Unsupported password algorithm',
-          ),
+        const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
+          ErrorCode.INTERNAL_SERVER_ERROR,
+          'Unsupported password algorithm',
         );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
 
       const srpId = passwordResult.srp_id;
@@ -1208,25 +1273,21 @@ export class AuthService {
           }, 2),
         };
         this.logger.error('Missing srp_B in password result', debugInfo);
-        throw new HttpException(
-          buildErrorResponse(
-            HttpStatus.UNAUTHORIZED,
-            ErrorCode.INTERNAL_SERVER_ERROR,
-            'Failed to get SRP parameters: missing srp_B',
-          ),
+        const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
+          ErrorCode.INTERNAL_SERVER_ERROR,
+          'Failed to get SRP parameters: missing srp_B',
         );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
       if (!g || !p || !salt1 || !salt2) {
         this.logger.error('Missing SRP parameters', { g, p, salt1: !!salt1, salt2: !!salt2 });
-        throw new HttpException(
-          buildErrorResponse(
-            HttpStatus.UNAUTHORIZED,
-            ErrorCode.INTERNAL_SERVER_ERROR,
-            'Failed to get SRP parameters: missing required fields',
-          ),
+        const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
+          ErrorCode.INTERNAL_SERVER_ERROR,
+          'Failed to get SRP parameters: missing required fields',
         );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
 
       // Вычисляем SRP параметры по алгоритму MTKruto (не используем tssrp6a)
@@ -1354,7 +1415,12 @@ export class AuthService {
       }
       
       if (!aBigInt || !uBigInt || !gA) {
-        throw new UnauthorizedException('Failed to generate valid SRP parameters');
+        const errorResponse = buildErrorResponse(
+          HttpStatus.UNAUTHORIZED,
+          ErrorCode.INTERNAL_SERVER_ERROR,
+          'Failed to generate valid SRP parameters',
+        );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
       
       // Преобразуем gA в Buffer (256 байт)
@@ -1436,7 +1502,12 @@ export class AuthService {
       }) as any;
 
       if (checkPasswordResult._ !== 'auth.authorization') {
-        throw new UnauthorizedException('2FA password verification failed');
+        const errorResponse = buildErrorResponse(
+          HttpStatus.UNAUTHORIZED,
+          ErrorCode.INVALID_2FA_PASSWORD,
+          '2FA password verification failed',
+        );
+        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
 
       const authUser = checkPasswordResult.user;
@@ -1477,7 +1548,13 @@ export class AuthService {
 
       // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из stored
       if (!stored.sessionId) {
-        throw new Error('Session ID not found in twoFactorStore');
+        // КРИТИЧНО: Используем HttpException с ErrorResponse вместо throw new Error
+        const errorResponse = buildErrorResponse(
+          HttpStatus.BAD_REQUEST,
+          ErrorCode.SESSION_NOT_FOUND,
+          'Session ID not found in twoFactorStore',
+        );
+        throw new HttpException(errorResponse, HttpStatus.BAD_REQUEST);
       }
 
       // Обновляем сессию в БД - меняем userId с временного на реальный
@@ -1513,10 +1590,22 @@ export class AuthService {
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
 
-      // КРИТИЧНО: Все Telegram ошибки обрабатываются через mapper
-      // НИКАКИХ error.message.includes() - это нарушает архитектурные принципы
-      const errorResponse = mapTelegramErrorToResponse(error);
-      throw new HttpException(errorResponse, errorResponse.statusCode);
+      // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо string.includes
+      // Это единственный правильный способ обработки Telegram ошибок
+      const telegramErrorResponse = mapTelegramErrorToResponse(error);
+      
+      // Если это известная Telegram ошибка, используем её ErrorResponse
+      if (telegramErrorResponse.errorCode !== ErrorCode.INTERNAL_SERVER_ERROR) {
+        throw new HttpException(telegramErrorResponse, telegramErrorResponse.statusCode);
+      }
+      
+      // Если это неизвестная ошибка, создаем общий ErrorResponse
+      const errorResponse = buildErrorResponse(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.INVALID_2FA_PASSWORD,
+        '2FA verification failed',
+      );
+      throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
     }
   }
 

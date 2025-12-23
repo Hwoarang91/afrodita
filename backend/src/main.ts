@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger, BadRequestException } from '@nestjs/common';
+import { buildValidationErrorResponse } from './common/utils/error-response.builder';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { HttpAdapterHost } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -175,17 +176,11 @@ async function bootstrap() {
         const logger = new Logger('ValidationPipe');
         logger.error(`Validation failed: ${JSON.stringify(errors, null, 2)}`);
         
-        // Возвращаем BadRequestException с массивом ValidationError
-        // ValidationExceptionFilter преобразует это в стандартизированный ErrorResponse
-        return new BadRequestException({
-          message: errors.map((err) => ({
-            property: err.property,
-            constraints: err.constraints,
-            value: err.value,
-          })),
-          error: 'Bad Request',
-          statusCode: 400,
-        });
+        // КРИТИЧНО: Используем buildValidationErrorResponse для создания стандартизированного ErrorResponse
+        // Это гарантирует, что message всегда строка, а не массив объектов
+        // Это предотвращает React error #31
+        const errorResponse = buildValidationErrorResponse(errors);
+        return new BadRequestException(errorResponse);
       },
     }),
   );

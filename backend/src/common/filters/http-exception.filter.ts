@@ -173,6 +173,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
         } else if (typeof responseObj.message === 'string') {
           message = responseObj.message;
         } else {
+          // КРИТИЧНО: Если message не строка и не массив, используем fallback
+          // Это защита от случаев, когда где-то создается HttpException с объектом в message
+          this.logger.warn(
+            '[HttpExceptionFilter] Обнаружен объект в message (не массив и не строка)! ' +
+            'Используем fallback для предотвращения React error #31.',
+            {
+              messageType: typeof responseObj.message,
+              messageValue: responseObj.message,
+            },
+          );
           message = 'Некорректный запрос';
         }
       } else if (typeof exceptionResponse === 'string') {
