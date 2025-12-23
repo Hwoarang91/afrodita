@@ -113,11 +113,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
     );
 
     // Регистрируем ошибку в метриках (если сервис доступен)
+    // Это включает canary-алерты для Telegram деградаций
     if (this.errorMetricsService) {
       this.errorMetricsService.recordError(errorCode, {
         statusCode: status,
         url: request.url,
         method: request.method,
+        sessionId: request.user?.sessionId, // Если доступно
       });
     }
 
