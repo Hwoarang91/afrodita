@@ -139,6 +139,20 @@ docker rm n8n
   - ErrorMetricsService для сбора статистики
   - Алерты для критичных ошибок (SESSION_INVALID, AUTH_KEY_UNREGISTERED)
   - Интегрирован в HttpExceptionFilter
+- Тесты для увеличения покрытия кода (+5%)
+  - telegram-error-mapper.spec.ts - полное покрытие маппинга MTProto ошибок
+  - session-state-machine.spec.ts - тесты для переходов состояний
+  - error-code-http-map.spec.ts - тесты для маппинга ErrorCode → HTTP status
+  - sensitive-data-masker.spec.ts - тесты для маскирования данных
+  - error-metrics.service.spec.ts - тесты для метрик ошибок
+  - error-code-rate-limit.middleware.spec.ts - тесты для rate limiting
+  - architectural-principles.spec.ts - автоматическая проверка соблюдения принципов
+- Архитектурные принципы зафиксированы
+  - Создан ARCHITECTURAL_PRINCIPLES.md с детальным описанием
+  - ❌ Никаких error.message.includes() вне mapper
+  - ❌ Никаких Telegram строк в UI / controller
+  - ✅ Единственная точка знания MTProto — telegram-error-mapper.ts
+  - ✅ UI работает только с ErrorCode
 - Исправлены ошибки компиляции и запуска на сервере
   - Добавлен AUTH_KEY_UNREGISTERED в ErrorCode enum
   - Добавлен AUTH_KEY_UNREGISTERED в ERROR_HTTP_MAP

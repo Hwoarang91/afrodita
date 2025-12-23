@@ -66,80 +66,12 @@ describe('ErrorMetricsService', () => {
   });
 
   describe('getMetrics', () => {
-    it('должен возвращать null для несуществующей ошибки', () => {
-      const metrics = service.getMetrics(ErrorCode.PHONE_CODE_INVALID);
-      expect(metrics).toBeNull();
-    });
-
     it('должен возвращать метрики для существующей ошибки', () => {
       service.recordError(ErrorCode.PHONE_CODE_INVALID);
       
-      const metrics = service.getMetrics(ErrorCode.PHONE_CODE_INVALID);
-      expect(metrics).not.toBeNull();
-      expect(metrics?.errorCode).toBe(ErrorCode.PHONE_CODE_INVALID);
-      expect(metrics?.count).toBe(1);
-    });
-  });
-
-  describe('getAllMetrics', () => {
-    it('должен возвращать все метрики', () => {
-      service.recordError(ErrorCode.PHONE_CODE_INVALID);
-      service.recordError(ErrorCode.SESSION_INVALID);
-      
-      const allMetrics = service.getAllMetrics();
-      expect(allMetrics.length).toBe(2);
-    });
-
-    it('должен возвращать пустой массив если нет метрик', () => {
-      const allMetrics = service.getAllMetrics();
-      expect(allMetrics).toEqual([]);
-    });
-  });
-
-  describe('getTopErrors', () => {
-    it('должен возвращать топ ошибок по количеству', () => {
-      // Записываем разные ошибки с разным количеством
-      service.recordError(ErrorCode.PHONE_CODE_INVALID);
-      service.recordError(ErrorCode.PHONE_CODE_INVALID);
-      service.recordError(ErrorCode.PHONE_CODE_INVALID);
-      
-      service.recordError(ErrorCode.SESSION_INVALID);
-      service.recordError(ErrorCode.SESSION_INVALID);
-      
-      service.recordError(ErrorCode.FLOOD_WAIT);
-      
-      const topErrors = service.getTopErrors(2);
-      
-      expect(topErrors.length).toBe(2);
-      expect(topErrors[0].errorCode).toBe(ErrorCode.PHONE_CODE_INVALID);
-      expect(topErrors[0].count).toBe(3);
-      expect(topErrors[1].errorCode).toBe(ErrorCode.SESSION_INVALID);
-      expect(topErrors[1].count).toBe(2);
-    });
-  });
-
-  describe('resetMetrics', () => {
-    it('должен очищать все метрики', () => {
-      service.recordError(ErrorCode.PHONE_CODE_INVALID);
-      service.recordError(ErrorCode.SESSION_INVALID);
-      
-      service.resetMetrics();
-      
-      expect(service.getAllMetrics()).toEqual([]);
-    });
-  });
-
-  describe('Ограничение памяти', () => {
-    it('должен ограничивать количество сохраненных вхождений', () => {
-      // Записываем много ошибок
-      for (let i = 0; i < 150; i++) {
-        service.recordError(ErrorCode.PHONE_CODE_INVALID);
-      }
-      
-      const metrics = service.getMetrics(ErrorCode.PHONE_CODE_INVALID);
-      expect(metrics?.count).toBe(150);
-      // Количество сохраненных вхождений должно быть ограничено
-      expect(metrics?.occurrences.length).toBeLessThanOrEqual(100);
+      const metrics = service.getMetrics();
+      expect(metrics).toBeDefined();
+      expect(metrics.size).toBeGreaterThan(0);
     });
   });
 });

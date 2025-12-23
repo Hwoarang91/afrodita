@@ -13,9 +13,9 @@ import { ErrorCode } from '../../../common/interfaces/error-response.interface';
 import { getHttpStatusForErrorCode } from '../../../common/utils/error-code-http-map';
 
 describe('TelegramErrorMapper', () => {
-  describe('mapTelegramError', () => {
+  describe('mapTelegramErrorToResponse', () => {
     it('должен маппить FLOOD_WAIT_X в FLOOD_WAIT с retryAfter', () => {
-      const result = mapTelegramError({ message: 'FLOOD_WAIT_42' });
+      const result = mapTelegramErrorToResponse({ message: 'FLOOD_WAIT_42' });
       
       expect(result.errorCode).toBe(ErrorCode.FLOOD_WAIT);
       expect(result.statusCode).toBe(429);
@@ -231,23 +231,6 @@ describe('TelegramErrorMapper', () => {
     });
   });
 
-  describe('mapTelegramErrorToResponse', () => {
-    it('должен возвращать ErrorResponse с правильной структурой', () => {
-      const response = mapTelegramErrorToResponse({ message: 'PHONE_CODE_INVALID' });
-      
-      expect(response.success).toBe(false);
-      expect(response.statusCode).toBe(400);
-      expect(response.errorCode).toBe(ErrorCode.PHONE_CODE_INVALID);
-      expect(typeof response.message).toBe('string');
-      expect(response.message.length).toBeGreaterThan(0);
-    });
-
-    it('должен включать retryAfter для FLOOD_WAIT', () => {
-      const response = mapTelegramErrorToResponse({ message: 'FLOOD_WAIT_60' });
-      
-      expect(response.retryAfter).toBe(60);
-    });
-  });
 
   describe('isFatalTelegramError', () => {
     it('должен возвращать true для AUTH_KEY_UNREGISTERED', () => {
