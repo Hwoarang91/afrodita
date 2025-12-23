@@ -21,6 +21,8 @@ import { TelegramUserController } from './controllers/telegram-user.controller';
 import { TelegramUserSession } from '../../entities/telegram-user-session.entity';
 import { TelegramUserClientService } from './services/telegram-user-client.service';
 import { SessionEncryptionService } from './services/session-encryption.service';
+import { TelegramSessionService } from './services/telegram-session.service';
+import { TelegramSessionGuard } from './guards/telegram-session.guard';
 import { UsersModule } from '../users/users.module';
 import { ServicesModule } from '../services/services.module';
 import { MastersModule } from '../masters/masters.module';
@@ -54,6 +56,8 @@ import { WebSocketModule } from '../websocket/websocket.module';
     ScheduledMessagesService,
     TelegramUserClientService,
     SessionEncryptionService,
+    TelegramSessionService,
+    TelegramSessionGuard,
   ],
   exports: [
     TelegramService,
@@ -63,6 +67,7 @@ import { WebSocketModule } from '../websocket/websocket.module';
     ScheduledMessagesService,
     TelegramUserClientService,
     SessionEncryptionService,
+    TelegramSessionService,
   ],
 })
 export class TelegramModule {}
