@@ -176,7 +176,6 @@ class DatabaseStorage implements Partial<Storage> {
 
       // КРИТИЧНО: Проверка на null и обработка ошибок decrypt
       if (!session.encryptedSessionData || session.encryptedSessionData.trim() === '') {
-        this.logger.warn(`DatabaseStorage.delete: Session ${this.sessionId} has empty encryptedSessionData`);
         return;
       }
 
@@ -185,7 +184,6 @@ class DatabaseStorage implements Partial<Storage> {
         decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
       } catch (error: any) {
         // Если не удалось расшифровать - просто возвращаемся (Storage контракт)
-        this.logger.warn(`DatabaseStorage.delete: Failed to decrypt session ${this.sessionId}: ${error.message}`);
         return;
       }
 
