@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ErrorResponse, ErrorCode } from '../interfaces/error-response.interface';
-import { buildErrorResponse } from '../utils/error-response.builder';
+import { buildErrorResponse, buildValidationErrorResponse } from '../utils/error-response.builder';
 import { getHttpStatusForErrorCode } from '../utils/error-code-http-map';
 import { maskSensitiveData } from '../utils/sensitive-data-masker';
 import { ErrorMetricsService } from '../utils/error-metrics.service';
