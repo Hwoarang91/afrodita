@@ -263,7 +263,11 @@ export class MastersService {
     
     if (appointmentsCount > 0) {
       throw new BadRequestException(
-        `Невозможно удалить мастера: у него есть ${appointmentsCount} записей. Сначала удалите или отмените все записи.`,
+        buildErrorResponse(
+          400,
+          ErrorCode.VALIDATION_ERROR,
+          `Невозможно удалить мастера: у него есть ${appointmentsCount} записей. Сначала удалите или отмените все записи.`
+        )
       );
     }
     

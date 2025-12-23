@@ -142,13 +142,21 @@ export class UsersService {
 
     if (appointmentsCount > 0) {
       throw new BadRequestException(
-        `Невозможно удалить клиента: у него есть ${appointmentsCount} записей. Сначала удалите или отмените все записи.`,
+        buildErrorResponse(
+          400,
+          ErrorCode.VALIDATION_ERROR,
+          `Невозможно удалить клиента: у него есть ${appointmentsCount} записей. Сначала удалите или отмените все записи.`
+        )
       );
     }
     
     if (transactionsCount > 0) {
       throw new BadRequestException(
-        `Невозможно удалить клиента: у него есть ${transactionsCount} транзакций.`,
+        buildErrorResponse(
+          400,
+          ErrorCode.VALIDATION_ERROR,
+          `Невозможно удалить клиента: у него есть ${transactionsCount} транзакций.`
+        )
       );
     }
 
@@ -163,7 +171,11 @@ export class UsersService {
       // Если ошибка связана с внешними ключами, даем более понятное сообщение
       if (error.code === '23503' || error.message?.includes('foreign key')) {
         throw new BadRequestException(
-          'Невозможно удалить клиента: у него есть связанные записи (записи на услуги, транзакции или уведомления).',
+          buildErrorResponse(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            'Невозможно удалить клиента: у него есть связанные записи (записи на услуги, транзакции или уведомления).'
+          )
         );
       }
       throw error;

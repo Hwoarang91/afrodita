@@ -73,7 +73,25 @@ export class ValidationExceptionFilter implements ExceptionFilter {
     ) {
       // Уже стандартизированный ErrorResponse от exceptionFactory
       this.logger.debug('[ValidationExceptionFilter] Получен готовый ErrorResponse от exceptionFactory');
-      response.status(status).json(exceptionResponse);
+
+      // КРИТИЧНО: Создаем новый объект для защиты от прототипного загрязнения
+      // НИКОГДА не возвращаем exceptionResponse напрямую
+      const safeResponse = {
+        success: false,
+        statusCode: (exceptionResponse as any).statusCode || status,
+        errorCode: (exceptionResponse as any).errorCode,
+        message: (exceptionResponse as any).message, // Гарантированно строка
+      };
+
+      if ((exceptionResponse as any).details) {
+        safeResponse.details = (exceptionResponse as any).details;
+      }
+
+      if ((exceptionResponse as any).retryAfter !== undefined) {
+        safeResponse.retryAfter = (exceptionResponse as any).retryAfter;
+      }
+
+      response.status(status).json(safeResponse);
       return;
     }
 

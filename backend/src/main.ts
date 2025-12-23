@@ -195,6 +195,10 @@ async function bootstrap() {
   const httpExceptionFilter = new HttpExceptionFilter();
   httpExceptionFilter.setErrorMetricsService(errorMetricsService);
   
+  // IMPORTANT: ValidationExceptionFilter MUST be registered BEFORE HttpExceptionFilter
+  // This ensures that ValidationPipe errors are processed correctly and don't leak ValidationError[] arrays
+  // If the order is wrong, BadRequestException from ValidationPipe will be handled by HttpExceptionFilter
+  // which may return arrays in message field, causing React error #31
   app.useGlobalFilters(
     new ValidationExceptionFilter(), // Обрабатывает BadRequestException (ValidationPipe)
     httpExceptionFilter, // Обрабатывает все остальные HttpException

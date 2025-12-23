@@ -61,17 +61,23 @@ export class AppointmentsService {
 
     // Проверка активности мастера
     if (!master.isActive) {
-      throw new BadRequestException('Master is not active');
+      throw new BadRequestException(
+        buildErrorResponse(400, ErrorCode.VALIDATION_ERROR, 'Master is not active')
+      );
     }
 
     // Проверка активности услуги
     if (!service.isActive) {
-      throw new BadRequestException('Service is not active');
+      throw new BadRequestException(
+        buildErrorResponse(400, ErrorCode.VALIDATION_ERROR, 'Service is not active')
+      );
     }
 
     // Проверка доступности мастера для услуги
     if (!master.services.some((s) => s.id === service.id)) {
-      throw new BadRequestException('Master does not provide this service');
+      throw new BadRequestException(
+        buildErrorResponse(400, ErrorCode.VALIDATION_ERROR, 'Master does not provide this service')
+      );
     }
 
     const startTime = new Date(dto.startTime);

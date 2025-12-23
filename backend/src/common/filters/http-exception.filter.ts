@@ -38,11 +38,90 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
     const exceptionResponse = exception.getResponse();
 
+    // КРИТИЧНО: ПЕРВАЯ ЗАЩИТА - проверяем на ValidationError[] в response
+    // Если где-то бросили throw new BadRequestException(validationErrors)
+    // то exceptionResponse.message будет массивом объектов
+    if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null &&
+      'message' in exceptionResponse &&
+      Array.isArray((exceptionResponse as any).message)
+    ) {
+      this.logger.error(
+        '[HttpExceptionFilter] КРИТИЧЕСКАЯ ЗАЩИТА: Обнаружен массив ValidationError[] в BadRequestException! ' +
+        'Преобразуем в ErrorResponse для предотвращения React error #31.',
+        {
+          validationErrorsCount: (exceptionResponse as any).message.length,
+          firstError: (exceptionResponse as any).message[0] ? {
+            property: (exceptionResponse as any).message[0].property,
+            constraints: Object.keys((exceptionResponse as any).message[0].constraints || {}),
+          } : null,
+        },
+      );
+
+      // Преобразуем ValidationError[] в стандартизированный ErrorResponse
+      const validationErrors = (exceptionResponse as any).message;
+      const errorResponse = buildValidationErrorResponse(validationErrors);
+
+      // Регистрируем ошибку в метриках
+      if (this.errorMetricsService) {
+        this.errorMetricsService.recordError(ErrorCode.VALIDATION_ERROR, {
+          statusCode: status,
+          url: request.url,
+          method: request.method,
+        });
+      }
+
+      response.status(status).json(errorResponse);
+      return;
+    }
+
+    // КРИТИЧНО: ВТОРАЯ ЗАЩИТА - проверяем на ValidationError OBJECT в message
+    // Если где-то бросили BadRequestException с объектом {property, constraints, value}
+    // то exceptionResponse.message будет объектом (не массивом)
+    if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null &&
+      'message' in exceptionResponse &&
+      typeof (exceptionResponse as any).message === 'object' &&
+      (exceptionResponse as any).message !== null &&
+      !Array.isArray((exceptionResponse as any).message) &&
+      'property' in (exceptionResponse as any).message &&
+      'constraints' in (exceptionResponse as any).message
+    ) {
+      this.logger.error(
+        '[HttpExceptionFilter] КРИТИЧЕСКАЯ ЗАЩИТА: Обнаружен объект ValidationError в BadRequestException! ' +
+        'Это вызывает React error #31. Преобразуем в ErrorResponse.',
+        {
+          validationErrorProperty: (exceptionResponse as any).message.property,
+          constraints: Object.keys((exceptionResponse as any).message.constraints || {}),
+        },
+      );
+
+      // Преобразуем одиночный ValidationError в стандартизированный ErrorResponse
+      const validationErrors = [(exceptionResponse as any).message];
+      const errorResponse = buildValidationErrorResponse(validationErrors);
+
+      // Регистрируем ошибку в метриках
+      if (this.errorMetricsService) {
+        this.errorMetricsService.recordError(ErrorCode.VALIDATION_ERROR, {
+          statusCode: status,
+          url: request.url,
+          method: request.method,
+        });
+      }
+
+      response.status(status).json(errorResponse);
+      return;
+    }
+
+
+
     // Логируем ошибку с маскированием sensitive данных
     // КРИТИЧНО: Логируем errorCode, а не message (message для UI)
     const maskedBody = maskSensitiveData(request.body || {});
     const maskedQuery = maskSensitiveData(request.query || {});
-    
+
     this.logger.error(
       `[HTTP Exception] ${request.method} ${request.url}`,
       {
@@ -75,16 +154,44 @@ export class HttpExceptionFilter implements ExceptionFilter {
         errorCode: (exceptionResponse as any).errorCode,
         message: (exceptionResponse as any).message, // Гарантированно строка
       };
-      
+
       if ((exceptionResponse as any).details) {
         cleanErrorResponse.details = (exceptionResponse as any).details;
       }
-      
+
       if ((exceptionResponse as any).retryAfter !== undefined) {
         cleanErrorResponse.retryAfter = (exceptionResponse as any).retryAfter;
       }
-      
+
       response.status(status).json(cleanErrorResponse);
+      return;
+    }
+
+    // КРИТИЧНО: ЗАЩИТА ОТ message: object (не Array, не String)
+    // Если сюда пришел BadRequestException с message как объектом ValidationError
+    if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null &&
+      'message' in exceptionResponse &&
+      typeof (exceptionResponse as any).message === 'object' &&
+      !Array.isArray((exceptionResponse as any).message) &&
+      'property' in (exceptionResponse as any).message &&
+      'constraints' in (exceptionResponse as any).message
+    ) {
+      this.logger.error(
+        '[HttpExceptionFilter] КРИТИЧЕСКАЯ ЗАЩИТА: Обнаружен объект ValidationError в message! ' +
+        'Это пропущено ValidationExceptionFilter. Преобразуем в ErrorResponse.',
+        {
+          validationErrorProperty: (exceptionResponse as any).message.property,
+          constraints: Object.keys((exceptionResponse as any).message.constraints || {}),
+        },
+      );
+
+      // Преобразуем одиночный ValidationError в стандартизированный ErrorResponse
+      const validationErrors = [(exceptionResponse as any).message];
+      const errorResponse = buildValidationErrorResponse(validationErrors);
+
+      response.status(status).json(errorResponse);
       return;
     }
 
