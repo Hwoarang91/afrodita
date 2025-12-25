@@ -48,9 +48,9 @@ export interface ErrorCodeUIBehavior {
 /**
  * Матрица соответствия ErrorCode и UI поведения
  */
-export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeUIBehavior>> = {
+export const ERROR_CODE_UI_MATRIX: Partial<Record<string, ErrorCodeUIBehavior>> = {
   // Rate limiting
-  [ErrorCode.FLOOD_WAIT]: {
+  FLOOD_WAIT: {
     description: 'Показать таймер обратного отсчета',
     action: (error) => {
       // Пример: showFloodTimer(error.retryAfter)
