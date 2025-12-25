@@ -13,7 +13,9 @@
  * ```
  */
 
-import { ErrorCode } from '../../backend/src/common/interfaces/error-response.interface';
+// Используем строковые литералы вместо enum, так как ErrorCode определен в backend
+// и не доступен напрямую из admin приложения
+type ErrorCode = string;
 
 export type UIBehaviorAction = (error: {
   errorCode: string;
@@ -57,7 +59,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
     autoRetry: true,
   },
   
-  [ErrorCode.TOO_MANY_REQUESTS]: {
+  TOO_MANY_REQUESTS: {
     description: 'Показать сообщение о превышении лимита',
     action: (error) => {
       // Пример: toast.error(error.message)
@@ -66,7 +68,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
   },
 
   // Phone code errors
-  [ErrorCode.PHONE_CODE_INVALID]: {
+  PHONE_CODE_INVALID: {
     description: 'Показать ошибку в поле ввода кода, shake input',
     action: (error) => {
       // Пример: setCodeError(error.message); shakeInput('code')
@@ -74,7 +76,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
     },
   },
   
-  [ErrorCode.PHONE_CODE_EXPIRED]: {
+  PHONE_CODE_EXPIRED: {
     description: 'Показать кнопку "Запросить код заново"',
     action: (error) => {
       // Пример: showRequestNewCodeButton()
@@ -82,7 +84,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
     },
   },
   
-  [ErrorCode.PHONE_NUMBER_INVALID]: {
+  PHONE_NUMBER_INVALID: {
     description: 'Показать ошибку в поле номера телефона',
     action: (error) => {
       // Пример: setPhoneError(error.message)
@@ -90,7 +92,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
     },
   },
   
-  [ErrorCode.PHONE_NUMBER_BANNED]: {
+  PHONE_NUMBER_BANNED: {
     description: 'Показать блокирующее сообщение с ссылкой на поддержку',
     action: (error) => {
       // Пример: showBlockedMessage(error.message, supportLink)
@@ -99,7 +101,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
   },
 
   // 2FA errors
-  [ErrorCode.INVALID_2FA_PASSWORD]: {
+  INVALID_2FA_PASSWORD: {
     description: 'Shake input пароля, показать ошибку',
     action: (error) => {
       // Пример: shakeInput('password'); setPasswordError(error.message)
@@ -108,7 +110,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
   },
 
   // Session errors
-  [ErrorCode.SESSION_INVALID]: {
+  SESSION_INVALID: {
     description: 'Перенаправить на страницу авторизации',
     action: (error) => {
       // Пример: router.push('/auth/telegram')
@@ -117,7 +119,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
     requiresReauth: true,
   },
   
-  [ErrorCode.SESSION_NOT_FOUND]: {
+  SESSION_NOT_FOUND: {
     description: 'Перенаправить на страницу авторизации',
     action: (error) => {
       // Пример: router.push('/auth/telegram')
@@ -127,7 +129,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
   },
 
   // Migration errors
-  [ErrorCode.DC_MIGRATE]: {
+  DC_MIGRATE: {
     description: 'Автоматически повторить запрос',
     action: (error) => {
       // Пример: retryRequest()
@@ -136,7 +138,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
     autoRetry: true,
   },
   
-  [ErrorCode.RETRY]: {
+  RETRY: {
     description: 'Автоматически повторить запрос',
     action: (error) => {
       // Пример: retryRequest()
@@ -145,7 +147,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
     autoRetry: true,
   },
   
-  [ErrorCode.TIMEOUT]: {
+  TIMEOUT: {
     description: 'Показать сообщение и предложить повторить',
     action: (error) => {
       // Пример: toast.error(error.message); showRetryButton()
@@ -155,7 +157,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
   },
 
   // Validation errors
-  [ErrorCode.VALIDATION_ERROR]: {
+  VALIDATION_ERROR: {
     description: 'Показать ошибки валидации в соответствующих полях',
     action: (error) => {
       // Пример: showValidationErrors(error.details)
@@ -171,7 +173,7 @@ export const ERROR_CODE_UI_MATRIX: Partial<Record<ErrorCode | string, ErrorCodeU
  * @returns UI поведение или null если не найдено
  */
 export function getUIBehaviorForErrorCode(
-  errorCode: ErrorCode | string,
+  errorCode: string,
 ): ErrorCodeUIBehavior | null {
   return ERROR_CODE_UI_MATRIX[errorCode] || null;
 }
@@ -182,7 +184,7 @@ export function getUIBehaviorForErrorCode(
  * @param errorCode - Код ошибки
  * @returns true если требуется перелогин
  */
-export function requiresReauth(errorCode: ErrorCode | string): boolean {
+export function requiresReauth(errorCode: string): boolean {
   const behavior = getUIBehaviorForErrorCode(errorCode);
   return behavior?.requiresReauth ?? false;
 }
@@ -193,7 +195,7 @@ export function requiresReauth(errorCode: ErrorCode | string): boolean {
  * @param errorCode - Код ошибки
  * @returns true если можно автоматически повторить
  */
-export function canAutoRetry(errorCode: ErrorCode | string): boolean {
+export function canAutoRetry(errorCode: string): boolean {
   const behavior = getUIBehaviorForErrorCode(errorCode);
   return behavior?.autoRetry ?? false;
 }
