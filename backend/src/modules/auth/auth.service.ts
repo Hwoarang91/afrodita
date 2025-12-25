@@ -524,6 +524,7 @@ export class AuthService {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
+    expressRequest?: any, // Express request для сохранения сессии в request.session
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null; requires2FA: boolean; passwordHint?: string }> {
     try {
       // КРИТИЧНО: Нормализуем номер телефона для поиска в хранилище
@@ -1074,7 +1075,7 @@ export class AuthService {
           // Используем найденную сессию
           const migrated = this.twoFactorStore.get(normalizedPhone);
           if (migrated) {
-            return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent);
+            return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent, undefined);
           }
         }
         // КРИТИЧНО: Используем buildErrorResponse вместо прямого BadRequestException
