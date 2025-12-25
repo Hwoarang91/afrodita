@@ -1045,6 +1045,7 @@ export class AuthService {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
+    expressRequest?: any, // Express request для сохранения сессии в request.session
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
       // Нормализуем номер телефона для поиска в хранилище
@@ -1098,7 +1099,7 @@ export class AuthService {
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
       
-      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent, expressRequest);
+      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent);
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
       

@@ -492,7 +492,7 @@ export class AuthController {
         dto.phoneCodeHash,
         req.ip,
         req.get('user-agent'),
-        req, // Передаем request для сохранения сессии в request.session
+        req as any, // Передаем request для сохранения сессии в request.session
       );
 
       if (result.requires2FA) {
@@ -631,7 +631,7 @@ export class AuthController {
       dto.phoneCodeHash,
       req.ip,
       req.get('user-agent'),
-      req, // Передаем request для сохранения сессии в request.session
+      req as any, // Передаем request для сохранения сессии в request.session
     );
 
     // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
