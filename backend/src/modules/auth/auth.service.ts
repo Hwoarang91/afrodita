@@ -1098,7 +1098,7 @@ export class AuthService {
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
       
-      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent, request);
+      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent, expressRequest);
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
       
@@ -1124,7 +1124,7 @@ export class AuthService {
     stored: { client: Client; sessionId: string; phoneCodeHash: string; expiresAt: Date; passwordHint?: string },
     ipAddress?: string,
     userAgent?: string,
-    request?: any, // Express request для сохранения сессии в request.session
+    expressRequest?: any, // Express request для сохранения сессии в request.session
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
 
@@ -1573,8 +1573,8 @@ export class AuthService {
 
       // КРИТИЧНО: Также сохраняем сессию в request.session через TelegramSessionService
       // Это нужно для guard который проверяет request.session.telegramSession
-      if (request) {
-        this.telegramSessionService.save(request, {
+      if (expressRequest) {
+        this.telegramSessionService.save(expressRequest, {
           userId: user.id,
           sessionId: stored.sessionId,
           phoneNumber: normalizedPhone,
