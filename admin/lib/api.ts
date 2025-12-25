@@ -44,42 +44,40 @@ apiClient.interceptors.request.use((config) => {
   // Все остальные поля удаляются (userId, sessionId, client, user и т.д.)
   const url = config.url || '';
   const baseUrl = config.baseURL || '';
-  const fullUrl = (baseUrl + url).includes('/auth/telegram/2fa/verify');
+  const fullUrl = (baseUrl + url).includes('/auth/telegram/2fa/verify') || url.includes('/auth/telegram/2fa/verify');
   
   // Разрешенные ключи (соответствуют Telegram2FAVerifyDto)
   const ALLOWED_KEYS = ['phoneNumber', 'password', 'phoneCodeHash'] as const;
-  const FORBIDDEN_KEYS = ['userId', 'sessionId', 'client', 'user'] as const;
+  const FORBIDDEN_KEYS = ['userId', 'sessionId', 'client', 'user', 'id'] as const;
   
   if (fullUrl && config.data) {
     // Обрабатываем как объект (самый частый случай)
     if (typeof config.data === 'object' && config.data !== null && !Array.isArray(config.data) && !(config.data instanceof FormData)) {
-      let hasForbiddenFields = false;
+      // ВСЕГДА создаем новый чистый объект только с разрешенными полями (allow-list)
+      const { phoneNumber, password, phoneCodeHash } = config.data as any;
+      const cleanPayload: Record<string, any> = {};
       
-      // Проверяем наличие запрещенных полей
-      for (const field of FORBIDDEN_KEYS) {
-        if (field in config.data) {
-          hasForbiddenFields = true;
-          if (process.env.NODE_ENV === 'development') {
-            console.warn(`[API Interceptor] ⚠️ Removed forbidden field '${field}' from 2FA verify request`);
-          }
-        }
+      // Добавляем только разрешенные поля, если они есть
+      if (phoneNumber !== undefined && phoneNumber !== null) {
+        cleanPayload.phoneNumber = typeof phoneNumber === 'string' ? phoneNumber.trim() : phoneNumber;
+      }
+      if (password !== undefined && password !== null) {
+        cleanPayload.password = password;
+      }
+      if (phoneCodeHash !== undefined && phoneCodeHash !== null) {
+        cleanPayload.phoneCodeHash = phoneCodeHash;
       }
       
-      // Проверяем наличие неразрешенных полей (не в ALLOWED_KEYS)
-      const dataKeys = Object.keys(config.data);
-      const hasUnknownFields = dataKeys.some(key => !ALLOWED_KEYS.includes(key as any));
+      // Заменяем data на чистый объект (гарантированно без userId и других запрещенных полей)
+      config.data = cleanPayload;
       
-      // Если были запрещенные или неизвестные поля, создаем новый чистый объект
-      if (hasForbiddenFields || hasUnknownFields) {
-        const { phoneNumber, password, phoneCodeHash } = config.data as any;
-        config.data = {
-          phoneNumber: phoneNumber?.trim?.() || phoneNumber,
-          password: password,
-          phoneCodeHash: phoneCodeHash,
-        };
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[API Interceptor] ✅ Created clean payload for 2FA verify (allow-list approach)');
+      if (process.env.NODE_ENV === 'development') {
+        const hadForbidden = FORBIDDEN_KEYS.some(key => key in (config.data as any));
+        const hadUnknown = Object.keys(config.data as any).some(key => !ALLOWED_KEYS.includes(key as any));
+        if (hadForbidden || hadUnknown) {
+          console.warn('[API Interceptor] ⚠️ Removed forbidden/unknown fields from 2FA verify request');
         }
+        console.log('[API Interceptor] ✅ Clean payload for 2FA verify:', Object.keys(cleanPayload));
       }
     }
     // Обрабатываем как строку (JSON)
@@ -90,9 +88,15 @@ apiClient.interceptors.request.use((config) => {
           const { phoneNumber, password, phoneCodeHash } = parsed;
           // Создаем чистый объект только с разрешенными полями
           const cleanPayload: Record<string, any> = {};
-          if (phoneNumber !== undefined) cleanPayload.phoneNumber = phoneNumber?.trim?.() || phoneNumber;
-          if (password !== undefined) cleanPayload.password = password;
-          if (phoneCodeHash !== undefined) cleanPayload.phoneCodeHash = phoneCodeHash;
+          if (phoneNumber !== undefined && phoneNumber !== null) {
+            cleanPayload.phoneNumber = typeof phoneNumber === 'string' ? phoneNumber.trim() : phoneNumber;
+          }
+          if (password !== undefined && password !== null) {
+            cleanPayload.password = password;
+          }
+          if (phoneCodeHash !== undefined && phoneCodeHash !== null) {
+            cleanPayload.phoneCodeHash = phoneCodeHash;
+          }
           
           config.data = JSON.stringify(cleanPayload);
           if (process.env.NODE_ENV === 'development') {
@@ -100,6 +104,7 @@ apiClient.interceptors.request.use((config) => {
             if (hadForbidden) {
               console.warn('[API Interceptor] ⚠️ Removed forbidden fields from 2FA verify request (JSON string)');
             }
+            console.log('[API Interceptor] ✅ Clean payload for 2FA verify (JSON):', Object.keys(cleanPayload));
           }
         }
       } catch (e) {

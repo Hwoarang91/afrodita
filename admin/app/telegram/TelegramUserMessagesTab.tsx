@@ -550,24 +550,23 @@ export default function TelegramUserMessagesTab() {
                             {(session.status === 'invalid' || session.status === 'revoked') && (
                               <Button
                                 variant="destructive"
-                                  size="sm"
-                                  onClick={() => {
-                                    if (confirm('Вы уверены, что хотите полностью удалить эту сессию? Это действие нельзя отменить.')) {
-                                      deactivateSessionMutation.mutate({ sessionId: session.id, permanent: true });
-                                    }
-                                  }}
-                                  disabled={deactivateSessionMutation.isPending}
-                                >
-                                  {deactivateSessionMutation.isPending ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <Trash2 className="w-4 h-4 mr-2" />
-                                      Удалить
-                                    </>
-                                  )}
-                                </Button>
-                              </>
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm('Вы уверены, что хотите полностью удалить эту сессию? Это действие нельзя отменить.')) {
+                                    deactivateSessionMutation.mutate({ sessionId: session.id, permanent: true });
+                                  }
+                                }}
+                                disabled={deactivateSessionMutation.isPending}
+                              >
+                                {deactivateSessionMutation.isPending ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Удалить
+                                  </>
+                                )}
+                              </Button>
                             )}
                             {index === 0 && (
                               <Button
