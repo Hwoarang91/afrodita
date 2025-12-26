@@ -693,7 +693,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
       // КРИТИЧНО: Сохраняем сессию в БД с статусом 'active'
       await this.sessionRepository.save(session);
       this.logger.warn(`[saveSession] 🔥 SESSION ACTIVATED: sessionId=${session.id}, userId=${userId}, status=${session.status}, isActive=${session.isActive}`);
-      this.logger.log(`✅ Session ${session.id} updated successfully: ${currentStatus} → ${targetStatus}, isActive=true`);
+      this.logger.log(`✅ Session ${session.id} updated successfully: initializing → active, isActive=true`);
       
       // КРИТИЧНО: Проверяем, что сессия действительно сохранена с правильным статусом
       const verifySession = await this.sessionRepository.findOne({
