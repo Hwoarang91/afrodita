@@ -666,23 +666,19 @@ export class TelegramUserClientService implements OnModuleDestroy {
       this.logger.debug(`Updating session ${session.id} metadata for user ${userId}`);
       
       // КРИТИЧЕСКИ ВАЖНО: Проверяем переход состояния через SessionStateMachine
-      const currentStatus = session.status;
-      const targetStatus = 'active';
-      
-      if (currentStatus !== targetStatus) {
-        this.logger.log(`[SessionStateMachine] Attempting transition: ${currentStatus} → ${targetStatus} for session ${session.id}`);
-        try {
-          assertSessionTransition(currentStatus, targetStatus, session.id);
-          this.logger.log(`[SessionStateMachine] ✅ Transition allowed: ${currentStatus} → ${targetStatus} for session ${session.id}`);
-        } catch (transitionError: any) {
-          this.logger.error(`[SessionStateMachine] ❌ Transition blocked: ${transitionError.message}`);
-          // Если переход запрещен, помечаем сессию как invalid
-          session.status = 'invalid';
-          session.isActive = false;
-          session.invalidReason = `State transition blocked: ${transitionError.message}`;
-          await this.sessionRepository.save(session);
-          throw new Error(`Cannot activate session ${session.id}: ${transitionError.message}`);
-        }
+      // На этом этапе session.status === 'initializing' (проверено выше)
+      this.logger.log(`[SessionStateMachine] Attempting transition: initializing → active for session ${session.id}`);
+      try {
+        assertSessionTransition('initializing', 'active', session.id);
+        this.logger.log(`[SessionStateMachine] ✅ Transition allowed: initializing → active for session ${session.id}`);
+      } catch (transitionError: any) {
+        this.logger.error(`[SessionStateMachine] ❌ Transition blocked: ${transitionError.message}`);
+        // Если переход запрещен, помечаем сессию как invalid
+        session.status = 'invalid';
+        session.isActive = false;
+        session.invalidReason = `State transition blocked: ${transitionError.message}`;
+        await this.sessionRepository.save(session);
+        throw new Error(`Cannot activate session ${session.id}: ${transitionError.message}`);
       }
       
       session.phoneNumber = phoneNumber;

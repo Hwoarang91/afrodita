@@ -1740,36 +1740,5 @@ export class AuthService implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Очищает истекшие QR токены
-   */
-  private cleanExpiredQrTokens(): void {
-    const now = new Date();
-    for (const [tokenId, data] of this.qrTokenStore.entries()) {
-      if (data.expiresAt < now || data.status === 'expired') {
-        this.qrTokenStore.delete(tokenId);
-        // Отключаем клиент
-        data.client.disconnect().catch((err) => {
-          this.logger.error(`Error disconnecting client: ${err.message}`);
-        });
-      }
-    }
-  }
-
-  /**
-   * Очищает истекшие 2FA сессии
-   */
-  private cleanExpired2FASessions(): void {
-    const now = new Date();
-    for (const [phone, data] of this.twoFactorStore.entries()) {
-      if (data.expiresAt < now) {
-        this.twoFactorStore.delete(phone);
-        // Отключаем клиент
-        data.client.disconnect().catch((err) => {
-          this.logger.error(`Error disconnecting client: ${err.message}`);
-        });
-      }
-    }
-  }
 }
 
