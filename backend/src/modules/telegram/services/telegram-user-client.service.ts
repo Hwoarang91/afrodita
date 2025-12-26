@@ -104,60 +104,58 @@ class DatabaseStorage implements Partial<Storage> {
         return;
       }
 
-      let session = await this.sessionRepository.findOne({
-        where: {
-          id: this.sessionId, // КРИТИЧНО: ищем по sessionId, не userId
-        },
-      });
+      // КРИТИЧНО: Используем транзакцию с блокировкой для предотвращения race condition
+      // При множественных одновременных вызовах set() данные могут перезаписывать друг друга
+      await this.sessionRepository.manager.transaction('REPEATABLE READ', async (manager) => {
+        const session = await manager.findOne(TelegramUserSession, {
+          where: { id: this.sessionId },
+          lock: { mode: 'pessimistic_write' }, // Блокируем запись
+        });
 
-      let data: any = {};
+        if (!session) {
+          throw new Error(`Session ${this.sessionId} not found. Session must be created before using DatabaseStorage.`);
+        }
 
-      if (session && session.encryptedSessionData) {
-        try {
-          // Проверяем, что данные не пустые
-          if (session.encryptedSessionData.trim() !== '' && session.encryptedSessionData !== '{}') {
-            const decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
-            if (decrypted && decrypted.trim() !== '' && decrypted !== '{}') {
-              data = JSON.parse(decrypted);
+        let data: any = {};
+
+        if (session.encryptedSessionData) {
+          try {
+            if (session.encryptedSessionData.trim() !== '' && session.encryptedSessionData !== '{}') {
+              const decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
+              if (decrypted && decrypted.trim() !== '' && decrypted !== '{}') {
+                data = JSON.parse(decrypted);
+              }
             }
+          } catch (decryptError) {
+            // Если не удалось расшифровать (сессия повреждена или пустая), начинаем с пустого объекта
+            data = {};
           }
-        } catch (decryptError) {
-          // Если не удалось расшифровать (сессия повреждена или пустая), начинаем с пустого объекта
-          data = {};
         }
-      }
 
-      // Устанавливаем значение по ключу
-      let current: any = data;
-      for (let i = 0; i < key.length - 1; i++) {
-        const part = String(key[i]);
-        if (current[part] === undefined || typeof current[part] !== 'object') {
-          current[part] = {};
+        // Устанавливаем значение по ключу
+        let current: any = data;
+        for (let i = 0; i < key.length - 1; i++) {
+          const part = String(key[i]);
+          if (current[part] === undefined || typeof current[part] !== 'object') {
+            current[part] = {};
+          }
+          current = current[part];
         }
-        current = current[part];
-      }
 
-      const lastKey = String(key[key.length - 1]);
-      
-      // КРИТИЧНО: Сохраняем ТОЛЬКО Uint8Array как base64
-      // MTKruto использует Storage только для transport/crypto state (auth_key, server_salt, etc.)
-      current[lastKey] = Buffer.from(value).toString('base64');
+        const lastKey = String(key[key.length - 1]);
+        
+        // КРИТИЧНО: Сохраняем ТОЛЬКО Uint8Array как base64
+        current[lastKey] = Buffer.from(value).toString('base64');
 
-      const encrypted = this.encryptionService.encrypt(JSON.stringify(data));
+        const encrypted = this.encryptionService.encrypt(JSON.stringify(data));
 
-      if (session) {
         session.encryptedSessionData = encrypted;
         session.lastUsedAt = new Date();
-        // Убеждаемся, что сессия активна
         if (!session.isActive) {
           session.isActive = true;
         }
-        await this.sessionRepository.save(session);
-      } else {
-        // КРИТИЧНО: Не создаем сессию в set() - она должна быть создана заранее
-        // set() только обновляет данные существующей сессии
-        throw new Error(`Session ${this.sessionId} not found. Session must be created before using DatabaseStorage.`);
-      }
+        await manager.save(session);
+      });
     } catch (error: any) {
       throw new Error(`Failed to save session data: ${error.message}`);
     }
@@ -613,6 +611,24 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       if (!session) {
         throw new Error(`Session ${sessionId} not found for user ${userId}`);
+      }
+
+      // КРИТИЧНО: Проверяем, что сессия в допустимом состоянии для активации
+      // Только 'initializing' сессии могут быть активированы
+      if (session.status !== 'initializing') {
+        if (session.status === 'active') {
+          this.logger.warn(`Session ${sessionId} is already active, skipping activation`);
+          // Сессия уже активна - просто обновляем lastUsedAt
+          session.lastUsedAt = new Date();
+          await this.sessionRepository.save(session);
+          this.clients.set(sessionId, client);
+          return;
+        }
+        // Для invalid/revoked сессий - ошибка
+        throw new Error(
+          `Cannot activate session ${sessionId}: invalid state '${session.status}'. ` +
+          `Only 'initializing' sessions can be activated.`
+        );
       }
 
       // КРИТИЧЕСКИ ВАЖНО: Используем тот же клиент, который использовался для авторизации

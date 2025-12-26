@@ -12,6 +12,8 @@ import { User } from './user.entity';
 
 @Entity('telegram_user_sessions')
 @Index(['userId', 'isActive'])
+@Index(['userId', 'isActive', 'status']) // Композитный индекс для поиска активных сессий
+@Index(['status', 'isActive']) // Для административных запросов
 @Index(['phoneNumber'])
 export class TelegramUserSession {
   @PrimaryGeneratedColumn('uuid')

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, BadRequestException, HttpException, HttpStatus, OnModuleDestroy } from '@nestjs/common';
 import { ErrorResponse, ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
 import { mapTelegramErrorToResponse } from '../telegram/utils/telegram-error-mapper';
@@ -40,8 +40,11 @@ export interface JwtPayload {
 }
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleDestroy {
   private readonly logger = new Logger(AuthService.name);
+
+  // Интервал периодической очистки (5 минут)
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   // Временное хранилище для phone code hash (в production лучше использовать Redis)
   // Теперь храним sessionId для правильного lifecycle
@@ -86,7 +89,110 @@ export class AuthService {
     private jwtAuthService: JwtAuthService,
     private telegramUserClientService: TelegramUserClientService,
     private telegramSessionService: TelegramSessionService,
-  ) {}
+  ) {
+    // Запускаем периодическую очистку истекших сессий каждые 5 минут
+    this.cleanupInterval = setInterval(() => {
+      this.cleanExpiredPhoneCodeHashes();
+      this.cleanExpired2FASessions();
+      this.cleanExpiredQrTokens();
+    }, 5 * 60 * 1000);
+  }
+
+  /**
+   * Очистка ресурсов при остановке модуля
+   */
+  onModuleDestroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    // Отключаем все клиенты в хранилищах
+    this.disconnectAllClients();
+  }
+
+  /**
+   * Безопасное отключение клиента с обработкой ошибок
+   */
+  private async safeDisconnectClient(client: Client, context: string): Promise<void> {
+    try {
+      if (client && client.connected) {
+        await client.disconnect();
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to disconnect client (${context}): ${error.message}`);
+    }
+  }
+
+  /**
+   * Отключает все клиенты во всех хранилищах
+   */
+  private async disconnectAllClients(): Promise<void> {
+    const disconnectPromises: Promise<void>[] = [];
+
+    // Отключаем клиенты из phoneCodeHashStore
+    for (const [phone, stored] of this.phoneCodeHashStore.entries()) {
+      disconnectPromises.push(this.safeDisconnectClient(stored.client, `phoneCodeHash:${phone}`));
+    }
+
+    // Отключаем клиенты из twoFactorStore
+    for (const [phone, stored] of this.twoFactorStore.entries()) {
+      disconnectPromises.push(this.safeDisconnectClient(stored.client, `twoFactor:${phone}`));
+    }
+
+    // Отключаем клиенты из qrTokenStore
+    for (const [tokenId, stored] of this.qrTokenStore.entries()) {
+      disconnectPromises.push(this.safeDisconnectClient(stored.client, `qrToken:${tokenId}`));
+    }
+
+    await Promise.allSettled(disconnectPromises);
+    
+    this.phoneCodeHashStore.clear();
+    this.twoFactorStore.clear();
+    this.qrTokenStore.clear();
+    
+    this.logger.log('All auth clients disconnected and stores cleared');
+  }
+
+  /**
+   * Очистка истекших 2FA сессий с отключением клиентов
+   */
+  private cleanExpired2FASessions(): void {
+    const now = new Date();
+    let cleaned = 0;
+    
+    for (const [phone, stored] of this.twoFactorStore.entries()) {
+      if (stored.expiresAt < now) {
+        this.safeDisconnectClient(stored.client, `expired2FA:${phone}`);
+        this.twoFactorStore.delete(phone);
+        cleaned++;
+      }
+    }
+    
+    if (cleaned > 0) {
+      this.logger.log(`Cleaned ${cleaned} expired 2FA sessions`);
+    }
+  }
+
+  /**
+   * Очистка истекших QR токенов с отключением клиентов
+   */
+  private cleanExpiredQrTokens(): void {
+    const now = new Date();
+    let cleaned = 0;
+    
+    for (const [tokenId, stored] of this.qrTokenStore.entries()) {
+      if (stored.expiresAt < now) {
+        this.safeDisconnectClient(stored.client, `expiredQR:${tokenId}`);
+        this.qrTokenStore.delete(tokenId);
+        cleaned++;
+      }
+    }
+    
+    if (cleaned > 0) {
+      this.logger.log(`Cleaned ${cleaned} expired QR tokens`);
+    }
+  }
 
   async validateEmailPassword(email: string, password: string): Promise<User> {
     this.logger.debug(`Попытка входа: email=${email}`);

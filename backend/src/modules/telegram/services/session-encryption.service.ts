@@ -68,19 +68,15 @@ export class SessionEncryptionService {
   /**
    * Расшифровывает данные сессии
    * @param encryptedData Зашифрованные данные в формате: iv:tag:encryptedData
-   * @returns Расшифрованные данные (обычно JSON строка)
-   * @throws HttpException с ErrorResponse контрактом при ошибках
+   * @returns Расшифрованные данные (обычно JSON строка) или null для пустых данных
+   * @throws HttpException с ErrorResponse контрактом при ошибках расшифровки
    */
   decrypt(encryptedData: string | null | undefined): string {
-    // КРИТИЧНО: Проверка на null/undefined перед split()
+    // КРИТИЧНО: Для пустых данных возвращаем пустой JSON объект
+    // Это нужно для сессий в статусе 'initializing', где encryptedSessionData === null допустимо
     if (!encryptedData || typeof encryptedData !== 'string' || encryptedData.trim() === '') {
-      this.logger.error('SessionEncryptionService.decrypt: encryptedData is null, undefined, or empty');
-      const errorResponse = buildErrorResponse(
-        HttpStatus.UNAUTHORIZED,
-        ErrorCode.SESSION_INVALID,
-        'Session data is missing or invalid. Please re-authorize via phone or QR code.',
-      );
-      throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
+      this.logger.debug('SessionEncryptionService.decrypt: encryptedData is empty, returning empty object');
+      return '{}';
     }
 
     try {
@@ -132,6 +128,20 @@ export class SessionEncryptionService {
         'Failed to decrypt session data. Please re-authorize via phone or QR code.',
       );
       throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
+    }
+  }
+
+  /**
+   * Безопасная расшифровка с возвратом null при ошибках
+   * Используется в местах, где ошибка расшифровки не критична
+   */
+  decryptSafe(encryptedData: string | null | undefined): string | null {
+    try {
+      const result = this.decrypt(encryptedData);
+      return result === '{}' ? null : result;
+    } catch (error) {
+      this.logger.debug(`decryptSafe: returning null due to error`);
+      return null;
     }
   }
 }
