@@ -677,8 +677,25 @@ export class TelegramUserClientService implements OnModuleDestroy {
       session.lastUsedAt = new Date();
       session.ipAddress = ipAddress || null;
       session.userAgent = userAgent || null;
+      
+      // КРИТИЧНО: Сохраняем сессию в БД с статусом 'active'
       await this.sessionRepository.save(session);
+      this.logger.warn(`[saveSession] 🔥 SESSION ACTIVATED: sessionId=${session.id}, userId=${userId}, status=${session.status}, isActive=${session.isActive}`);
       this.logger.log(`✅ Session ${session.id} updated successfully: ${currentStatus} → ${targetStatus}, isActive=true`);
+      
+      // КРИТИЧНО: Проверяем, что сессия действительно сохранена с правильным статусом
+      const verifySession = await this.sessionRepository.findOne({
+        where: { id: session.id },
+      });
+      if (verifySession) {
+        if (verifySession.status === 'active' && verifySession.isActive === true) {
+          this.logger.warn(`[saveSession] ✅ VERIFICATION PASSED: sessionId=${verifySession.id}, status=${verifySession.status}, isActive=${verifySession.isActive}`);
+        } else {
+          this.logger.error(`[saveSession] ❌ VERIFICATION FAILED: sessionId=${verifySession.id}, status=${verifySession.status}, isActive=${verifySession.isActive} (expected: status=active, isActive=true)`);
+        }
+      } else {
+        this.logger.error(`[saveSession] ❌ CRITICAL: Session ${session.id} not found in DB after save!`);
+      }
 
       // КРИТИЧЕСКИ ВАЖНО: Сохраняем тот же клиент в кеш по sessionId
       // НЕ создаем новый клиент - используем тот, который уже прошел авторизацию
