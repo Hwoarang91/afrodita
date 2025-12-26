@@ -1576,13 +1576,22 @@ export class AuthService {
       // КРИТИЧНО: Также сохраняем сессию в request.session через TelegramSessionService
       // Это нужно для guard который проверяет request.session.telegramSession
       if (expressRequest) {
-        this.telegramSessionService.save(expressRequest, {
-          userId: user.id,
-          sessionId: stored.sessionId,
-          phoneNumber: normalizedPhone,
-          sessionData: null, // MTProto данные уже в БД через DatabaseStorage
-          createdAt: Date.now(),
-        });
+        this.logger.log(`[2FA] Saving Telegram session to request.session: userId=${user.id}, sessionId=${stored.sessionId}, phoneNumber=${normalizedPhone}`);
+        try {
+          this.telegramSessionService.save(expressRequest, {
+            userId: user.id,
+            sessionId: stored.sessionId,
+            phoneNumber: normalizedPhone,
+            sessionData: null, // MTProto данные уже в БД через DatabaseStorage
+            createdAt: Date.now(),
+          });
+          this.logger.log(`[2FA] ✅ Telegram session saved to request.session successfully`);
+        } catch (error: any) {
+          this.logger.error(`[2FA] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
+          // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
+        }
+      } else {
+        this.logger.warn(`[2FA] ⚠️ expressRequest is not provided, cannot save session to request.session`);
       }
 
       // Удаляем временные данные
