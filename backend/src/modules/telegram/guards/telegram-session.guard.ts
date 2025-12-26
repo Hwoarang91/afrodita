@@ -31,14 +31,17 @@ export class TelegramSessionGuard implements CanActivate {
     }
 
     const userId = request.user.sub;
+    this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP: userId=${userId}, checking request.session and DB...`);
     this.logger.debug(`TelegramSessionGuard: Проверка активной Telegram сессии для пользователя ${userId}`);
 
     // КРИТИЧНО: Сначала проверяем request.session (для новых авторизаций)
     let session = this.telegramSessionService.load(request);
 
     if (session) {
+      this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP RESULT: userId=${userId}, found=true, sessionId=${session.sessionId}, source=request.session`);
       this.logger.debug(`TelegramSessionGuard: ✅ Session found in request.session: userId=${session.userId}, sessionId=${session.sessionId}`);
     } else {
+      this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP: userId=${userId}, found=false in request.session, checking DB...`);
       this.logger.debug(`TelegramSessionGuard: Session not found in request.session, checking DB for userId=${userId}`);
       
       // Если сессии нет в request.session, ищем в БД по userId из JWT
@@ -63,6 +66,7 @@ export class TelegramSessionGuard implements CanActivate {
         const activeSession = userSessions.find(s => s.status === 'active' && s.isActive);
         
         if (activeSession) {
+          this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP RESULT: userId=${userId}, found=true, sessionId=${activeSession.id}, source=DB`);
           this.logger.log(`TelegramSessionGuard: ✅ Found active session in DB: ${activeSession.id} for userId=${userId}`);
           
           // КРИТИЧНО: Проверяем, что Telegram клиент подключен и валиден
@@ -134,6 +138,7 @@ export class TelegramSessionGuard implements CanActivate {
             // Продолжаем - сессия найдена в БД, это не критично
           }
         } else {
+          this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP RESULT: userId=${userId}, found=false, userSessions=${userSessions.length}, sessions=${userSessions.map(s => `${s.id}(${s.status}, active=${s.isActive}, userId=${s.userId})`).join(', ') || 'none'}`);
           this.logger.warn(`TelegramSessionGuard: No active session found in DB for userId=${userId}. User sessions: ${userSessions.map(s => `${s.id}(${s.status}, active=${s.isActive})`).join(', ') || 'none'}`);
         }
       } catch (error: any) {

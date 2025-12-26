@@ -52,6 +52,7 @@ export class TelegramSessionService {
 
       request.session[SESSION_KEY] = encrypted;
 
+      this.logger.warn(`[TELEGRAM] 🔥 SESSION SAVED: userId=${payload.userId}, sessionId=${payload.sessionId}, phoneNumber=${payload.phoneNumber || 'N/A'}`);
       this.logger.log(
         `[TELEGRAM] ✅ Session saved (userId=${payload.userId}, sessionId=${payload.sessionId})`,
       );
@@ -84,6 +85,7 @@ export class TelegramSessionService {
       const decryptedString = this.encryption.decrypt(encrypted);
       const decrypted = JSON.parse(decryptedString) as TelegramSessionPayload;
 
+      this.logger.warn(`[TELEGRAM] 🔥 SESSION LOADED: userId=${decrypted.userId}, sessionId=${decrypted.sessionId}, found=true`);
       this.logger.log(
         `[TELEGRAM] ✅ Session loaded (userId=${decrypted.userId}, sessionId=${decrypted.sessionId})`,
       );

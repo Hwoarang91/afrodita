@@ -1563,7 +1563,9 @@ export class AuthService {
       }
 
       // Сохраняем сессию MTProto в БД
+      this.logger.warn(`[2FA] 🔥 TG LOGIN SUCCESS: appUserId=${user.id}, phone=${normalizedPhone}, telegramId=${user.telegramId}, sessionId=${stored.sessionId}`);
       this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}), sessionId: ${stored.sessionId}`);
+      
       await this.telegramUserClientService.saveSession(
         user.id,
         client,
@@ -1572,10 +1574,13 @@ export class AuthService {
         ipAddress,
         userAgent,
       );
+      
+      this.logger.warn(`[2FA] ✅ Session saved to DB: userId=${user.id}, sessionId=${stored.sessionId}, isActive=true, status=active`);
 
       // КРИТИЧНО: Также сохраняем сессию в request.session через TelegramSessionService
       // Это нужно для guard который проверяет request.session.telegramSession
       if (expressRequest) {
+        this.logger.warn(`[2FA] 🔥 SESSION SAVED to request.session: userId=${user.id}, sessionId=${stored.sessionId}, phoneNumber=${normalizedPhone}`);
         this.logger.log(`[2FA] Saving Telegram session to request.session: userId=${user.id}, sessionId=${stored.sessionId}, phoneNumber=${normalizedPhone}`);
         try {
           this.telegramSessionService.save(expressRequest, {
@@ -1585,6 +1590,7 @@ export class AuthService {
             sessionData: null, // MTProto данные уже в БД через DatabaseStorage
             createdAt: Date.now(),
           });
+          this.logger.warn(`[2FA] ✅ SESSION SAVED to request.session successfully: userId=${user.id}, sessionId=${stored.sessionId}`);
           this.logger.log(`[2FA] ✅ Telegram session saved to request.session successfully`);
         } catch (error: any) {
           this.logger.error(`[2FA] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
