@@ -65,6 +65,57 @@ export class TelegramSessionGuard implements CanActivate {
         if (activeSession) {
           this.logger.log(`TelegramSessionGuard: ✅ Found active session in DB: ${activeSession.id} for userId=${userId}`);
           
+          // КРИТИЧНО: Проверяем, что Telegram клиент подключен и валиден
+          // Просто наличие сессии в БД недостаточно - нужно убедиться, что клиент работает
+          try {
+            const client = await this.telegramUserClientService.getClient(activeSession.id);
+            
+            if (!client) {
+              this.logger.error(`TelegramSessionGuard: ❌ Failed to get client for session ${activeSession.id}`);
+              // Сессия найдена, но клиент не может быть создан - возможно данные повреждены
+              throw new UnauthorizedException(
+                'Telegram session found but client cannot be initialized. Please re-authorize.',
+              );
+            }
+            
+            // Проверяем, что клиент подключен
+            if (!client.connected) {
+              this.logger.warn(`TelegramSessionGuard: Client for session ${activeSession.id} is not connected, attempting to connect...`);
+              try {
+                await client.connect();
+                this.logger.log(`TelegramSessionGuard: ✅ Client connected successfully for session ${activeSession.id}`);
+              } catch (connectError: any) {
+                this.logger.error(`TelegramSessionGuard: ❌ Failed to connect client for session ${activeSession.id}: ${connectError.message}`);
+                throw new UnauthorizedException(
+                  'Telegram session found but connection failed. Please re-authorize.',
+                );
+              }
+            } else {
+              this.logger.debug(`TelegramSessionGuard: ✅ Client already connected for session ${activeSession.id}`);
+            }
+            
+            // КРИТИЧНО: Валидируем сессию через getMe()
+            try {
+              await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+              this.logger.log(`TelegramSessionGuard: ✅ Session ${activeSession.id} validated successfully via getMe()`);
+            } catch (validationError: any) {
+              this.logger.error(`TelegramSessionGuard: ❌ Session ${activeSession.id} validation failed: ${validationError.message}`);
+              throw new UnauthorizedException(
+                'Telegram session is invalid. Please re-authorize via phone or QR code.',
+              );
+            }
+          } catch (error: any) {
+            // Если это уже UnauthorizedException - пробрасываем дальше
+            if (error instanceof UnauthorizedException) {
+              throw error;
+            }
+            // Иначе логируем и пробрасываем как 401
+            this.logger.error(`TelegramSessionGuard: Error validating client for session ${activeSession.id}: ${error.message}`, error.stack);
+            throw new UnauthorizedException(
+              'Telegram session found but cannot be validated. Please re-authorize.',
+            );
+          }
+          
           // Создаем payload для совместимости с TelegramSessionService
           session = {
             userId: userId,
