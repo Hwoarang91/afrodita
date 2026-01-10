@@ -11,6 +11,7 @@ import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { Loader2, Smartphone, QrCode } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { Telegram2FATab } from './components/Telegram2FATab';
 
 interface TelegramAuthTabProps {
