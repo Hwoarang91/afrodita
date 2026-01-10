@@ -14,13 +14,14 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
 import { OptionalJwtAuthGuard } from '../../../common/guards/optional-jwt-auth.guard';
+import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard';
 import { TelegramSessionGuard } from '../guards/telegram-session.guard';
 import { UserSendMessageDto, UserSendMediaDto } from '../dto/user-send-message.dto';
 import { DeactivateSessionDto, SessionInfoDto } from '../dto/session-management.dto';
 
 @ApiTags('telegram')
 @Controller('telegram/user')
-@UseGuards(OptionalJwtAuthGuard, TelegramSessionGuard)
+@UseGuards(JwtAuthGuard) // КРИТИЧНО: Используем JwtAuthGuard на уровне класса (требует JWT)
 @ApiBearerAuth()
 export class TelegramUserController {
   private readonly logger = new Logger(TelegramUserController.name);
@@ -37,9 +38,11 @@ export class TelegramUserController {
   }
 
   @Post('send-message')
+  @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Отправка текстового сообщения от лица авторизованного пользователя' })
   @ApiResponse({ status: 200, description: 'Сообщение отправлено' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
+  @ApiResponse({ status: 403, description: 'Telegram сессия не готова (initializing)' })
   async sendMessage(@Body() dto: UserSendMessageDto, @Request() req) {
     try {
       // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
@@ -134,9 +137,11 @@ export class TelegramUserController {
   }
 
   @Post('send-media')
+  @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Отправка медиа от лица авторизованного пользователя' })
   @ApiResponse({ status: 200, description: 'Медиа отправлено' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
+  @ApiResponse({ status: 403, description: 'Telegram сессия не готова (initializing)' })
   async sendMedia(@Body() dto: UserSendMediaDto, @Request() req) {
     try {
       // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
@@ -232,6 +237,7 @@ export class TelegramUserController {
   }
 
   @Get('chats')
+  @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Получение списка чатов авторизованного пользователя' })
   @ApiResponse({ status: 200, description: 'Список чатов получен' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
@@ -332,6 +338,7 @@ export class TelegramUserController {
   }
 
   @Get('contacts')
+  @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Получение списка контактов авторизованного пользователя' })
   @ApiResponse({ status: 200, description: 'Список контактов получен' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
@@ -411,6 +418,7 @@ export class TelegramUserController {
   }
 
   @Get('messages/:chatId')
+  @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Получение истории сообщений из чата' })
   @ApiResponse({ status: 200, description: 'История сообщений получена' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
@@ -491,11 +499,106 @@ export class TelegramUserController {
     }
   }
 
-  @Get('sessions')
-  @UseGuards(OptionalJwtAuthGuard) // Исключаем TelegramSessionGuard - этот метод показывает все сессии, не только активную
+  @Get('status')
   @ApiOperation({
-    summary: 'Получение списка активных сессий пользователя',
-    description: 'Возвращает список всех активных Telegram сессий текущего авторизованного пользователя с информацией о IP адресе, устройстве и датах использования',
+    summary: 'Получение статуса Telegram сессии пользователя',
+    description: 'Возвращает текущий статус Telegram сессии (active, initializing, invalid, not_found). Не требует активной сессии - используется для проверки готовности сессии перед запросами к Telegram API.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Статус сессии успешно получен',
+    schema: {
+      example: {
+        success: true,
+        status: 'active',
+        hasActiveSession: true,
+        sessionId: '550e8400-e29b-41d4-a716-446655440000',
+        phoneNumber: '+79001234567',
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
+  async getStatus(@Request() req): Promise<{
+    success: boolean;
+    status: 'active' | 'initializing' | 'invalid' | 'not_found';
+    hasActiveSession: boolean;
+    sessionId: string | null;
+    phoneNumber: string | null;
+    invalidReason?: string | null;
+  }> {
+    try {
+      // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+      
+      const userId = req.user.sub;
+      this.logger.debug(`Получение статуса Telegram сессии для пользователя ${userId}`);
+
+      const sessions = await this.telegramUserClientService.getUserSessions(userId);
+      
+      // Фильтруем только сессии текущего пользователя (на случай, если это админ)
+      const userSessions = sessions.filter(s => s.userId === userId);
+      
+      // Ищем активную сессию
+      const activeSession = userSessions.find(s => s.status === 'active' && s.isActive);
+      
+      if (activeSession) {
+        return {
+          success: true,
+          status: 'active',
+          hasActiveSession: true,
+          sessionId: activeSession.id,
+          phoneNumber: activeSession.phoneNumber,
+          invalidReason: null,
+        };
+      }
+      
+      // Ищем сессии в других статусах
+      const initializingSession = userSessions.find(s => s.status === 'initializing');
+      const invalidSession = userSessions.find(s => s.status === 'invalid');
+      
+      if (initializingSession) {
+        return {
+          success: true,
+          status: 'initializing',
+          hasActiveSession: false,
+          sessionId: initializingSession.id,
+          phoneNumber: initializingSession.phoneNumber,
+          invalidReason: null,
+        };
+      }
+      
+      if (invalidSession) {
+        return {
+          success: true,
+          status: 'invalid',
+          hasActiveSession: false,
+          sessionId: invalidSession.id,
+          phoneNumber: invalidSession.phoneNumber,
+          invalidReason: invalidSession.invalidReason || 'Session is invalid',
+        };
+      }
+      
+      // Нет сессий
+      return {
+        success: true,
+        status: 'not_found',
+        hasActiveSession: false,
+        sessionId: null,
+        phoneNumber: null,
+        invalidReason: null,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка получения статуса сессии: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Failed to get session status: ${error.message}`);
+    }
+  }
+
+  @Get('sessions')
+  @ApiOperation({
+    summary: 'Получение списка сессий пользователя',
+    description: 'Возвращает список всех Telegram сессий текущего авторизованного пользователя (включая initializing, active, invalid) с информацией о IP адресе, устройстве и датах использования. НЕ требует активной сессии - используется для проверки статуса.',
   })
   @ApiResponse({
     status: 200,
@@ -529,7 +632,11 @@ export class TelegramUserController {
       const userId = req.user.sub;
       this.logger.debug(`Получение сессий для пользователя ${userId}`);
 
-      const sessions = await this.telegramUserClientService.getUserSessions(userId);
+      const allSessions = await this.telegramUserClientService.getUserSessions(userId);
+      
+      // КРИТИЧНО: Фильтруем только сессии ТЕКУЩЕГО пользователя
+      // (для админа getUserSessions возвращает ВСЕ сессии в системе)
+      const sessions = allSessions.filter(s => s.userId === userId);
 
       // Определяем текущую активную сессию (используется для API)
       // Для простоты берем первую активную сессию со статусом 'active'

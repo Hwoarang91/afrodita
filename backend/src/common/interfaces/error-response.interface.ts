@@ -40,6 +40,9 @@ export enum ErrorCode {
   SESSION_NOT_FOUND = 'SESSION_NOT_FOUND',
   PASSWORD_HASH_INVALID = 'PASSWORD_HASH_INVALID',
   
+  // Telegram session status (403)
+  TELEGRAM_SESSION_NOT_READY = 'TELEGRAM_SESSION_NOT_READY', // Сессия существует, но еще не активна
+  
   // Not found errors (404)
   NOT_FOUND = 'NOT_FOUND',
   

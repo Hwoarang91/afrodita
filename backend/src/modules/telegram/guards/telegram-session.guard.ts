@@ -1,6 +1,8 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException, Logger, HttpStatus } from '@nestjs/common';
 import { TelegramSessionService } from '../services/telegram-session.service';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
+import { buildErrorResponse } from '../../../common/utils/error-response.builder';
+import { ErrorCode } from '../../../common/interfaces/error-response.interface';
 
 /**
  * Guard для проверки наличия активной Telegram сессии
@@ -157,19 +159,91 @@ export class TelegramSessionGuard implements CanActivate {
             // Продолжаем - сессия найдена в БД, это не критично
           }
         } else {
+          // КРИТИЧНО: Проверяем, есть ли сессии в других статусах (initializing, invalid)
+          // Это позволяет различать NO_SESSION (401) и SESSION_NOT_READY (403)
+          const initializingSession = userSessions.find(s => s.status === 'initializing');
+          const invalidSession = userSessions.find(s => s.status === 'invalid');
+          
+          if (initializingSession) {
+            // Сессия существует, но еще не активна - это 403, а не 401
+            this.logger.warn(`[TelegramSessionGuard] ⚠️ Session found but not ready: userId=${userId}, sessionId=${initializingSession.id}, status=initializing`);
+            const errorResponse = buildErrorResponse(
+              HttpStatus.FORBIDDEN,
+              ErrorCode.TELEGRAM_SESSION_NOT_READY,
+              'Telegram session is initializing. Please wait for authorization to complete.',
+            );
+            throw new ForbiddenException(errorResponse);
+          }
+          
+          if (invalidSession) {
+            // Сессия существует, но невалидна - тоже 403
+            this.logger.warn(`[TelegramSessionGuard] ⚠️ Session found but invalid: userId=${userId}, sessionId=${invalidSession.id}, status=invalid, reason=${invalidSession.invalidReason || 'N/A'}`);
+            const errorResponse = buildErrorResponse(
+              HttpStatus.FORBIDDEN,
+              ErrorCode.SESSION_INVALID,
+              `Telegram session is invalid: ${invalidSession.invalidReason || 'Unknown reason'}. Please re-authorize via phone or QR code.`,
+            );
+            throw new ForbiddenException(errorResponse);
+          }
+          
+          // Нет сессий вообще - это 401
           this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP RESULT: userId=${userId}, found=false, userSessions=${userSessions.length}, sessions=${userSessions.map(s => `${s.id}(${s.status}, active=${s.isActive}, userId=${s.userId})`).join(', ') || 'none'}`);
-          this.logger.warn(`TelegramSessionGuard: No active session found in DB for userId=${userId}. User sessions: ${userSessions.map(s => `${s.id}(${s.status}, active=${s.isActive})`).join(', ') || 'none'}`);
+          this.logger.warn(`TelegramSessionGuard: No sessions found in DB for userId=${userId}`);
         }
       } catch (error: any) {
+        // Если это уже ForbiddenException или UnauthorizedException - пробрасываем дальше
+        if (error instanceof ForbiddenException || error instanceof UnauthorizedException) {
+          throw error;
+        }
         this.logger.error(`TelegramSessionGuard: Error loading session from DB: ${error.message}`, error.stack);
       }
     }
 
+    // КРИТИЧНО: Если сессия не найдена, проверяем статус сессий в БД для правильного кода ошибки
     if (!session) {
-      this.logger.warn(`TelegramSessionGuard: ❌ No active Telegram session found in request.session or DB for userId=${userId}`);
-      throw new UnauthorizedException(
-        'No active Telegram session found. Please authorize via phone or QR code.',
+      try {
+        const allSessions = await this.telegramUserClientService.getUserSessions(userId);
+        const userSessions = allSessions.filter(s => s.userId === userId);
+        
+        const initializingSession = userSessions.find(s => s.status === 'initializing');
+        const invalidSession = userSessions.find(s => s.status === 'invalid');
+        
+        if (initializingSession) {
+          this.logger.warn(`[TelegramSessionGuard] ⚠️ Session found but not ready (final check): userId=${userId}, sessionId=${initializingSession.id}, status=initializing`);
+          const errorResponse = buildErrorResponse(
+            HttpStatus.FORBIDDEN,
+            ErrorCode.TELEGRAM_SESSION_NOT_READY,
+            'Telegram session is initializing. Please wait for authorization to complete.',
+          );
+          throw new ForbiddenException(errorResponse);
+        }
+        
+        if (invalidSession) {
+          this.logger.warn(`[TelegramSessionGuard] ⚠️ Session found but invalid (final check): userId=${userId}, sessionId=${invalidSession.id}, status=invalid`);
+          const errorResponse = buildErrorResponse(
+            HttpStatus.FORBIDDEN,
+            ErrorCode.SESSION_INVALID,
+            `Telegram session is invalid: ${invalidSession.invalidReason || 'Unknown reason'}. Please re-authorize via phone or QR code.`,
+          );
+          throw new ForbiddenException(errorResponse);
+        }
+      } catch (error: any) {
+        // Если это уже ForbiddenException - пробрасываем дальше
+        if (error instanceof ForbiddenException) {
+          throw error;
+        }
+        // Иначе логируем и продолжаем с 401
+        this.logger.debug(`TelegramSessionGuard: Error checking session status: ${error.message}`);
+      }
+      
+      // Нет сессий вообще - это 401 NO_SESSION
+      this.logger.warn(`TelegramSessionGuard: ❌ No Telegram session found (NO_SESSION) for userId=${userId}`);
+      const errorResponse = buildErrorResponse(
+        HttpStatus.UNAUTHORIZED,
+        ErrorCode.SESSION_NOT_FOUND,
+        'No Telegram session found. Please authorize via phone or QR code.',
       );
+      throw new UnauthorizedException(errorResponse);
     }
 
     // Кладём расшифрованную сессию в request для использования в контроллерах

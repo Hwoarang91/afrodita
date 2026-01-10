@@ -18,9 +18,12 @@ export const ERROR_HTTP_MAP: Record<ErrorCode, number> = {
   UNAUTHORIZED: 401,
   INVALID_CREDENTIALS: 401,
   INVALID_2FA_PASSWORD: 401,
-  SESSION_INVALID: 401,
+  SESSION_INVALID: 403, // КРИТИЧНО: Изменено на 403, так как используется в ForbiddenException
   SESSION_NOT_FOUND: 401,
   PASSWORD_HASH_INVALID: 401,
+  
+  // Telegram session status (403)
+  TELEGRAM_SESSION_NOT_READY: 403, // Сессия существует, но еще не активна
 
   // Not found errors (404)
   NOT_FOUND: 404,
