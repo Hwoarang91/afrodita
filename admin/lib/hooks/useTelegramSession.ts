@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 
 export type TelegramSessionStatus = 
@@ -114,6 +114,6 @@ export function useTelegramSession() {
     ...query,
     data: query.data,
     status: uiStatus, // UI-статус для использования в компонентах
-  } as typeof query & { status: TelegramSessionStatus };
+  } as UseQueryResult<TelegramSessionStatusResponse> & { status: TelegramSessionStatus };
 }
 
