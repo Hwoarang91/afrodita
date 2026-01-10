@@ -50,8 +50,11 @@ export class TelegramSessionGuard implements CanActivate {
     // КРИТИЧНО: Сначала проверяем request.session (для новых авторизаций)
     let session = this.telegramSessionService.load(request);
 
+    let sessionSource: 'request.session' | 'database' | null = null;
+    
     if (session) {
-      this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP RESULT: userId=${userId}, found=true, sessionId=${session.sessionId}, source=request.session`);
+      sessionSource = 'request.session';
+      this.logger.log(`[TelegramSessionGuard] ✅ Session found from ${sessionSource}: userId=${userId}, sessionId=${session.sessionId}`);
       this.logger.debug(`TelegramSessionGuard: ✅ Session found in request.session: userId=${session.userId}, sessionId=${session.sessionId}`);
     } else {
       this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP: userId=${userId}, found=false in request.session, checking DB...`);
@@ -87,8 +90,9 @@ export class TelegramSessionGuard implements CanActivate {
             );
           }
           
-          this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP RESULT: userId=${userId}, found=true, sessionId=${activeSession.id}, source=DB, session.userId=${activeSession.userId}`);
-          this.logger.log(`TelegramSessionGuard: ✅ Found active session in DB: ${activeSession.id} for userId=${userId} (session.userId=${activeSession.userId})`);
+          sessionSource = 'database';
+          this.logger.log(`[TelegramSessionGuard] ✅ Session found from ${sessionSource}: userId=${userId}, sessionId=${activeSession.id}, session.userId=${activeSession.userId}`);
+          this.logger.debug(`TelegramSessionGuard: ✅ Found active session in DB: ${activeSession.id} for userId=${userId} (session.userId=${activeSession.userId})`);
           
           // КРИТИЧНО: Проверяем, что Telegram клиент подключен и валиден
           // Просто наличие сессии в БД недостаточно - нужно убедиться, что клиент работает
@@ -250,7 +254,8 @@ export class TelegramSessionGuard implements CanActivate {
     request.telegramSession = session;
     request.telegramSessionId = session.sessionId;
 
-    this.logger.log(`TelegramSessionGuard: ✅ Session validated for userId=${session.userId}, sessionId=${session.sessionId}`);
+    // КРИТИЧНО: Логируем источник сессии для отладки
+    this.logger.log(`[TelegramSessionGuard] ✅ Session validated: userId=${session.userId}, sessionId=${session.sessionId}, source=${sessionSource || 'unknown'}`);
 
     return true;
   }
