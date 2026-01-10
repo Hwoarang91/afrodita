@@ -14,6 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import express from 'express';
 import * as cookieParser from 'cookie-parser';
+import * as session from 'express-session';
 import { DataSource } from 'typeorm';
 
 async function bootstrap() {
@@ -133,10 +134,28 @@ async function bootstrap() {
     }
     app.use(compression());
 
+    // КРИТИЧНО: Express session middleware ПЕРЕД cookieParser
+    // Это нужно для работы request.session в TelegramSessionService
+    const sessionSecret = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'your-session-secret-key-change-me';
+    app.use(
+      session({
+        secret: sessionSecret,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+          maxAge: 24 * 60 * 60 * 1000, // 24 часа
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax', // Для работы через nginx/proxy
+        },
+        name: 'sessionId', // Имя cookie для сессии
+      }),
+    );
+
     // Cookie parser для работы с httpOnly cookies
     app.use(cookieParser());
 
-    logger.log('Middleware настроены');
+    logger.log('Middleware настроены (session, cookie-parser)');
 
   // Rate limiting
   // Применяется глобально, но можно настроить для конкретных роутов

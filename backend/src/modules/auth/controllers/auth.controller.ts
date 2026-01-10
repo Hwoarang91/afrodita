@@ -18,6 +18,7 @@ import { Response as ExpressResponse } from 'express';
 import { AuthService, TelegramAuthData } from '../auth.service';
 import { JwtAuthService, TokenPair } from '../services/jwt.service';
 import { CsrfService } from '../services/csrf.service';
+import { TelegramSessionService } from '../../telegram/services/telegram-session.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../../common/guards/optional-jwt-auth.guard';
 import { LoginRequestDto } from '../dto/login-request.dto';
@@ -40,6 +41,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly jwtService: JwtAuthService,
     private readonly csrfService: CsrfService,
+    private readonly telegramSessionService: TelegramSessionService, // КРИТИЧНО: Для сохранения сессии в request.session
   ) {}
 
   @Post('login')
@@ -570,14 +572,29 @@ export class AuthController {
     }
     
     try {
-      // Передаем userId из JWT для сохранения сессии
-      const result = await this.authService.checkQrTokenStatus(tokenId, req.user?.sub);
+      // КРИТИЧНО: Передаем expressRequest для сохранения сессии в request.session
+      // saveSession() внутри checkQrTokenStatus теперь сохраняет сессию в request.session
+      const result = await this.authService.checkQrTokenStatus(tokenId, req.user?.sub, req as any);
 
-      if (result.status === 'accepted' && result.user) {
-        // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
-        // Только создаем Telegram сессию для работы с Telegram API
-
-        this.logger.log(`Telegram сессия создана через QR для пользователя: ${result.user.id}`);
+      if (result.status === 'accepted' && result.user && result.sessionId) {
+        // КРИТИЧНО: Дополнительное сохранение в request.session на случай, если saveSession() не сохранил
+        // Это защита от race condition - убеждаемся, что сессия точно в request.session
+        this.logger.log(`[QR] Additional check: Saving Telegram session to request.session: userId=${result.user.id}, sessionId=${result.sessionId}`);
+        try {
+          this.telegramSessionService.save(req, {
+            userId: result.user.id,
+            sessionId: result.sessionId,
+            phoneNumber: result.user.phone || undefined,
+            sessionData: null, // MTProto данные уже в БД через DatabaseStorage
+            createdAt: Date.now(),
+          });
+          this.logger.log(`[QR] ✅ Telegram session saved to request.session successfully`);
+        } catch (error: any) {
+          this.logger.error(`[QR] ⚠️ Failed to save session to request.session (non-critical): ${error.message}`);
+          // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
+        }
+        
+        this.logger.log(`Telegram сессия создана через QR для пользователя: ${result.user.id}, sessionId: ${result.sessionId}`);
       }
 
       return {

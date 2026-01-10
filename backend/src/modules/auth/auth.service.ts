@@ -924,12 +924,13 @@ export class AuthService implements OnModuleDestroy {
   /**
    * Проверяет статус QR токена
    */
-  async checkQrTokenStatus(tokenId: string, userId?: string): Promise<{
+  async checkQrTokenStatus(tokenId: string, userId?: string, expressRequest?: any): Promise<{
     status: 'pending' | 'accepted' | 'expired';
     user?: User;
     tokens?: { accessToken: string; refreshToken: string } | null;
     expiresAt?: number;
     timeRemaining?: number;
+    sessionId?: string; // КРИТИЧНО: Возвращаем sessionId для сохранения в request.session
   }> {
     try {
       const stored = this.qrTokenStore.get(tokenId);
@@ -1058,7 +1059,8 @@ export class AuthService implements OnModuleDestroy {
             // Используем userId из параметра (если передан админом) или создаем нового пользователя
             const sessionUserId = userId || user.id;
             this.logger.log(`Saving Telegram session for user ${sessionUserId} (role: ${user.role}, phone: ${normalizedPhone}), sessionId: ${stored.sessionId}`);
-            // КРИТИЧНО: Передаем sessionId в saveSession
+            // КРИТИЧНО: Передаем sessionId и expressRequest в saveSession
+            // saveSession() теперь сам сохраняет сессию в request.session если expressRequest передан
             await this.telegramUserClientService.saveSession(
               sessionUserId,
               stored.client,
@@ -1066,6 +1068,7 @@ export class AuthService implements OnModuleDestroy {
               normalizedPhone || '',
               undefined, // ipAddress не доступен в этом контексте
               undefined, // userAgent не доступен в этом контексте
+              expressRequest, // КРИТИЧНО: Передаем expressRequest для сохранения в request.session
             );
 
             // НЕ генерируем JWT токены - авторизация Telegram не должна авторизовывать в дашборде
@@ -1076,12 +1079,13 @@ export class AuthService implements OnModuleDestroy {
             stored.user = user;
             stored.tokens = null; // Не возвращаем токены для дашборда
 
-            this.logger.log(`QR code accepted for user: ${user.id}`);
+            this.logger.log(`QR code accepted for user: ${user.id}, sessionId: ${stored.sessionId}`);
 
             return {
               status: 'accepted',
               user,
               tokens: stored.tokens,
+              sessionId: stored.sessionId, // КРИТИЧНО: Возвращаем sessionId для сохранения в request.session
               expiresAt: Math.floor(stored.expiresAt.getTime() / 1000),
               timeRemaining: 0,
             };
