@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { Client, Storage, StorageKeyPart } from '@mtkruto/node';
 import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
 import { SessionEncryptionService } from './session-encryption.service';
+import { TelegramSessionService } from './telegram-session.service';
 import { User, UserRole } from '../../../entities/user.entity';
 import { handleMtprotoError, MtprotoErrorAction } from '../utils/mtproto-error.handler';
 import { assertSessionTransition } from '../utils/session-state-machine';
@@ -334,6 +335,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private encryptionService: SessionEncryptionService,
+    private telegramSessionService: TelegramSessionService,
   ) {
     this.logger.log('TelegramUserClientService initialized');
   }
@@ -600,6 +602,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
     phoneNumber: string,
     ipAddress?: string,
     userAgent?: string,
+    expressRequest?: any, // Express request для сохранения сессии в request.session
   ): Promise<void> {
     try {
       this.logger.log(`Starting saveSession for user ${userId}, sessionId: ${sessionId}, phone: ${phoneNumber}`);
@@ -651,15 +654,73 @@ export class TelegramUserClientService implements OnModuleDestroy {
         throw new Error(`Session validation failed: ${getMeError.message}`);
       }
 
-      // Получаем DC ID из сессии для сохранения
+      // КРИТИЧНО: Проверяем, что MTProto state записан в DatabaseStorage
+      // После getMe() все данные должны быть записаны через storage.set()
+      let hasAuthKey = false;
       let dcId: number | null = null;
       try {
+        // Проверяем наличие auth_key - это критично для работы сессии
+        const authKey = await client.storage.get(['auth_key']);
+        hasAuthKey = authKey !== null && authKey !== undefined;
+        
+        // Получаем DC ID из сессии
         const dcValue = await client.storage.get(['dc']);
         if (dcValue && typeof dcValue === 'object' && 'dcId' in (dcValue as any)) {
           dcId = (dcValue as any).dcId;
         }
-      } catch (e) {
-        this.logger.debug(`Could not extract DC ID: ${(e as Error).message}`);
+        
+        this.logger.debug(`MTProto state check: hasAuthKey=${hasAuthKey}, dcId=${dcId}`);
+        
+        if (!hasAuthKey) {
+          this.logger.error(`❌ MTProto auth_key not found in storage for session ${sessionId}`);
+          // Даем небольшую задержку - возможно данные еще пишутся асинхронно
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const retryAuthKey = await client.storage.get(['auth_key']);
+          hasAuthKey = retryAuthKey !== null && retryAuthKey !== undefined;
+          
+          if (!hasAuthKey) {
+            throw new Error(`MTProto auth_key is missing in storage. Session data may not be properly saved.`);
+          }
+          this.logger.log(`✅ auth_key found after retry for session ${sessionId}`);
+        }
+      } catch (e: any) {
+        this.logger.error(`❌ Failed to verify MTProto state for session ${sessionId}: ${e.message}`);
+        session.status = 'invalid';
+        session.isActive = false;
+        session.invalidReason = `MTProto state verification failed: ${e.message}`;
+        await this.sessionRepository.save(session);
+        throw new Error(`MTProto state verification failed: ${e.message}`);
+      }
+
+      // КРИТИЧНО: Перечитываем сессию из БД чтобы убедиться, что encryptedSessionData записана
+      // DatabaseStorage.set() должен был записать данные через транзакцию
+      const sessionWithData = await this.sessionRepository.findOne({
+        where: { id: sessionId },
+      });
+      
+      if (!sessionWithData) {
+        throw new Error(`Session ${sessionId} not found after MTProto state check`);
+      }
+      
+      // Проверяем, что encryptedSessionData не пустая
+      if (!sessionWithData.encryptedSessionData || 
+          sessionWithData.encryptedSessionData.trim() === '' || 
+          sessionWithData.encryptedSessionData === '{}') {
+        this.logger.error(`❌ encryptedSessionData is empty for session ${sessionId}`);
+        // Даем небольшую задержку - возможно данные еще пишутся
+        await new Promise(resolve => setTimeout(resolve, 200));
+        const retrySession = await this.sessionRepository.findOne({ where: { id: sessionId } });
+        
+        if (!retrySession || !retrySession.encryptedSessionData || 
+            retrySession.encryptedSessionData.trim() === '' || 
+            retrySession.encryptedSessionData === '{}') {
+          throw new Error(`encryptedSessionData is empty after retry. MTProto state may not be properly saved to DB.`);
+        }
+        this.logger.log(`✅ encryptedSessionData found after retry for session ${sessionId}`);
+        // Обновляем ссылку на сессию
+        session = retrySession;
+      } else {
+        this.logger.log(`✅ encryptedSessionData is present for session ${sessionId} (length: ${sessionWithData.encryptedSessionData.length})`);
       }
 
       // Обновляем метаданные сессии
@@ -712,6 +773,27 @@ export class TelegramUserClientService implements OnModuleDestroy {
       // КРИТИЧЕСКИ ВАЖНО: Сохраняем тот же клиент в кеш по sessionId
       // НЕ создаем новый клиент - используем тот, который уже прошел авторизацию
       this.clients.set(sessionId, client);
+
+      // КРИТИЧНО: Сохраняем сессию в request.session для следующего запроса
+      // Это нужно для Guard который проверяет request.session.telegramSession
+      if (expressRequest) {
+        this.logger.log(`[saveSession] Saving session to request.session: userId=${userId}, sessionId=${sessionId}, phoneNumber=${phoneNumber}`);
+        try {
+          this.telegramSessionService.save(expressRequest, {
+            userId: userId,
+            sessionId: sessionId,
+            phoneNumber: phoneNumber,
+            sessionData: null, // MTProto данные уже в БД через DatabaseStorage
+            createdAt: Date.now(),
+          });
+          this.logger.log(`[saveSession] ✅ Session saved to request.session successfully: userId=${userId}, sessionId=${sessionId}`);
+        } catch (error: any) {
+          this.logger.error(`[saveSession] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
+          // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
+        }
+      } else {
+        this.logger.warn(`[saveSession] ⚠️ expressRequest is not provided, cannot save session to request.session`);
+      }
 
       this.logger.log(`✅ Session saved successfully for user ${userId}, session id: ${session.id}, phoneNumber: ${phoneNumber}, isActive: ${session.isActive}`);
       

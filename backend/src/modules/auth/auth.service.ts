@@ -802,6 +802,7 @@ export class AuthService implements OnModuleDestroy {
 
       // Сохраняем сессию MTProto для пользователя, найденного/созданного по телефону
       this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}), sessionId: ${sessionId}`);
+      // КРИТИЧНО: saveSession() теперь сам сохраняет сессию в request.session если expressRequest передан
       await this.telegramUserClientService.saveSession(
         user.id,
         client,
@@ -809,6 +810,7 @@ export class AuthService implements OnModuleDestroy {
         normalizedPhone,
         ipAddress,
         userAgent,
+        expressRequest, // КРИТИЧНО: Передаем expressRequest для сохранения в request.session
       );
 
       // Удаляем временные данные по нормализованному номеру
@@ -1181,7 +1183,7 @@ export class AuthService implements OnModuleDestroy {
           // Используем найденную сессию
           const migrated = this.twoFactorStore.get(normalizedPhone);
           if (migrated) {
-            return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent, undefined);
+            return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, migrated, ipAddress, userAgent, expressRequest);
           }
         }
         // КРИТИЧНО: Используем buildErrorResponse вместо прямого BadRequestException
@@ -1206,7 +1208,7 @@ export class AuthService implements OnModuleDestroy {
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
       
-      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent);
+      return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent, expressRequest);
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
       
@@ -1672,6 +1674,7 @@ export class AuthService implements OnModuleDestroy {
       this.logger.warn(`[2FA] 🔥 TG LOGIN SUCCESS: appUserId=${user.id}, phone=${normalizedPhone}, telegramId=${user.telegramId}, sessionId=${stored.sessionId}`);
       this.logger.log(`Saving Telegram session for user ${user.id} (role: ${user.role}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}), sessionId: ${stored.sessionId}`);
       
+      // КРИТИЧНО: saveSession() теперь сам сохраняет сессию в request.session если expressRequest передан
       await this.telegramUserClientService.saveSession(
         user.id,
         client,
@@ -1679,32 +1682,10 @@ export class AuthService implements OnModuleDestroy {
         normalizedPhone,
         ipAddress,
         userAgent,
+        expressRequest, // КРИТИЧНО: Передаем expressRequest для сохранения в request.session
       );
       
-      this.logger.warn(`[2FA] ✅ Session saved to DB: userId=${user.id}, sessionId=${stored.sessionId}, isActive=true, status=active`);
-
-      // КРИТИЧНО: Также сохраняем сессию в request.session через TelegramSessionService
-      // Это нужно для guard который проверяет request.session.telegramSession
-      if (expressRequest) {
-        this.logger.warn(`[2FA] 🔥 SESSION SAVED to request.session: userId=${user.id}, sessionId=${stored.sessionId}, phoneNumber=${normalizedPhone}`);
-        this.logger.log(`[2FA] Saving Telegram session to request.session: userId=${user.id}, sessionId=${stored.sessionId}, phoneNumber=${normalizedPhone}`);
-        try {
-          this.telegramSessionService.save(expressRequest, {
-            userId: user.id,
-            sessionId: stored.sessionId,
-            phoneNumber: normalizedPhone,
-            sessionData: null, // MTProto данные уже в БД через DatabaseStorage
-            createdAt: Date.now(),
-          });
-          this.logger.warn(`[2FA] ✅ SESSION SAVED to request.session successfully: userId=${user.id}, sessionId=${stored.sessionId}`);
-          this.logger.log(`[2FA] ✅ Telegram session saved to request.session successfully`);
-        } catch (error: any) {
-          this.logger.error(`[2FA] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
-          // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
-        }
-      } else {
-        this.logger.warn(`[2FA] ⚠️ expressRequest is not provided, cannot save session to request.session`);
-      }
+      this.logger.warn(`[2FA] ✅ Session saved to DB and request.session: userId=${user.id}, sessionId=${stored.sessionId}, isActive=true, status=active`);
 
       // Удаляем временные данные
       this.twoFactorStore.delete(normalizedPhone);
