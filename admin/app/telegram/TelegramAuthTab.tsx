@@ -11,7 +11,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { Loader2, Smartphone, QrCode, Shield, CheckCircle2, XCircle } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -21,6 +21,7 @@ interface TelegramAuthTabProps {
 
 export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps) {
   const { user } = useAuth(); // Получаем данные текущего пользователя (админа)
+  const queryClient = useQueryClient(); // КРИТИЧНО: Для инвалидации кеша статуса сессии
   const [authMethod, setAuthMethod] = useState<'phone' | 'qr'>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [code, setCode] = useState('');
@@ -124,6 +125,8 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
             clearInterval(interval);
             toast.success('Telegram аккаунт успешно подключен!');
             refetchSessions();
+            // КРИТИЧНО: Инвалидируем кеш статуса сессии для немедленного обновления UI
+            queryClient.invalidateQueries({ queryKey: ['telegram-session-status'] });
             // Сброс формы
             setQrTokenId('');
             setQrUrl('');
@@ -230,6 +233,8 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       } else {
         toast.success('Telegram аккаунт успешно подключен!');
         refetchSessions();
+        // КРИТИЧНО: Инвалидируем кеш статуса сессии для немедленного обновления UI
+        queryClient.invalidateQueries({ queryKey: ['telegram-session-status'] });
         // Сброс формы
         setPhoneNumber('');
         setCode('');
@@ -311,6 +316,8 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       if (response.data.success) {
         toast.success('Telegram аккаунт успешно подключен!');
         refetchSessions();
+        // КРИТИЧНО: Инвалидируем кеш статуса сессии для немедленного обновления UI
+        queryClient.invalidateQueries({ queryKey: ['telegram-session-status'] });
         // Сброс формы
         setPhoneNumber('');
         setCode('');

@@ -501,29 +501,26 @@ export class TelegramUserController {
   @Get('status')
   @ApiOperation({
     summary: 'Получение статуса Telegram сессии пользователя',
-    description: 'Возвращает текущий статус Telegram сессии (active, initializing, invalid, not_found). Не требует активной сессии - используется для проверки готовности сессии перед запросами к Telegram API.',
+    description: 'Возвращает текущий статус Telegram сессии (active, initializing, expired, error, not_found). Не требует активной сессии - используется для проверки готовности сессии перед запросами к Telegram API. ВСЕГДА возвращает 200, если JWT валиден. 401 только если нет JWT.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Статус сессии успешно получен',
+    description: 'Статус сессии успешно получен (всегда 200, если JWT валиден)',
     schema: {
       example: {
-        success: true,
+        hasSession: true,
         status: 'active',
-        hasActiveSession: true,
         sessionId: '550e8400-e29b-41d4-a716-446655440000',
-        phoneNumber: '+79001234567',
+        createdAt: 1700000000,
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
+  @ApiResponse({ status: 401, description: 'Пользователь не авторизован (нет JWT)' })
   async getStatus(@Request() req): Promise<{
-    success: boolean;
-    status: 'active' | 'initializing' | 'invalid' | 'not_found';
-    hasActiveSession: boolean;
+    hasSession: boolean;
+    status: 'active' | 'initializing' | 'expired' | 'error' | 'not_found';
     sessionId: string | null;
-    phoneNumber: string | null;
-    invalidReason?: string | null;
+    createdAt: number | null;
   }> {
     try {
       // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
@@ -544,49 +541,44 @@ export class TelegramUserController {
       
       if (activeSession) {
         return {
-          success: true,
+          hasSession: true,
           status: 'active',
-          hasActiveSession: true,
           sessionId: activeSession.id,
-          phoneNumber: activeSession.phoneNumber,
-          invalidReason: null,
+          createdAt: Math.floor(activeSession.createdAt.getTime() / 1000),
         };
       }
       
       // Ищем сессии в других статусах
       const initializingSession = userSessions.find(s => s.status === 'initializing');
-      const invalidSession = userSessions.find(s => s.status === 'invalid');
+      // КРИТИЧНО: В entity нет статуса 'expired', есть только 'invalid' и 'revoked'
+      // Маппим их в 'expired' для frontend (более понятно для пользователя)
+      const invalidOrRevokedSession = userSessions.find(s => s.status === 'invalid' || s.status === 'revoked');
       
       if (initializingSession) {
         return {
-          success: true,
+          hasSession: true,
           status: 'initializing',
-          hasActiveSession: false,
           sessionId: initializingSession.id,
-          phoneNumber: initializingSession.phoneNumber,
-          invalidReason: null,
+          createdAt: Math.floor(initializingSession.createdAt.getTime() / 1000),
         };
       }
       
-      if (invalidSession) {
+      if (invalidOrRevokedSession) {
+        // Маппим 'invalid' и 'revoked' в 'expired' для frontend
         return {
-          success: true,
-          status: 'invalid',
-          hasActiveSession: false,
-          sessionId: invalidSession.id,
-          phoneNumber: invalidSession.phoneNumber,
-          invalidReason: invalidSession.invalidReason || 'Session is invalid',
+          hasSession: true,
+          status: 'expired',
+          sessionId: invalidOrRevokedSession.id,
+          createdAt: Math.floor(invalidOrRevokedSession.createdAt.getTime() / 1000),
         };
       }
       
-      // Нет сессий
+      // Нет сессий - это НЕ ошибка, просто нет сессии
       return {
-        success: true,
+        hasSession: false,
         status: 'not_found',
-        hasActiveSession: false,
         sessionId: null,
-        phoneNumber: null,
-        invalidReason: null,
+        createdAt: null,
       };
     } catch (error: any) {
       this.logger.error(`Ошибка получения статуса сессии: ${error.message}`, error.stack);

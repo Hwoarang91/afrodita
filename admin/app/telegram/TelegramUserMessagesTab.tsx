@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
+import { useTelegramSession } from '@/lib/hooks/useTelegramSession';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +37,7 @@ interface SessionInfo {
   isCurrent?: boolean;
 }
 
+
 export default function TelegramUserMessagesTab() {
   const [selectedTab, setSelectedTab] = useState<'send' | 'sessions'>('send');
   const [selectedChatId, setSelectedChatId] = useState('');
@@ -45,13 +47,20 @@ export default function TelegramUserMessagesTab() {
   const [caption, setCaption] = useState('');
   const queryClient = useQueryClient();
 
-  // Получение списка чатов
+  // КРИТИЧНО: Проверяем статус Telegram сессии перед загрузкой данных
+  const { data: sessionStatus, isLoading: isLoadingSession } = useTelegramSession();
+  
+  // Определяем, можем ли мы загружать Telegram данные
+  const canLoadTelegramData = Boolean(sessionStatus?.hasSession && sessionStatus.status === 'active');
+
+  // Получение списка чатов - ТОЛЬКО если сессия active
   const { data: chatsData, isLoading: isLoadingChats, error: chatsError } = useQuery({
     queryKey: ['telegram-user-chats'],
     queryFn: async () => {
       const response = await apiClient.get('/telegram/user/chats?type=all');
       return response.data;
     },
+    enabled: canLoadTelegramData, // КРИТИЧНО: Загружаем только когда сессия active
     retry: false,
   });
 
@@ -71,13 +80,14 @@ export default function TelegramUserMessagesTab() {
     }
   }, [chatsError]);
 
-  // Получение списка контактов
+  // Получение списка контактов - ТОЛЬКО если сессия active
   const { data: contactsData, isLoading: isLoadingContacts, error: contactsError } = useQuery({
     queryKey: ['telegram-user-contacts'],
     queryFn: async () => {
       const response = await apiClient.get('/telegram/user/contacts');
       return response.data;
     },
+    enabled: canLoadTelegramData, // КРИТИЧНО: Загружаем только когда сессия active
     retry: false,
   });
 
@@ -131,7 +141,7 @@ export default function TelegramUserMessagesTab() {
     },
   });
 
-  // Получение списка сессий
+  // Получение списка сессий (для просмотра - не требует active сессии)
   const { data: sessionsData, isLoading: isLoadingSessions } = useQuery({
     queryKey: ['telegram-user-sessions'],
     queryFn: async () => {
@@ -218,9 +228,59 @@ export default function TelegramUserMessagesTab() {
     });
   };
 
+  // КРИТИЧНО: Gatekeeper - проверяем статус сессии перед показом интерфейса
+  // ВСЕГДА после всех hooks, но перед финальным return
+  if (isLoadingSession) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-10">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Проверка статуса Telegram сессии...</p>
+      </div>
+    );
+  }
+
+  // Если сессии нет или статус не active - показываем соответствующий UI
+  if (!sessionStatus?.hasSession || (sessionStatus && sessionStatus.status !== 'active')) {
+    if (sessionStatus?.status === 'initializing') {
+      return (
+        <div className="flex flex-col items-center justify-center gap-4 py-10">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Авторизация Telegram...</p>
+        </div>
+      );
+    }
+    if (sessionStatus?.status === 'expired' || sessionStatus?.status === 'error') {
+      const statusMessage = sessionStatus && sessionStatus.status === 'expired' 
+        ? 'Сессия истекла' 
+        : 'Ошибка сессии';
+      return (
+        <div className="flex flex-col items-center justify-center gap-4 py-10">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">{statusMessage}</p>
+        </div>
+      );
+    }
+    // not_found или другой статус - показываем сообщение о необходимости авторизации
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-10">
+        <p className="text-muted-foreground">
+          Для работы с личными сообщениями необходимо авторизоваться в Telegram.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Перейдите на вкладку "Авторизация" и авторизуйтесь через телефон или QR-код.
+        </p>
+      </div>
+    );
+  }
+
+  // ✅ Сессия активна - показываем основной интерфейс
   return (
     <div className="space-y-6">
-      <Tabs value={selectedTab} onValueChange={(value) => setSelectedTab(value as 'send' | 'sessions')} className="w-full">
+      <Tabs 
+        value={selectedTab} 
+        onValueChange={(value) => setSelectedTab(value as 'send' | 'sessions')} 
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="send">
             <Send className="w-4 h-4 mr-2" />
@@ -550,24 +610,23 @@ export default function TelegramUserMessagesTab() {
                             {(session.status === 'invalid' || session.status === 'revoked') && (
                               <Button
                                 variant="destructive"
-                                  size="sm"
-                                  onClick={() => {
-                                    if (confirm('Вы уверены, что хотите полностью удалить эту сессию? Это действие нельзя отменить.')) {
-                                      deactivateSessionMutation.mutate({ sessionId: session.id, permanent: true });
-                                    }
-                                  }}
-                                  disabled={deactivateSessionMutation.isPending}
-                                >
-                                  {deactivateSessionMutation.isPending ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <Trash2 className="w-4 h-4 mr-2" />
-                                      Удалить
-                                    </>
-                                  )}
-                                </Button>
-                              </>
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm('Вы уверены, что хотите полностью удалить эту сессию? Это действие нельзя отменить.')) {
+                                    deactivateSessionMutation.mutate({ sessionId: session.id, permanent: true });
+                                  }
+                                }}
+                                disabled={deactivateSessionMutation.isPending}
+                              >
+                                {deactivateSessionMutation.isPending ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Удалить
+                                  </>
+                                )}
+                              </Button>
                             )}
                             {index === 0 && (
                               <Button
