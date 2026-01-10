@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import { useTelegramSession } from '@/lib/hooks/useTelegramSession';
+import { useTelegramSession, TelegramSessionStatus } from '@/lib/hooks/useTelegramSession';
 import { TelegramLoading } from './TelegramLoading';
 import { ErrorCard } from './components/ErrorCard';
 import { Button } from '@/components/ui/button';
@@ -50,7 +50,8 @@ export default function TelegramUserMessagesTab() {
   const queryClient = useQueryClient();
 
   // КРИТИЧНО: Проверяем статус Telegram сессии перед загрузкой данных
-  const { data: sessionData, status: sessionStatus, isLoading: isLoadingSession } = useTelegramSession();
+  const { data: sessionData, status, isLoading: isLoadingSession } = useTelegramSession();
+  const sessionStatus: TelegramSessionStatus = status;
   
   // Определяем, можем ли мы загружать Telegram данные
   const canLoadTelegramData = sessionStatus === 'active';
