@@ -30,7 +30,18 @@ export class TelegramSessionGuard implements CanActivate {
       throw new UnauthorizedException('Authentication required. Please log in first.');
     }
 
+    // КРИТИЧНО: Используем request.user.sub (JWT payload.sub) для получения userId
+    // Это должно совпадать с userId, который использовался при сохранении сессии
     const userId = request.user.sub;
+    
+    // Дополнительное логирование для отладки userId
+    this.logger.debug(`[TelegramSessionGuard] userId from JWT: sub=${userId}, user.id=${request.user.id || 'N/A'}, user.role=${request.user.role || 'N/A'}`);
+    
+    if (!userId || typeof userId !== 'string') {
+      this.logger.error(`[TelegramSessionGuard] ❌ Invalid userId from JWT: ${JSON.stringify(request.user)}`);
+      throw new UnauthorizedException('Invalid user ID in JWT token. Please log in again.');
+    }
+    
     this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP: userId=${userId}, checking request.session and DB...`);
     this.logger.debug(`TelegramSessionGuard: Проверка активной Telegram сессии для пользователя ${userId}`);
 
@@ -66,8 +77,16 @@ export class TelegramSessionGuard implements CanActivate {
         const activeSession = userSessions.find(s => s.status === 'active' && s.isActive);
         
         if (activeSession) {
-          this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP RESULT: userId=${userId}, found=true, sessionId=${activeSession.id}, source=DB`);
-          this.logger.log(`TelegramSessionGuard: ✅ Found active session in DB: ${activeSession.id} for userId=${userId}`);
+          // КРИТИЧНО: Проверяем, что userId сессии совпадает с userId из JWT
+          if (activeSession.userId !== userId) {
+            this.logger.error(`[TelegramSessionGuard] ❌ userId mismatch: session.userId=${activeSession.userId}, JWT userId=${userId}`);
+            throw new UnauthorizedException(
+              'Telegram session userId does not match current user. Please re-authorize.',
+            );
+          }
+          
+          this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP RESULT: userId=${userId}, found=true, sessionId=${activeSession.id}, source=DB, session.userId=${activeSession.userId}`);
+          this.logger.log(`TelegramSessionGuard: ✅ Found active session in DB: ${activeSession.id} for userId=${userId} (session.userId=${activeSession.userId})`);
           
           // КРИТИЧНО: Проверяем, что Telegram клиент подключен и валиден
           // Просто наличие сессии в БД недостаточно - нужно убедиться, что клиент работает

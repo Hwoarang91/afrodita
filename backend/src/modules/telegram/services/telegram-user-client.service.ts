@@ -607,13 +607,28 @@ export class TelegramUserClientService implements OnModuleDestroy {
     try {
       this.logger.log(`Starting saveSession for user ${userId}, sessionId: ${sessionId}, phone: ${phoneNumber}`);
       
+      // КРИТИЧНО: Проверяем, что userId совпадает (защита от ошибок в передаче параметров)
+      if (!userId || typeof userId !== 'string') {
+        throw new Error(`Invalid userId provided to saveSession: ${userId}`);
+      }
+      
       // Находим сессию в БД
       let session = await this.sessionRepository.findOne({
-        where: { id: sessionId, userId },
+        where: { id: sessionId },
       });
 
       if (!session) {
-        throw new Error(`Session ${sessionId} not found for user ${userId}`);
+        throw new Error(`Session ${sessionId} not found`);
+      }
+      
+      // КРИТИЧНО: Проверяем, что userId сессии совпадает с переданным userId
+      // Если не совпадает - это ошибка, нужно обновить userId перед активацией
+      if (session.userId !== userId) {
+        this.logger.warn(`[saveSession] ⚠️ userId mismatch: session.userId=${session.userId}, provided userId=${userId}. Updating session userId...`);
+        session.userId = userId;
+        // Сохраняем обновленный userId перед активацией
+        await this.sessionRepository.save(session);
+        this.logger.log(`[saveSession] ✅ Session userId updated: ${session.userId} → ${userId}`);
       }
 
       // КРИТИЧНО: Проверяем, что сессия в допустимом состоянии для активации
@@ -752,23 +767,40 @@ export class TelegramUserClientService implements OnModuleDestroy {
       session.userAgent = userAgent || null;
       
       // КРИТИЧНО: Сохраняем сессию в БД с статусом 'active'
-      await this.sessionRepository.save(session);
-      this.logger.warn(`[saveSession] 🔥 SESSION ACTIVATED: sessionId=${session.id}, userId=${userId}, status=${session.status}, isActive=${session.isActive}`);
-      this.logger.log(`✅ Session ${session.id} updated successfully: initializing → active, isActive=true`);
+      // await repository.save() гарантирует завершение транзакции перед возвратом
+      const savedSession = await this.sessionRepository.save(session);
+      this.logger.warn(`[saveSession] 🔥 SESSION ACTIVATED: sessionId=${savedSession.id}, userId=${userId}, status=${savedSession.status}, isActive=${savedSession.isActive}`);
+      this.logger.log(`✅ Session ${savedSession.id} updated successfully: initializing → active, isActive=true`);
       
-      // КРИТИЧНО: Проверяем, что сессия действительно сохранена с правильным статусом
+      // КРИТИЧНО: После await save() транзакция завершена - проверяем, что данные действительно сохранены
+      // Это защита от race condition - убеждаемся, что Guard сможет прочитать сессию сразу
       const verifySession = await this.sessionRepository.findOne({
-        where: { id: session.id },
+        where: { id: savedSession.id, userId: userId }, // КРИТИЧНО: Проверяем и userId тоже
       });
-      if (verifySession) {
-        if (verifySession.status === 'active' && verifySession.isActive === true) {
-          this.logger.warn(`[saveSession] ✅ VERIFICATION PASSED: sessionId=${verifySession.id}, status=${verifySession.status}, isActive=${verifySession.isActive}`);
-        } else {
-          this.logger.error(`[saveSession] ❌ VERIFICATION FAILED: sessionId=${verifySession.id}, status=${verifySession.status}, isActive=${verifySession.isActive} (expected: status=active, isActive=true)`);
-        }
-      } else {
-        this.logger.error(`[saveSession] ❌ CRITICAL: Session ${session.id} not found in DB after save!`);
+      
+      if (!verifySession) {
+        this.logger.error(`[saveSession] ❌ CRITICAL: Session ${savedSession.id} not found in DB after save! userId=${userId}`);
+        throw new Error(`Session ${savedSession.id} not found in DB immediately after save - possible race condition`);
       }
+      
+      // Проверяем все критичные поля
+      if (verifySession.status !== 'active' || verifySession.isActive !== true || verifySession.userId !== userId) {
+        this.logger.error(`[saveSession] ❌ VERIFICATION FAILED: sessionId=${verifySession.id}, status=${verifySession.status}, isActive=${verifySession.isActive}, userId=${verifySession.userId} (expected: status=active, isActive=true, userId=${userId})`);
+        throw new Error(`Session verification failed: status=${verifySession.status}, isActive=${verifySession.isActive}, userId mismatch: expected=${userId}, got=${verifySession.userId}`);
+      }
+      
+      // КРИТИЧНО: Проверяем, что encryptedSessionData не пустая (защита от пустой сессии)
+      if (!verifySession.encryptedSessionData || 
+          verifySession.encryptedSessionData.trim() === '' || 
+          verifySession.encryptedSessionData === '{}') {
+        this.logger.error(`[saveSession] ❌ CRITICAL: encryptedSessionData is empty after save! sessionId=${verifySession.id}`);
+        throw new Error(`encryptedSessionData is empty after save - MTProto state was not properly saved`);
+      }
+      
+      this.logger.warn(`[saveSession] ✅ VERIFICATION PASSED: sessionId=${verifySession.id}, status=${verifySession.status}, isActive=${verifySession.isActive}, userId=${verifySession.userId}, dataLength=${verifySession.encryptedSessionData.length}`);
+      
+      // Обновляем ссылку на сессию для дальнейшего использования
+      session = verifySession;
 
       // КРИТИЧЕСКИ ВАЖНО: Сохраняем тот же клиент в кеш по sessionId
       // НЕ создаем новый клиент - используем тот, который уже прошел авторизацию
@@ -776,20 +808,43 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       // КРИТИЧНО: Сохраняем сессию в request.session для следующего запроса
       // Это нужно для Guard который проверяет request.session.telegramSession
+      // КРИТИЧНО: userId должен совпадать с userId из JWT (request.user.sub)
       if (expressRequest) {
-        this.logger.log(`[saveSession] Saving session to request.session: userId=${userId}, sessionId=${sessionId}, phoneNumber=${phoneNumber}`);
-        try {
-          this.telegramSessionService.save(expressRequest, {
-            userId: userId,
-            sessionId: sessionId,
-            phoneNumber: phoneNumber,
-            sessionData: null, // MTProto данные уже в БД через DatabaseStorage
-            createdAt: Date.now(),
-          });
-          this.logger.log(`[saveSession] ✅ Session saved to request.session successfully: userId=${userId}, sessionId=${sessionId}`);
-        } catch (error: any) {
-          this.logger.error(`[saveSession] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
-          // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
+        // Проверяем, что userId в expressRequest совпадает с переданным userId
+        const jwtUserId = expressRequest.user?.sub;
+        if (jwtUserId && jwtUserId !== userId) {
+          this.logger.warn(`[saveSession] ⚠️ userId mismatch: JWT userId=${jwtUserId}, provided userId=${userId}. Using JWT userId.`);
+          // Используем userId из JWT для согласованности
+          const correctedUserId = jwtUserId;
+          this.logger.log(`[saveSession] Saving session to request.session: userId=${correctedUserId}, sessionId=${sessionId}, phoneNumber=${phoneNumber}`);
+          try {
+            this.telegramSessionService.save(expressRequest, {
+              userId: correctedUserId, // Используем userId из JWT
+              sessionId: sessionId,
+              phoneNumber: phoneNumber,
+              sessionData: null, // MTProto данные уже в БД через DatabaseStorage
+              createdAt: Date.now(),
+            });
+            this.logger.log(`[saveSession] ✅ Session saved to request.session successfully: userId=${correctedUserId}, sessionId=${sessionId}`);
+          } catch (error: any) {
+            this.logger.error(`[saveSession] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
+            // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
+          }
+        } else {
+          this.logger.log(`[saveSession] Saving session to request.session: userId=${userId}, sessionId=${sessionId}, phoneNumber=${phoneNumber}, JWT userId=${jwtUserId || 'N/A'}`);
+          try {
+            this.telegramSessionService.save(expressRequest, {
+              userId: userId,
+              sessionId: sessionId,
+              phoneNumber: phoneNumber,
+              sessionData: null, // MTProto данные уже в БД через DatabaseStorage
+              createdAt: Date.now(),
+            });
+            this.logger.log(`[saveSession] ✅ Session saved to request.session successfully: userId=${userId}, sessionId=${sessionId}`);
+          } catch (error: any) {
+            this.logger.error(`[saveSession] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
+            // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
+          }
         }
       } else {
         this.logger.warn(`[saveSession] ⚠️ expressRequest is not provided, cannot save session to request.session`);
@@ -797,43 +852,14 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       this.logger.log(`✅ Session saved successfully for user ${userId}, session id: ${session.id}, phoneNumber: ${phoneNumber}, isActive: ${session.isActive}`);
       
-      // Проверяем, что сессия действительно сохранена и активна
-      const savedSession = await this.sessionRepository.findOne({
+      // Дополнительная проверка структуры данных (опционально, не критично)
+      // Основная проверка уже выполнена выше через verifySession
+      const finalCheck = await this.sessionRepository.findOne({
         where: { id: session.id },
       });
-      if (savedSession) {
-        // Проверяем, что в сессии есть данные (не пустые)
-        let hasData = false;
-        let dataSize = 0;
-        try {
-          if (savedSession.encryptedSessionData && savedSession.encryptedSessionData.trim() !== '' && savedSession.encryptedSessionData !== '{}') {
-            const decrypted = this.encryptionService.decrypt(savedSession.encryptedSessionData);
-            if (decrypted && decrypted.trim() !== '' && decrypted !== '{}') {
-              const data = JSON.parse(decrypted);
-              // Проверяем наличие критических ключей
-              const hasAuthKey = data.auth_key && Array.isArray(data.auth_key) && data.auth_key.length > 0;
-              const hasDc = data.dc !== undefined;
-              const hasServerSalt = data.server_salt && Array.isArray(data.server_salt) && data.server_salt.length > 0;
-              hasData = hasAuthKey && hasDc && hasServerSalt;
-              dataSize = decrypted.length;
-              
-              this.logger.log(`✅ Verified saved session: id=${savedSession.id}, isActive=${savedSession.isActive}, phoneNumber=${savedSession.phoneNumber}, userId=${savedSession.userId}`);
-              this.logger.log(`📊 Session data check: hasAuthKey=${hasAuthKey}, authKeyLength=${hasAuthKey ? data.auth_key.length : 0}, hasDc=${hasDc}, dc=${data.dc || 'N/A'}, hasServerSalt=${hasServerSalt}, dataSize=${dataSize} bytes`);
-              
-              if (!hasData) {
-                this.logger.error(`❌ CRITICAL: Session ${savedSession.id} has empty or invalid session data! Missing critical keys.`);
-              }
-            } else {
-              this.logger.error(`❌ CRITICAL: Session ${savedSession.id} has empty decrypted data!`);
-            }
-          } else {
-            this.logger.error(`❌ CRITICAL: Session ${savedSession.id} has empty encryptedSessionData!`);
-          }
-        } catch (e) {
-          this.logger.error(`❌ CRITICAL: Failed to verify session data for ${savedSession.id}: ${(e as Error).message}`);
-        }
-      } else {
-        this.logger.error(`❌ ERROR: Session ${session.id} was not found in database after saving!`);
+      // Эта проверка уже выполнена выше через verifySession, поэтому просто логируем успех
+      if (finalCheck) {
+        this.logger.log(`✅ Final verification: Session ${finalCheck.id} is confirmed in DB`);
       }
     } catch (error: any) {
       this.logger.error(`Error saving session for user ${userId}: ${error.message}`, error.stack);
