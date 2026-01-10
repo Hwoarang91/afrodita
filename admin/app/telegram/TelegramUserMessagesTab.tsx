@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useTelegramSession } from '@/lib/hooks/useTelegramSession';
+import { TelegramLoading } from './TelegramLoading';
+import { ErrorCard } from './components/ErrorCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,10 +50,10 @@ export default function TelegramUserMessagesTab() {
   const queryClient = useQueryClient();
 
   // КРИТИЧНО: Проверяем статус Telegram сессии перед загрузкой данных
-  const { data: sessionStatus, isLoading: isLoadingSession } = useTelegramSession();
+  const { data: sessionData, status: sessionStatus, isLoading: isLoadingSession } = useTelegramSession();
   
   // Определяем, можем ли мы загружать Telegram данные
-  const canLoadTelegramData = Boolean(sessionStatus?.hasSession && sessionStatus.status === 'active');
+  const canLoadTelegramData = sessionStatus === 'active';
 
   // Получение списка чатов - ТОЛЬКО если сессия active
   const { data: chatsData, isLoading: isLoadingChats, error: chatsError } = useQuery({
@@ -240,42 +242,29 @@ export default function TelegramUserMessagesTab() {
   }
 
   // Если сессии нет или статус не active - показываем соответствующий UI
-  if (!sessionStatus?.hasSession || sessionStatus.status !== 'active') {
-    if (sessionStatus?.status === 'initializing') {
+  if (sessionStatus !== 'active') {
+    if (sessionStatus === 'initializing' || sessionStatus === 'waiting_2fa') {
       return (
-        <div className="flex flex-col items-center justify-center gap-4 py-10">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Авторизация Telegram...</p>
-          <p className="text-sm text-muted-foreground">Это может занять несколько секунд</p>
-        </div>
+        <TelegramLoading status={sessionStatus} />
       );
     }
-    if (sessionStatus?.status === 'expired' || sessionStatus?.status === 'invalid' || sessionStatus?.status === 'revoked') {
-      const statusType = sessionStatus.status === 'expired' 
-        ? 'expired' 
-        : sessionStatus.status === 'invalid' 
-        ? 'invalid' 
-        : 'revoked';
+    if (sessionStatus === 'expired' || sessionStatus === 'error') {
       return (
-        <div className="flex flex-col items-center justify-center gap-4 py-10">
-          <p className="text-muted-foreground text-lg">
-            Telegram сессия {statusType === 'expired' ? 'истекла' : statusType === 'invalid' ? 'невалидна' : 'была отозвана'}
-          </p>
-          {sessionStatus.invalidReason && (
-            <p className="text-sm text-muted-foreground">
-              Причина: {sessionStatus.invalidReason}
-            </p>
-          )}
-          <p className="text-sm text-muted-foreground">
-            Пожалуйста, перейдите на вкладку &quot;Авторизация&quot; и переавторизуйте свой Telegram аккаунт.
-          </p>
-        </div>
+        <ErrorCard
+          title={sessionStatus === 'expired' ? 'Telegram сессия истекла' : 'Ошибка Telegram сессии'}
+          message={sessionData?.invalidReason || (sessionStatus === 'expired' ? 'Сессия была отозвана или истекла' : 'Не удалось подключить Telegram аккаунт')}
+          actionText="Переавторизоваться"
+          onAction={() => {
+            // Переходим на вкладку авторизации через изменение URL
+            window.location.href = '/telegram?tab=auth';
+          }}
+        />
       );
     }
-    // not_found или другой статус - показываем сообщение о необходимости авторизации
+    // none или другой статус - показываем сообщение о необходимости авторизации
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-10">
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground text-lg">
           Для работы с личными сообщениями необходимо авторизоваться в Telegram.
         </p>
         <p className="text-sm text-muted-foreground">

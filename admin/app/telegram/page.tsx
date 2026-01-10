@@ -13,7 +13,10 @@ import ScheduledMessagesManagement from './ScheduledMessagesManagement';
 import TelegramAuthTab from './TelegramAuthTab';
 import TelegramUserMessagesTab from './TelegramUserMessagesTab';
 import { TelegramLoading } from './TelegramLoading';
-import { useTelegramSession } from '@/lib/hooks/useTelegramSession';
+import { TelegramHeader } from './components/TelegramHeader';
+import { TelegramStatusPanel } from './components/TelegramStatusPanel';
+import { ErrorCard } from './components/ErrorCard';
+import { useTelegramSession, mapBackendStatusToUI, type TelegramSessionStatus } from '@/lib/hooks/useTelegramSession';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -53,23 +56,11 @@ export default function TelegramPage() {
   const searchParams = useSearchParams();
   
   // КРИТИЧНО: Проверяем статус Telegram сессии
-  const { data: sessionStatus, isLoading: isLoadingSession, error: sessionError } = useTelegramSession();
+  const { data: sessionData, status: sessionStatus, isLoading: isLoadingSession, error: sessionError } = useTelegramSession();
   
   // Главные табы: Бот, Авторизация, Личные сообщения
   const [mainTab, setMainTab] = useState<'bot' | 'auth' | 'user'>('bot');
   
-  // Читаем параметр tab из URL при монтировании
-  useEffect(() => {
-    const tabParam = searchParams?.get('tab');
-    if (tabParam === 'auth' || tabParam === 'user') {
-      setMainTab(tabParam);
-    }
-  }, [searchParams]);
-  
-  // Если ошибка авторизации - редирект на логин (обработается middleware)
-  if (sessionError && (sessionError as Error).message === 'Not authenticated') {
-    return null; // React Query автоматически перенаправит через middleware
-  }
   // Подтабы для раздела "Бот"
   const [botSubTab, setBotSubTab] = useState<'send' | 'manage' | 'chats' | 'members' | 'scheduled' | 'settings'>('chats');
   const [welcomeMessage, setWelcomeMessage] = useState('');
@@ -79,6 +70,14 @@ export default function TelegramPage() {
   const [mediaType, setMediaType] = useState<'text' | 'photo' | 'video' | 'audio' | 'document' | 'sticker' | 'location' | 'poll'>('text');
   const [mediaUrl, setMediaUrl] = useState('');
   const [caption, setCaption] = useState('');
+  
+  // Читаем параметр tab из URL при монтировании
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab');
+    if (tabParam === 'auth' || tabParam === 'user') {
+      setMainTab(tabParam);
+    }
+  }, [searchParams]);
 
   // Отправка сообщения
   const sendMutation = useMutation({
@@ -161,12 +160,28 @@ export default function TelegramPage() {
     enabled: false,
   });
 
+  // Если ошибка авторизации - редирект на логин (обработается middleware)
+  if (sessionError && (sessionError as Error).message === 'Not authenticated') {
+    return null; // React Query автоматически перенаправит через middleware
+  }
+
+  // Определяем UI статус из backend ответа
+  const uiStatus: TelegramSessionStatus = sessionStatus || 'none';
+
   return (
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-foreground mb-2">Управление Telegram</h1>
         <p className="text-muted-foreground">Работа с ботом, авторизация и отправка личных сообщений</p>
       </div>
+
+      {/* Telegram Header - всегда виден */}
+      <TelegramHeader status={uiStatus} />
+      
+      {/* Status Panel - показывает прогресс авторизации */}
+      {uiStatus !== 'none' && uiStatus !== 'active' && (
+        <TelegramStatusPanel status={uiStatus} />
+      )}
 
       {/* Главные табы */}
       <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as 'bot' | 'auth' | 'user')} className="w-full">
@@ -379,10 +394,52 @@ export default function TelegramPage() {
 
         {/* Таб: Авторизация */}
         <TabsContent value="auth">
-          <TelegramAuthTab onAuthSuccess={() => {
-            // После успешной авторизации переключаемся на таб личных сообщений
-            setMainTab('user');
-          }} />
+          {isLoadingSession ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="ml-4 text-muted-foreground">Проверка статуса Telegram сессии...</p>
+            </div>
+          ) : sessionStatus === 'error' ? (
+            <ErrorCard
+              title="Ошибка подключения Telegram"
+              message={sessionData?.invalidReason || 'Не удалось подключить Telegram аккаунт'}
+              actionText="Повторить"
+              onAction={() => {
+                // Перезагружаем статус
+                window.location.reload();
+              }}
+            />
+          ) : sessionStatus === 'expired' ? (
+            <div className="space-y-4">
+              <ErrorCard
+                title="Telegram сессия истекла"
+                message={sessionData?.invalidReason || 'Сессия Telegram была отозвана или истекла. Пожалуйста, переавторизуйтесь.'}
+                actionText="Переавторизоваться"
+                onAction={() => {
+                  setMainTab('auth');
+                }}
+              />
+              <TelegramAuthTab onAuthSuccess={() => setMainTab('user')} />
+            </div>
+          ) : sessionStatus === 'active' ? (
+            <div className="space-y-4">
+              <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
+                <CardContent className="pt-6">
+                  <p className="text-green-800 dark:text-green-200">
+                    ✅ Telegram аккаунт подключен. Вы можете перейти на вкладку &quot;Личные сообщения&quot; для работы.
+                  </p>
+                  {sessionData?.phoneNumber && (
+                    <p className="text-sm text-green-700 dark:text-green-300 mt-2">
+                      Телефон: {sessionData.phoneNumber}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+              <TelegramAuthTab onAuthSuccess={() => setMainTab('user')} />
+            </div>
+          ) : (
+            <TelegramAuthTab onAuthSuccess={() => setMainTab('user')} />
+          )}
         </TabsContent>
 
         {/* Таб: Личные сообщения */}

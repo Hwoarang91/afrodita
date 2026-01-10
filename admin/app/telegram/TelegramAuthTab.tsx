@@ -3,17 +3,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { QRCodeSVG } from 'qrcode.react';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import { Loader2, Smartphone, QrCode, Shield, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, Smartphone, QrCode } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { Telegram2FATab } from './components/Telegram2FATab';
 
 interface TelegramAuthTabProps {
   onAuthSuccess?: () => void;
@@ -419,61 +417,13 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
 
   return (
     <div className="space-y-6">
-      {/* Статус подключения */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Статус подключения</CardTitle>
-            <Badge variant={isConnected ? 'default' : 'destructive'} className="flex items-center gap-2">
-              {isConnected ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  Подключено
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-4 h-4" />
-                  Не подключено
-                </>
-              )}
-            </Badge>
-          </div>
-          <CardDescription>
-            {isConnected
-              ? 'Ваш Telegram аккаунт подключен. Вы можете отправлять сообщения от своего имени.'
-              : 'Подключите свой Telegram аккаунт для отправки сообщений клиентам от вашего имени.'}
-          </CardDescription>
-        </CardHeader>
-        {isConnected && activeSession && (
-          <CardContent>
-            <div className="text-sm space-y-1">
-              <div>
-                <span className="text-muted-foreground">Телефон:</span>{' '}
-                {activeSession.phoneNumber || 'Не указан'}
-              </div>
-              <div>
-                <span className="text-muted-foreground">Статус:</span>{' '}
-                <Badge variant="default" className="ml-1">
-                  {activeSession.status === 'active' ? 'Активна' : activeSession.status}
-                </Badge>
-              </div>
-              {activeSession.invalidReason && (
-                <div className="text-xs text-destructive mt-1">
-                  Причина: {activeSession.invalidReason}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
       {/* Форма авторизации */}
       {!isConnected && (
         <Card>
           <CardHeader>
             <CardTitle>Подключение Telegram</CardTitle>
             <CardDescription>
-              Выберите способ авторизации: через номер телефона или QR-код
+              Подключите свой Telegram аккаунт для отправки сообщений клиентам от вашего имени
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -490,7 +440,29 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
               </TabsList>
 
               <TabsContent value="phone" className="space-y-4 mt-4">
-                {!requires2FA ? (
+                {requires2FA ? (
+                  <Telegram2FATab
+                    phoneNumber={phoneNumber}
+                    phoneCodeHash={phoneCodeHash}
+                    passwordHint={passwordHint}
+                    onSuccess={() => {
+                      refetchSessions();
+                      queryClient.invalidateQueries({ queryKey: ['telegram-session-status'] });
+                      setPhoneNumber('');
+                      setCode('');
+                      setPhoneCodeHash('');
+                      setTwoFAPassword('');
+                      setRequires2FA(false);
+                      if (onAuthSuccess) {
+                        onAuthSuccess();
+                      }
+                    }}
+                    onCancel={() => {
+                      setRequires2FA(false);
+                      setTwoFAPassword('');
+                    }}
+                  />
+                ) : (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="phone">Номер телефона</Label>
@@ -507,7 +479,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                     {!phoneCodeHash ? (
                       <Button
                         onClick={handleRequestCode}
-                        disabled={isRequestingCode}
+                        disabled={isRequestingCode || !phoneNumber.trim()}
                         className="w-full"
                       >
                         {isRequestingCode ? (
@@ -530,11 +502,12 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                             onChange={(e) => setCode(e.target.value)}
                             placeholder="12345"
                             maxLength={6}
+                            autoFocus
                           />
                         </div>
                         <Button
                           onClick={handleVerifyCode}
-                          disabled={isLoading}
+                          disabled={isLoading || !code.trim()}
                           className="w-full"
                         >
                           {isLoading ? (
@@ -549,50 +522,6 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                       </>
                     )}
                   </>
-                ) : (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleVerify2FA();
-                    }}
-                    className="space-y-4"
-                  >
-                    <div className="flex items-center space-x-2 text-muted-foreground">
-                      <Shield className="w-5 h-5" />
-                      <p className="text-sm">Требуется двухфакторная аутентификация</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="2fa-password">Пароль 2FA</Label>
-                      {passwordHint && (
-                        <p className="text-xs text-muted-foreground mb-1">
-                          Подсказка: {passwordHint}
-                        </p>
-                      )}
-                      <PasswordInput
-                        id="2fa-password"
-                        name="2fa-password"
-                        value={twoFAPassword}
-                        onChange={(e) => setTwoFAPassword(e.target.value)}
-                        placeholder="Введите пароль 2FA"
-                        autoComplete="current-password"
-                        required
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      disabled={isLoading || !twoFAPassword}
-                      className="w-full"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Проверка...
-                        </>
-                      ) : (
-                        'Подтвердить'
-                      )}
-                    </Button>
-                  </form>
                 )}
               </TabsContent>
 
@@ -604,11 +533,11 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                   </div>
                 ) : qrTokenId ? (
                   <div className="flex flex-col items-center space-y-4">
-                    <div className="p-4 bg-white rounded-lg">
+                    <div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-border">
                       {qrUrl && <QRCodeSVG value={qrUrl} size={256} />}
                     </div>
                     <div className="text-center space-y-2">
-                      <p className="text-sm font-medium">Отсканируйте QR-код в приложении Telegram</p>
+                      <p className="text-sm font-medium text-foreground">Отсканируйте QR-код в приложении Telegram</p>
                       {qrStatus === 'pending' && (
                         <>
                           <p className="text-xs text-muted-foreground">
@@ -622,7 +551,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                         </>
                       )}
                       {qrStatus === 'accepted' && (
-                        <p className="text-xs text-green-600">QR-код принят!</p>
+                        <p className="text-xs text-green-600 dark:text-green-400">QR-код принят!</p>
                       )}
                       {qrStatus === 'expired' && (
                         <p className="text-xs text-destructive">QR-код истек</p>
@@ -635,8 +564,15 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                     )}
                   </div>
                 ) : (
-                  <Button onClick={generateQrCode} className="w-full">
-                    Сгенерировать QR-код
+                  <Button onClick={generateQrCode} className="w-full" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Генерация...
+                      </>
+                    ) : (
+                      'Сгенерировать QR-код'
+                    )}
                   </Button>
                 )}
               </TabsContent>

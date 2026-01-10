@@ -1,56 +1,36 @@
 'use client';
 
-import { Loader2, AlertCircle, Lock } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { TelegramSessionStatus } from '@/lib/hooks/useTelegramSession';
 
 interface TelegramLoadingProps {
-  status: 'initializing' | 'invalid' | 'revoked' | 'expired';
+  status: TelegramSessionStatus;
   message?: string;
-  invalidReason?: string | null;
 }
 
-export function TelegramLoading({ status, message, invalidReason }: TelegramLoadingProps) {
+export function TelegramLoading({ status, message }: TelegramLoadingProps) {
+  const getStatusMessage = () => {
+    if (message) return message;
+    
+    switch (status) {
+      case 'initializing':
+        return 'Авторизация Telegram...';
+      case 'waiting_2fa':
+        return 'Ожидание ввода пароля 2FA...';
+      default:
+        return 'Загрузка...';
+    }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-20">
-      {status === 'initializing' && (
-        <>
-          <Loader2 className="w-12 h-12 animate-spin text-primary" />
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
-            {message || 'Авторизация Telegram...'}
-          </p>
-          <p className="text-gray-500 dark:text-gray-500 text-sm">
-            Это может занять несколько секунд
-          </p>
-        </>
-      )}
-      
-      {(status === 'invalid' || status === 'expired') && (
-        <>
-          <AlertCircle className="w-12 h-12 text-red-500" />
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
-            Telegram сессия {status === 'invalid' ? 'невалидна' : 'истекла'}
-          </p>
-          {invalidReason && (
-            <p className="text-gray-500 dark:text-gray-500 text-sm">
-              Причина: {invalidReason}
-            </p>
-          )}
-          <p className="text-gray-500 dark:text-gray-500 text-sm">
-            Пожалуйста, переавторизуйте свой Telegram аккаунт
-          </p>
-        </>
-      )}
-      
-      {status === 'revoked' && (
-        <>
-          <Lock className="w-12 h-12 text-orange-500" />
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
-            Telegram сессия была отозвана
-          </p>
-          <p className="text-gray-500 dark:text-gray-500 text-sm">
-            Пожалуйста, войдите снова для продолжения работы
-          </p>
-        </>
-      )}
+      <Loader2 className="w-12 h-12 animate-spin text-primary" />
+      <p className="text-muted-foreground text-lg">
+        {getStatusMessage()}
+      </p>
+      <p className="text-muted-foreground text-sm">
+        Это обычно занимает несколько секунд
+      </p>
     </div>
   );
 }
