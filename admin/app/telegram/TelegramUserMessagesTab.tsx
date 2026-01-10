@@ -51,9 +51,10 @@ export default function TelegramUserMessagesTab() {
 
   // КРИТИЧНО: Проверяем статус Telegram сессии перед загрузкой данных
   const { data: sessionData, status, isLoading: isLoadingSession } = useTelegramSession();
+  const sessionStatus = status as TelegramSessionStatus;
   
   // Определяем, можем ли мы загружать Telegram данные
-  const canLoadTelegramData = (status as TelegramSessionStatus) === 'active';
+  const canLoadTelegramData = sessionStatus === 'active';
 
   // Получение списка чатов - ТОЛЬКО если сессия active
   const { data: chatsData, isLoading: isLoadingChats, error: chatsError } = useQuery({
