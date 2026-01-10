@@ -56,7 +56,8 @@ export default function TelegramPage() {
   const searchParams = useSearchParams();
   
   // КРИТИЧНО: Проверяем статус Telegram сессии
-  const { data: sessionData, status: sessionStatus, isLoading: isLoadingSession, error: sessionError } = useTelegramSession();
+  const { data: sessionData, status, isLoading: isLoadingSession, error: sessionError } = useTelegramSession();
+  const sessionStatus = status as TelegramSessionStatus;
   
   // Главные табы: Бот, Авторизация, Личные сообщения
   const [mainTab, setMainTab] = useState<'bot' | 'auth' | 'user'>('bot');
