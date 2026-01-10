@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard';
 import { TelegramSessionGuard } from '../guards/telegram-session.guard';
 import { UserSendMessageDto, UserSendMediaDto } from '../dto/user-send-message.dto';
 import { DeactivateSessionDto, SessionInfoDto } from '../dto/session-management.dto';
+import { TelegramSessionStatusDto } from '../dto/telegram-session-status.dto';
 
 @ApiTags('telegram')
 @Controller('telegram/user')
@@ -498,91 +499,94 @@ export class TelegramUserController {
     }
   }
 
-  @Get('status')
+  @Get('session-status')
   @ApiOperation({
-    summary: 'Получение статуса Telegram сессии пользователя',
-    description: 'Возвращает текущий статус Telegram сессии (active, initializing, expired, error, not_found). Не требует активной сессии - используется для проверки готовности сессии перед запросами к Telegram API. ВСЕГДА возвращает 200, если JWT валиден. 401 только если нет JWT.',
+    summary: 'Получение статуса Telegram сессии',
+    description: 'Возвращает информацию о наличии и статусе Telegram сессии. Всегда возвращает 200 если JWT валиден. Не требует активной Telegram сессии - используется для проверки готовности сессии перед запросами к Telegram API.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Статус сессии успешно получен (всегда 200, если JWT валиден)',
-    schema: {
-      example: {
-        hasSession: true,
-        status: 'active',
-        sessionId: '550e8400-e29b-41d4-a716-446655440000',
-        createdAt: 1700000000,
-      },
-    },
+    description: 'Статус сессии успешно получен',
+    type: TelegramSessionStatusDto,
   })
-  @ApiResponse({ status: 401, description: 'Пользователь не авторизован (нет JWT)' })
-  async getStatus(@Request() req): Promise<{
-    hasSession: boolean;
-    status: 'active' | 'initializing' | 'expired' | 'error' | 'not_found';
-    sessionId: string | null;
-    createdAt: number | null;
-  }> {
+  @ApiResponse({ status: 401, description: 'JWT токен невалиден или отсутствует' })
+  async getSessionStatus(@Request() req): Promise<TelegramSessionStatusDto> {
     try {
-      // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
+      // КРИТИЧНО: Проверяем только JWT, НЕ Telegram сессию
       if (!req.user?.sub) {
         throw new UnauthorizedException('Authentication required');
       }
-      
-      const userId = req.user.sub;
-      this.logger.debug(`Получение статуса Telegram сессии для пользователя ${userId}`);
 
+      const userId = req.user.sub;
+      this.logger.debug(`Проверка статуса Telegram сессии для пользователя ${userId}`);
+
+      // Получаем все сессии пользователя
       const sessions = await this.telegramUserClientService.getUserSessions(userId);
       
       // Фильтруем только сессии текущего пользователя (на случай, если это админ)
       const userSessions = sessions.filter(s => s.userId === userId);
       
-      // Ищем активную сессию
+      // Ищем активную сессию со статусом 'active'
       const activeSession = userSessions.find(s => s.status === 'active' && s.isActive);
-      
+
       if (activeSession) {
+        // Есть активная сессия
         return {
           hasSession: true,
           status: 'active',
           sessionId: activeSession.id,
+          phoneNumber: activeSession.phoneNumber,
           createdAt: Math.floor(activeSession.createdAt.getTime() / 1000),
+          lastUsedAt: activeSession.lastUsedAt ? Math.floor(activeSession.lastUsedAt.getTime() / 1000) : null,
         };
       }
-      
-      // Ищем сессии в других статусах
+
+      // Проверяем, есть ли сессия в статусе 'initializing'
       const initializingSession = userSessions.find(s => s.status === 'initializing');
-      // КРИТИЧНО: В entity нет статуса 'expired', есть только 'invalid' и 'revoked'
-      // Маппим их в 'expired' для frontend (более понятно для пользователя)
-      const invalidOrRevokedSession = userSessions.find(s => s.status === 'invalid' || s.status === 'revoked');
       
       if (initializingSession) {
         return {
           hasSession: true,
           status: 'initializing',
           sessionId: initializingSession.id,
+          phoneNumber: initializingSession.phoneNumber,
           createdAt: Math.floor(initializingSession.createdAt.getTime() / 1000),
+          lastUsedAt: initializingSession.lastUsedAt ? Math.floor(initializingSession.lastUsedAt.getTime() / 1000) : null,
         };
       }
+
+      // Проверяем, есть ли невалидная сессия
+      const invalidSession = userSessions.find(s => s.status === 'invalid' || s.status === 'revoked');
       
-      if (invalidOrRevokedSession) {
-        // Маппим 'invalid' и 'revoked' в 'expired' для frontend
+      if (invalidSession) {
+        // Маппим 'invalid' и 'revoked' в 'expired' для frontend (более понятно для пользователя)
         return {
           hasSession: true,
           status: 'expired',
-          sessionId: invalidOrRevokedSession.id,
-          createdAt: Math.floor(invalidOrRevokedSession.createdAt.getTime() / 1000),
+          sessionId: invalidSession.id,
+          phoneNumber: invalidSession.phoneNumber,
+          invalidReason: invalidSession.invalidReason,
+          createdAt: Math.floor(invalidSession.createdAt.getTime() / 1000),
+          lastUsedAt: invalidSession.lastUsedAt ? Math.floor(invalidSession.lastUsedAt.getTime() / 1000) : null,
         };
       }
-      
-      // Нет сессий - это НЕ ошибка, просто нет сессии
+
+      // Нет сессий вообще
       return {
         hasSession: false,
-        status: 'not_found',
-        sessionId: null,
-        createdAt: null,
       };
     } catch (error: any) {
       this.logger.error(`Ошибка получения статуса сессии: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to get session status: ${error.message}`);
+      
+      // КРИТИЧНО: Если это UnauthorizedException (нет JWT) - пробрасываем
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      
+      // Для всех остальных ошибок возвращаем hasSession: false
+      return {
+        hasSession: false,
+      };
     }
   }
 

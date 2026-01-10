@@ -240,23 +240,35 @@ export default function TelegramUserMessagesTab() {
   }
 
   // Если сессии нет или статус не active - показываем соответствующий UI
-  if (!sessionStatus?.hasSession || (sessionStatus && sessionStatus.status !== 'active')) {
+  if (!sessionStatus?.hasSession || sessionStatus.status !== 'active') {
     if (sessionStatus?.status === 'initializing') {
       return (
         <div className="flex flex-col items-center justify-center gap-4 py-10">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <p className="text-muted-foreground">Авторизация Telegram...</p>
+          <p className="text-sm text-muted-foreground">Это может занять несколько секунд</p>
         </div>
       );
     }
-    if (sessionStatus?.status === 'expired' || sessionStatus?.status === 'error') {
-      const statusMessage = sessionStatus && sessionStatus.status === 'expired' 
-        ? 'Сессия истекла' 
-        : 'Ошибка сессии';
+    if (sessionStatus?.status === 'expired' || sessionStatus?.status === 'invalid' || sessionStatus?.status === 'revoked') {
+      const statusType = sessionStatus.status === 'expired' 
+        ? 'expired' 
+        : sessionStatus.status === 'invalid' 
+        ? 'invalid' 
+        : 'revoked';
       return (
         <div className="flex flex-col items-center justify-center gap-4 py-10">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">{statusMessage}</p>
+          <p className="text-muted-foreground text-lg">
+            Telegram сессия {statusType === 'expired' ? 'истекла' : statusType === 'invalid' ? 'невалидна' : 'была отозвана'}
+          </p>
+          {sessionStatus.invalidReason && (
+            <p className="text-sm text-muted-foreground">
+              Причина: {sessionStatus.invalidReason}
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Пожалуйста, перейдите на вкладку &quot;Авторизация&quot; и переавторизуйте свой Telegram аккаунт.
+          </p>
         </div>
       );
     }
@@ -267,7 +279,7 @@ export default function TelegramUserMessagesTab() {
           Для работы с личными сообщениями необходимо авторизоваться в Telegram.
         </p>
         <p className="text-sm text-muted-foreground">
-          Перейдите на вкладку "Авторизация" и авторизуйтесь через телефон или QR-код.
+          Перейдите на вкладку &quot;Авторизация&quot; и авторизуйтесь через телефон или QR-код.
         </p>
       </div>
     );

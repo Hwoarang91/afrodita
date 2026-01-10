@@ -12,6 +12,8 @@ import AutoRepliesManagement from './AutoRepliesManagement';
 import ScheduledMessagesManagement from './ScheduledMessagesManagement';
 import TelegramAuthTab from './TelegramAuthTab';
 import TelegramUserMessagesTab from './TelegramUserMessagesTab';
+import { TelegramLoading } from './TelegramLoading';
+import { useTelegramSession } from '@/lib/hooks/useTelegramSession';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,7 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Bot, Shield, MessageSquare } from 'lucide-react';
+import { Bot, Shield, MessageSquare, Loader2 } from 'lucide-react';
 
 interface ChatInfo {
   id: number;
@@ -50,6 +52,9 @@ export default function TelegramPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
+  // КРИТИЧНО: Проверяем статус Telegram сессии
+  const { data: sessionStatus, isLoading: isLoadingSession, error: sessionError } = useTelegramSession();
+  
   // Главные табы: Бот, Авторизация, Личные сообщения
   const [mainTab, setMainTab] = useState<'bot' | 'auth' | 'user'>('bot');
   
@@ -60,6 +65,11 @@ export default function TelegramPage() {
       setMainTab(tabParam);
     }
   }, [searchParams]);
+  
+  // Если ошибка авторизации - редирект на логин (обработается middleware)
+  if (sessionError && (sessionError as Error).message === 'Not authenticated') {
+    return null; // React Query автоматически перенаправит через middleware
+  }
   // Подтабы для раздела "Бот"
   const [botSubTab, setBotSubTab] = useState<'send' | 'manage' | 'chats' | 'members' | 'scheduled' | 'settings'>('chats');
   const [welcomeMessage, setWelcomeMessage] = useState('');
@@ -369,7 +379,10 @@ export default function TelegramPage() {
 
         {/* Таб: Авторизация */}
         <TabsContent value="auth">
-          <TelegramAuthTab onAuthSuccess={() => setMainTab('user')} />
+          <TelegramAuthTab onAuthSuccess={() => {
+            // После успешной авторизации переключаемся на таб личных сообщений
+            setMainTab('user');
+          }} />
         </TabsContent>
 
         {/* Таб: Личные сообщения */}
