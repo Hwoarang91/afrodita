@@ -5,8 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useTelegramSession, TelegramSessionStatus } from '@/lib/hooks/useTelegramSession';
+import { useTelegramWebSocket } from '@/lib/hooks/useTelegramWebSocket';
 import { TelegramLoading } from './TelegramLoading';
 import { ErrorCard } from './components/ErrorCard';
+import { FloodWaitTimer, FloodWaitEvent } from './components/FloodWaitTimer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,7 +23,40 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Send, MessageSquare, Image, Video, File, Loader2, Shield, Trash2, X } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Send, MessageSquare, Image, Video, File, Loader2, Shield, Trash2, X, Pin, History } from 'lucide-react';
+import { MediaPreview, MediaData } from './components/MediaPreview';
+import { MessageDeliveryStatus } from './components/MessageDeliveryStatus';
+import { MessageActions } from './components/MessageActions';
+
+interface Message {
+  id: number;
+  fromId: string | null;
+  message: string;
+  date: number;
+  out: boolean;
+  media?: MediaData | null;
+  readOutbox?: boolean | null;
+  readInbox?: boolean | null;
+  reactions?: {
+    results: Array<{
+      reaction: string;
+      count: number;
+    }>;
+    recentReactions?: Array<{
+      reaction: string;
+      peerId: string | null;
+    }>;
+  } | null;
+  editDate?: number | null;
+  replyTo?: {
+    replyToMsgId: number;
+    replyToPeerId: string | null;
+  } | null;
+  forwards?: number | null;
+  views?: number | null;
+  pinned?: boolean;
+}
 
 interface SessionInfo {
   id: string;
@@ -47,11 +82,33 @@ export default function TelegramUserMessagesTab() {
   const [mediaType, setMediaType] = useState<'text' | 'photo' | 'video' | 'document'>('text');
   const [mediaUrl, setMediaUrl] = useState('');
   const [caption, setCaption] = useState('');
+  const [floodWaitEvent, setFloodWaitEvent] = useState<FloodWaitEvent | null>(null);
   const queryClient = useQueryClient();
 
   // КРИТИЧНО: Проверяем статус Telegram сессии перед загрузкой данных
   const { data: sessionData, status, isLoading: isLoadingSession } = useTelegramSession();
   const sessionStatus = status as TelegramSessionStatus;
+  
+  // Получаем sessionId из активной сессии
+  const currentSessionId = sessionData?.sessionId;
+
+  // WebSocket подключение для получения FloodWait событий
+  useTelegramWebSocket({
+    enabled: sessionStatus === 'active' && !!currentSessionId,
+    sessionId: currentSessionId,
+    eventTypes: ['flood-wait'],
+    onEventLog: (event) => {
+      if (event.type === 'flood-wait') {
+        setFloodWaitEvent({
+          sessionId: event.sessionId,
+          userId: event.userId,
+          waitTime: event.data.waitTime || 0,
+          method: event.data.method,
+          timestamp: event.timestamp,
+        });
+      }
+    },
+  });
   
   // Определяем, можем ли мы загружать Telegram данные
   const canLoadTelegramData = sessionStatus === 'active';
@@ -110,14 +167,28 @@ export default function TelegramUserMessagesTab() {
     }
   }, [contactsError]);
 
+  // Получение истории сообщений - ТОЛЬКО если сессия active и выбран чат
+  const { data: messagesData, isLoading: isLoadingMessages, error: messagesError } = useQuery({
+    queryKey: ['telegram-user-messages', selectedChatId],
+    queryFn: async () => {
+      if (!selectedChatId) return null;
+      const response = await apiClient.get(`/telegram/user/messages/${selectedChatId}?limit=50`);
+      return response.data;
+    },
+    enabled: canLoadTelegramData && !!selectedChatId, // КРИТИЧНО: Загружаем только когда сессия active и выбран чат
+    retry: false,
+  });
+
   // Отправка текстового сообщения
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { chatId: string; message: string; parseMode?: string }) => {
       return await apiClient.post('/telegram/user/send-message', data);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Сообщение отправлено');
       setMessage('');
+      // Обновляем историю сообщений после отправки
+      queryClient.invalidateQueries({ queryKey: ['telegram-user-messages', variables.chatId] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Ошибка при отправке сообщения');
@@ -134,10 +205,12 @@ export default function TelegramUserMessagesTab() {
     }) => {
       return await apiClient.post('/telegram/user/send-media', data);
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Медиа отправлено');
       setMediaUrl('');
       setCaption('');
+      // Обновляем историю сообщений после отправки
+      queryClient.invalidateQueries({ queryKey: ['telegram-user-messages', variables.chatId] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Ошибка при отправке медиа');
@@ -231,13 +304,40 @@ export default function TelegramUserMessagesTab() {
     });
   };
 
+  const formatMessageDate = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    if (messageDate.getTime() === today.getTime()) {
+      return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    }
+    return date.toLocaleString('ru-RU', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   // КРИТИЧНО: Gatekeeper - проверяем статус сессии перед показом интерфейса
   // ВСЕГДА после всех hooks, но перед финальным return
   if (isLoadingSession) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-10">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-muted-foreground">Проверка статуса Telegram сессии...</p>
+      <div className="space-y-4 py-6">
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            <Skeleton className="h-6 w-64" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+            <div className="pt-2">
+              <p className="text-muted-foreground text-sm">Проверка статуса Telegram сессии...</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -278,6 +378,14 @@ export default function TelegramUserMessagesTab() {
   // ✅ Сессия активна - показываем основной интерфейс
   return (
     <div className="space-y-6">
+      {/* Таймер FloodWait */}
+      {floodWaitEvent && (
+        <FloodWaitTimer
+          event={floodWaitEvent}
+          onDismiss={() => setFloodWaitEvent(null)}
+        />
+      )}
+      
       <Tabs 
         value={selectedTab} 
         onValueChange={(value) => setSelectedTab(value as 'send' | 'sessions')} 
@@ -301,9 +409,14 @@ export default function TelegramUserMessagesTab() {
             </CardHeader>
             <CardContent>
               {isLoadingChats || isLoadingContacts ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  <span>Загрузка чатов и контактов...</span>
+                <div className="space-y-3 py-2">
+                  <Skeleton className="h-10 w-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-3/4" />
+                  </div>
                 </div>
               ) : (chatsData?.chats?.length > 0 || contactsData?.contacts?.length > 0) ? (
                 <Select value={selectedChatId} onValueChange={setSelectedChatId}>
@@ -314,11 +427,29 @@ export default function TelegramUserMessagesTab() {
                     {chatsData?.chats?.length > 0 && (
                       <>
                         <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Чаты</div>
-                        {chatsData.chats.map((chat: any) => (
-                          <SelectItem key={chat.id} value={chat.id}>
-                            {chat.title} ({chat.type})
-                          </SelectItem>
-                        ))}
+                        {[...(chatsData.chats || [])]
+                          .sort((a: any, b: any) => {
+                            // Сортировка: закрепленные сверху, затем по непрочитанным
+                            const aPinned = a.pinned ? 1 : 0;
+                            const bPinned = b.pinned ? 1 : 0;
+                            if (aPinned !== bPinned) {
+                              return bPinned - aPinned;
+                            }
+                            const aUnread = a.unreadCount || 0;
+                            const bUnread = b.unreadCount || 0;
+                            return bUnread - aUnread;
+                          })
+                          .map((chat: any) => {
+                            const pinnedIcon = chat.pinned ? '📌 ' : '';
+                            const unreadBadge = (chat.unreadCount && chat.unreadCount > 0) 
+                              ? ` [${chat.unreadCount > 99 ? '99+' : chat.unreadCount}]` 
+                              : '';
+                            return (
+                              <SelectItem key={chat.id} value={chat.id}>
+                                {pinnedIcon}{chat.title} ({chat.type}){unreadBadge}
+                              </SelectItem>
+                            );
+                          })}
                       </>
                     )}
                     {contactsData?.contacts?.length > 0 && (
@@ -461,6 +592,112 @@ export default function TelegramUserMessagesTab() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* История сообщений */}
+          {selectedChatId && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="w-5 h-5" />
+                  История сообщений
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoadingMessages ? (
+                  <div className="space-y-3 py-4">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-4 w-16" />
+                          <Skeleton className="h-4 w-24" />
+                        </div>
+                        <Skeleton className="h-16 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : messagesError ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-destructive">
+                      Ошибка загрузки истории сообщений
+                    </p>
+                  </div>
+                ) : messagesData?.messages && messagesData.messages.length > 0 ? (
+                  <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                    {messagesData.messages.map((msg: Message) => (
+                      <div
+                        key={msg.id}
+                        className={`group p-4 rounded-lg border ${
+                          msg.out
+                            ? 'bg-primary/5 border-primary/20 ml-8'
+                            : 'bg-muted/50 border-border mr-8'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {msg.out ? 'Вы' : `ID: ${msg.fromId || 'Неизвестно'}`}
+                            </span>
+                            {msg.out && (
+                              <Badge variant="outline" className="text-xs">
+                                Исходящее
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {formatMessageDate(msg.date)}
+                            </span>
+                            {/* Статус доставки */}
+                            <MessageDeliveryStatus
+                              out={msg.out}
+                              readOutbox={msg.readOutbox}
+                              readInbox={msg.readInbox}
+                            />
+                            {/* Быстрые действия - показываем при hover */}
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MessageActions
+                                messageId={msg.id}
+                                chatId={selectedChatId}
+                                onForward={async (messageId, chatId) => {
+                                  // TODO: Реализовать диалог выбора чата для пересылки
+                                  toast.info('Функция пересылки будет реализована в следующей версии');
+                                }}
+                                onDelete={async (messageId, chatId) => {
+                                  try {
+                                    await apiClient.delete(`/telegram/user/messages/${chatId}/${messageId}`);
+                                    toast.success('Сообщение удалено');
+                                    queryClient.invalidateQueries({ queryKey: ['telegram-user-messages', chatId] });
+                                  } catch (error: any) {
+                                    toast.error(`Ошибка удаления сообщения: ${error.message}`);
+                                  }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        {msg.message && (
+                          <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                            {msg.message}
+                          </p>
+                        )}
+                        {msg.media && (
+                          <div className="mt-3">
+                            <MediaPreview media={msg.media} />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">
+                      История сообщений пуста
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="sessions" className="space-y-6">
@@ -499,9 +736,23 @@ export default function TelegramUserMessagesTab() {
             </CardHeader>
             <CardContent>
               {isLoadingSessions ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  <span>Загрузка сессий...</span>
+                <div className="space-y-4 py-4">
+                  {[1, 2, 3].map((i) => (
+                    <Card key={i}>
+                      <CardContent className="pt-6 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-6 w-20" />
+                          <Skeleton className="h-6 w-24" />
+                          <Skeleton className="h-4 w-32" />
+                        </div>
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-4 w-1/2" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               ) : sessionsData?.sessions?.length > 0 ? (
                 <div className="space-y-4">

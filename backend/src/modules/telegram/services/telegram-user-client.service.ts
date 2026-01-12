@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, HttpException } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, HttpException, Inject, forwardRef, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,6 +6,9 @@ import { Client, Storage, StorageKeyPart } from '@mtkruto/node';
 import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
 import { SessionEncryptionService } from './session-encryption.service';
 import { TelegramSessionService } from './telegram-session.service';
+import { TelegramHeartbeatService } from './telegram-heartbeat.service';
+import { TelegramClientEventEmitter } from './telegram-client-event-emitter.service';
+import { TelegramConnectionMonitorService } from './telegram-connection-monitor.service';
 import { User, UserRole } from '../../../entities/user.entity';
 import { handleMtprotoError, MtprotoErrorAction } from '../utils/mtproto-error.handler';
 import { assertSessionTransition } from '../utils/session-state-machine';
@@ -336,8 +339,24 @@ export class TelegramUserClientService implements OnModuleDestroy {
     private userRepository: Repository<User>,
     private encryptionService: SessionEncryptionService,
     private telegramSessionService: TelegramSessionService,
+    @Optional() @Inject(forwardRef(() => TelegramHeartbeatService))
+    private heartbeatService?: TelegramHeartbeatService,
+    @Optional() @Inject(forwardRef(() => TelegramClientEventEmitter))
+    private eventEmitter?: TelegramClientEventEmitter,
+    @Optional() @Inject(forwardRef(() => TelegramConnectionMonitorService))
+    private connectionMonitorService?: TelegramConnectionMonitorService,
   ) {
     this.logger.log('TelegramUserClientService initialized');
+    if (this.heartbeatService) {
+      this.logger.log('HeartbeatService integration enabled');
+    } else {
+      this.logger.debug('HeartbeatService not available (optional)');
+    }
+    if (this.eventEmitter) {
+      this.logger.log('TelegramClientEventEmitter integration enabled');
+    } else {
+      this.logger.debug('TelegramClientEventEmitter not available (optional)');
+    }
   }
 
   /**
@@ -404,6 +423,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
         }
         // Если клиент отключен, удаляем его
         this.clients.delete(sessionId);
+        // Очищаем статус heartbeat для этой сессии (Task 1.2)
+        this.heartbeatService?.clearHeartbeatStatus(sessionId);
       }
 
       // Получаем API credentials
@@ -475,16 +496,33 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.log(`Connecting client for session ${sessionId} (phone: ${session.phoneNumber})...`);
         await client.connect();
         this.logger.log(`Client connected successfully for session ${sessionId} (phone: ${session.phoneNumber})`);
+        // Эмитим событие подключения (Task 2.1)
+        this.eventEmitter?.emitConnect(sessionId, session.userId, session.phoneNumber || undefined);
       }
 
       // КРИТИЧЕСКИ ВАЖНО: Выполняем контрольный getMe() для валидации сессии
       try {
         this.logger.debug(`Validating session ${session.id} with getMe()...`);
+        const startTime = Date.now();
         await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        const duration = Date.now() - startTime;
         this.logger.log(`✅ Session ${session.id} validated successfully`);
+        // Эмитим событие успешного invoke (Task 2.1)
+        this.eventEmitter?.emitInvoke(sessionId, 'users.getFullUser', session.userId, duration);
       } catch (e: any) {
         const errorResult = handleMtprotoError(e);
         this.logger.error(`❌ Session ${session.id} validation failed: ${errorResult.reason}`);
+        // Эмитим событие ошибки (Task 2.1)
+        this.eventEmitter?.emitError(sessionId, e, session.userId, 'Session validation');
+        
+        // Проверяем на FloodWait (Task 2.1)
+        if (errorResult.action === MtprotoErrorAction.RETRY && errorResult.retryAfter) {
+          const floodMatch = errorResult.reason.match(/FLOOD_WAIT_(\d+)/);
+          if (floodMatch) {
+            const waitTime = parseInt(floodMatch[1], 10);
+            this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser');
+          }
+        }
         
         if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
           // Инвалидируем эту конкретную сессию
@@ -500,6 +538,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
             // Игнорируем ошибки отключения
           }
           this.clients.delete(sessionId);
+          // Очищаем статус heartbeat для этой сессии (Task 1.2)
+          this.heartbeatService?.clearHeartbeatStatus(sessionId);
           
           this.logger.warn(`Session ${sessionId} invalidated due to ${errorResult.reason}`);
           
@@ -584,6 +624,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
     // Подключаемся к Telegram
     await client.connect();
+    // Эмитим событие подключения (Task 2.1)
+    this.eventEmitter?.emitConnect(session.id, userId);
     
     this.logger.log(`Auth client created and connected for session ${session.id}`);
     
@@ -657,10 +699,27 @@ export class TelegramUserClientService implements OnModuleDestroy {
       // Это гарантирует, что auth_key финальный и зарегистрирован в Telegram
       this.logger.debug(`Performing getMe() check for session ${sessionId} to ensure auth_key is final`);
       try {
+        const startTime = Date.now();
         await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        const duration = Date.now() - startTime;
         this.logger.log(`✅ getMe() successful - auth_key is valid and registered for session ${sessionId}`);
+        // Эмитим событие успешного invoke (Task 2.1)
+        this.eventEmitter?.emitInvoke(sessionId, 'users.getFullUser', userId, duration);
       } catch (getMeError: any) {
         this.logger.error(`❌ getMe() failed for session ${sessionId}: ${getMeError.message}`);
+        // Эмитим событие ошибки (Task 2.1)
+        this.eventEmitter?.emitError(sessionId, getMeError, userId, 'Session save validation');
+        
+        // Проверяем на FloodWait (Task 2.1)
+        const errorResult = handleMtprotoError(getMeError);
+        if (errorResult.action === MtprotoErrorAction.RETRY && errorResult.retryAfter) {
+          const floodMatch = errorResult.reason.match(/FLOOD_WAIT_(\d+)/);
+          if (floodMatch) {
+            const waitTime = parseInt(floodMatch[1], 10);
+            this.eventEmitter?.emitFloodWait(sessionId, waitTime, userId, 'users.getFullUser');
+          }
+        }
+        
         // Если getMe() не прошел, сессия невалидна
         session.status = 'invalid';
         session.isActive = false;
@@ -881,7 +940,13 @@ export class TelegramUserClientService implements OnModuleDestroy {
         const client = this.clients.get(session.id);
         if (client) {
           await client.disconnect();
+          // Эмитим событие отключения (Task 2.1)
+          this.eventEmitter?.emitDisconnect(session.id, session.userId, 'Session deleted by user');
           this.clients.delete(session.id);
+          // Очищаем статус heartbeat для этой сессии (Task 1.2)
+          this.heartbeatService?.clearHeartbeatStatus(session.id);
+          // Удаляем статус мониторинга (Task 2.3)
+          this.connectionMonitorService?.removeConnectionStatus(session.id);
         }
       }
 
@@ -972,10 +1037,18 @@ export class TelegramUserClientService implements OnModuleDestroy {
     if (client) {
       try {
         await client.disconnect();
+        // Эмитим событие отключения (Task 2.1)
+        this.eventEmitter?.emitDisconnect(sessionId, session.userId, 'Session removed');
       } catch (e) {
         this.logger.warn(`Error disconnecting client for session ${sessionId}: ${(e as Error).message}`);
+        // Эмитим событие ошибки при отключении (Task 2.1)
+        this.eventEmitter?.emitError(sessionId, e as Error, session.userId, 'Session remove disconnect');
       }
       this.clients.delete(sessionId);
+      // Очищаем статус heartbeat для этой сессии (Task 1.2)
+      this.heartbeatService?.clearHeartbeatStatus(sessionId);
+      // Удаляем статус мониторинга (Task 2.3)
+      this.connectionMonitorService?.removeConnectionStatus(sessionId);
     }
 
     // Полностью удаляем сессию из БД
@@ -999,10 +1072,18 @@ export class TelegramUserClientService implements OnModuleDestroy {
         if (client) {
           try {
             await client.disconnect();
+            // Эмитим событие отключения (Task 2.1)
+            this.eventEmitter?.emitDisconnect(session.id, session.userId, reason);
           } catch (e) {
             this.logger.warn(`Error disconnecting client for session ${session.id}: ${(e as Error).message}`);
+            // Эмитим событие ошибки при отключении (Task 2.1)
+            this.eventEmitter?.emitError(session.id, e as Error, session.userId, 'Invalidate all sessions disconnect');
           }
           this.clients.delete(session.id);
+          // Очищаем статус heartbeat для этой сессии (Task 1.2)
+          this.heartbeatService?.clearHeartbeatStatus(session.id);
+          // Удаляем статус мониторинга (Task 2.3)
+          this.connectionMonitorService?.removeConnectionStatus(session.id);
         }
 
         // Инвалидируем сессию с указанием причины
@@ -1059,8 +1140,13 @@ export class TelegramUserClientService implements OnModuleDestroy {
           // Это оптимизация - избегаем лишних RPC вызовов
           return client;
         }
-        // Если клиент отключен, удаляем его
+        // КРИТИЧНО: Lazy reconnection - если клиент отключен, удаляем его из кеша
+        // Новое соединение будет создано ниже при необходимости
+        // Это автоматическое переподключение при обнаружении disconnect (Task 3)
+        this.logger.warn(`Client for session ${sessionId} is disconnected, will recreate connection`);
         this.clients.delete(sessionId);
+        // Очищаем статус heartbeat для этой сессии (Task 1.2)
+        this.heartbeatService?.clearHeartbeatStatus(sessionId);
       }
 
       // Получаем API credentials
@@ -1097,20 +1183,38 @@ export class TelegramUserClientService implements OnModuleDestroy {
       this.clients.set(sessionId, client);
 
       // Подключаемся к Telegram
+      // КРИТИЧНО: Lazy reconnection - переподключение при обнаружении disconnect (Task 3)
       if (!client.connected) {
         this.logger.log(`Connecting client for session ${sessionId} (userId: ${session.userId}, phone: ${session.phoneNumber})...`);
         await client.connect();
         this.logger.log(`Client connected successfully for session ${sessionId}`);
+        // Эмитим событие подключения (Task 2.1)
+        this.eventEmitter?.emitConnect(sessionId, session.userId, session.phoneNumber || undefined);
       }
 
       // КРИТИЧЕСКИ ВАЖНО: Выполняем контрольный getMe() для валидации сессии
       try {
         this.logger.debug(`Validating session ${sessionId} with getMe()...`);
+        const startTime = Date.now();
         await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        const duration = Date.now() - startTime;
         this.logger.log(`✅ Session ${sessionId} validated successfully`);
+        // Эмитим событие успешного invoke (Task 2.1)
+        this.eventEmitter?.emitInvoke(sessionId, 'users.getFullUser', session.userId, duration);
       } catch (e: any) {
         const errorResult = handleMtprotoError(e);
         this.logger.error(`❌ Session ${sessionId} validation failed: ${errorResult.reason}`);
+        // Эмитим событие ошибки (Task 2.1)
+        this.eventEmitter?.emitError(sessionId, e, session.userId, 'Session validation');
+        
+        // Проверяем на FloodWait (Task 2.1)
+        if (errorResult.action === MtprotoErrorAction.RETRY && errorResult.retryAfter) {
+          const floodMatch = errorResult.reason.match(/FLOOD_WAIT_(\d+)/);
+          if (floodMatch) {
+            const waitTime = parseInt(floodMatch[1], 10);
+            this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser');
+          }
+        }
         
         if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
           // Инвалидируем эту конкретную сессию
@@ -1122,10 +1226,14 @@ export class TelegramUserClientService implements OnModuleDestroy {
           // Отключаем и удаляем клиент из кеша
           try {
             await client.disconnect();
+            // Эмитим событие отключения (Task 2.1)
+            this.eventEmitter?.emitDisconnect(sessionId, session.userId, errorResult.reason);
           } catch (disconnectError) {
             // Игнорируем ошибки отключения
           }
           this.clients.delete(sessionId);
+          // Очищаем статус heartbeat для этой сессии (Task 1.2)
+          this.heartbeatService?.clearHeartbeatStatus(sessionId);
           
           this.logger.warn(`Session ${sessionId} invalidated due to ${errorResult.reason}`);
           return null;
@@ -1175,7 +1283,13 @@ export class TelegramUserClientService implements OnModuleDestroy {
       const client = this.clients.get(sessionId);
       if (client) {
         await client.disconnect();
+        // Эмитим событие отключения (Task 2.1)
+        this.eventEmitter?.emitDisconnect(sessionId, session.userId, 'Deactivated by user');
         this.clients.delete(sessionId);
+        // Очищаем статус heartbeat для этой сессии (Task 1.2)
+        this.heartbeatService?.clearHeartbeatStatus(sessionId);
+        // Удаляем статус мониторинга (Task 2.3)
+        this.connectionMonitorService?.removeConnectionStatus(sessionId);
       }
     }
 
@@ -1247,13 +1361,25 @@ export class TelegramUserClientService implements OnModuleDestroy {
    */
   async onModuleDestroy() {
     this.logger.log('Disconnecting all Telegram user clients...');
+    const sessionIds = Array.from(this.clients.keys());
     for (const [sessionId, client] of this.clients.entries()) {
       try {
+        // Получаем userId из сессии для эмита события
+        const session = await this.sessionRepository.findOne({ where: { id: sessionId } });
+        const userId = session?.userId || 'unknown';
+        
         await client.disconnect();
+        // Эмитим событие отключения (Task 2.1)
+        this.eventEmitter?.emitDisconnect(sessionId, userId, 'Module destroyed');
         this.logger.log(`Client disconnected for session ${sessionId}`);
       } catch (error: any) {
         this.logger.error(`Error disconnecting client for session ${sessionId}: ${error.message}`);
+        // Эмитим событие ошибки при отключении (Task 2.1)
+        const session = await this.sessionRepository.findOne({ where: { id: sessionId } }).catch(() => null);
+        this.eventEmitter?.emitError(sessionId, error, session?.userId, 'Module destroy disconnect');
       }
+      // Очищаем статус heartbeat для этой сессии (Task 1.2)
+      this.heartbeatService?.clearHeartbeatStatus(sessionId);
     }
     this.clients.clear();
   }

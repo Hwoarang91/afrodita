@@ -25,6 +25,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { VirtualizedList } from '@/app/components/VirtualizedList';
 import { Bot, Shield, MessageSquare, Loader2 } from 'lucide-react';
 
 interface ChatInfo {
@@ -396,9 +398,19 @@ export default function TelegramPage() {
         {/* Таб: Авторизация */}
         <TabsContent value="auth">
           {isLoadingSession ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="ml-4 text-muted-foreground">Проверка статуса Telegram сессии...</p>
+            <div className="space-y-4 py-6">
+              <Card>
+                <CardContent className="pt-6 space-y-4">
+                  <Skeleton className="h-6 w-64" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                  <div className="pt-2">
+                    <p className="text-muted-foreground text-sm">Проверка статуса Telegram сессии...</p>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           ) : sessionStatus === 'error' ? (
             <ErrorCard
@@ -667,11 +679,16 @@ function ChatsList() {
             <p className="text-sm">Добавьте бота в группу или канал, и он появится здесь автоматически</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {chats.map((chat) => (
+          <VirtualizedList
+            items={chats}
+            itemHeight={160}
+            containerHeight={600}
+            overscan={3}
+            className="rounded-lg"
+            renderItem={(chat) => (
               <div
                 key={chat.id}
-                className="border border-border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                className="border border-border rounded-lg p-4 hover:bg-muted/50 transition-colors mb-4"
               >
                 <div className="flex items-start gap-4">
                   {chat.photoUrl ? (
@@ -747,8 +764,8 @@ function ChatsList() {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         )}
       </div>
       

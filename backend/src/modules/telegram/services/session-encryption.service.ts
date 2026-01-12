@@ -14,32 +14,67 @@ export class SessionEncryptionService {
   private readonly encryptionKey: Buffer;
 
   constructor(private configService: ConfigService) {
+    const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
     const key = this.configService.get<string>('TELEGRAM_SESSION_ENCRYPTION_KEY');
     
-    if (!key) {
-      this.logger.warn(
-        'TELEGRAM_SESSION_ENCRYPTION_KEY is not set in environment variables. ' +
-        'Generating a random key for development. ' +
-        'WARNING: This key will be different on each restart, so encrypted sessions will not be recoverable!'
-      );
-      // Генерируем случайный ключ для разработки
-      this.encryptionKey = crypto.randomBytes(this.keyLength);
-    } else {
-      // Преобразуем ключ в Buffer (если это hex строка, декодируем, иначе используем как есть)
-      if (key.length === 64) {
-        // Предполагаем hex формат
-        this.encryptionKey = Buffer.from(key, 'hex');
+    // КРИТИЧНО: В продакшене ключ обязателен
+    if (!key || key.trim().length === 0) {
+      const errorMessage = 
+        'TELEGRAM_SESSION_ENCRYPTION_KEY is required in environment variables. ' +
+        'Generate a secure 32-byte (64 hex characters) key using: ' +
+        'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"';
+      
+      if (nodeEnv === 'production') {
+        this.logger.error(errorMessage);
+        throw new Error(
+          'TELEGRAM_SESSION_ENCRYPTION_KEY is required in production. ' +
+          'Please set it in your environment variables before starting the application.'
+        );
       } else {
-        // Используем SHA-256 хеш от ключа для получения 32-байтового ключа
-        this.encryptionKey = crypto.createHash('sha256').update(key).digest();
-      }
-
-      if (this.encryptionKey.length !== this.keyLength) {
-        throw new Error(`Encryption key must be ${this.keyLength} bytes (${this.keyLength * 2} hex characters)`);
+        // В development только предупреждаем, но все равно требуем ключ
+        this.logger.error(errorMessage);
+        throw new Error(
+          'TELEGRAM_SESSION_ENCRYPTION_KEY is required. ' +
+          'Please set it in your .env file. For development, generate a key using: ' +
+          'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+        );
       }
     }
 
-    this.logger.log('SessionEncryptionService initialized');
+    // Валидация минимальной длины ключа (минимум 32 символа для текста или 64 для hex)
+    const trimmedKey = key.trim();
+    const minLength = 32; // Минимум 32 символа для достаточной энтропии
+    
+    if (trimmedKey.length < minLength) {
+      throw new Error(
+        `TELEGRAM_SESSION_ENCRYPTION_KEY must be at least ${minLength} characters long. ` +
+        `Current length: ${trimmedKey.length}. ` +
+        'For hex format, use 64 characters (32 bytes). ' +
+        'For text format, use at least 32 characters (will be hashed with SHA-256).'
+      );
+    }
+
+    // Преобразуем ключ в Buffer
+    if (trimmedKey.length === 64 && /^[0-9a-fA-F]+$/.test(trimmedKey)) {
+      // Hex формат (64 символа) - декодируем напрямую
+      this.encryptionKey = Buffer.from(trimmedKey, 'hex');
+      this.logger.log('Using hex-encoded encryption key (64 characters)');
+    } else {
+      // Текстовый формат - используем SHA-256 хеш для получения 32-байтового ключа
+      // Это позволяет использовать человекочитаемые пароли, но с достаточной длиной
+      this.encryptionKey = crypto.createHash('sha256').update(trimmedKey, 'utf8').digest();
+      this.logger.log(`Using text-based encryption key (hashed with SHA-256), original length: ${trimmedKey.length}`);
+    }
+
+    // Финальная проверка длины (должна быть 32 байта)
+    if (this.encryptionKey.length !== this.keyLength) {
+      throw new Error(
+        `Encryption key must produce ${this.keyLength} bytes after processing. ` +
+        `Got ${this.encryptionKey.length} bytes. This should never happen - please report this bug.`
+      );
+    }
+
+    this.logger.log('SessionEncryptionService initialized with secure encryption key');
   }
 
   /**

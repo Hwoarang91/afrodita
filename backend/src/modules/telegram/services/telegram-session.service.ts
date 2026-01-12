@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SessionEncryptionService } from './session-encryption.service';
+import { SensitiveDataMasker } from '../../../common/utils/sensitive-data-masker';
 
 export interface TelegramSessionPayload {
   userId: string;
@@ -52,7 +53,9 @@ export class TelegramSessionService {
 
       request.session[SESSION_KEY] = encrypted;
 
-      this.logger.warn(`[TELEGRAM] 🔥 SESSION SAVED: userId=${payload.userId}, sessionId=${payload.sessionId}, phoneNumber=${payload.phoneNumber || 'N/A'}`);
+      // Используем маскирование для чувствительных данных
+      const maskedPhone = payload.phoneNumber ? SensitiveDataMasker.maskPhoneNumber(payload.phoneNumber) : 'N/A';
+      this.logger.warn(`[TELEGRAM] 🔥 SESSION SAVED: userId=${payload.userId}, sessionId=${payload.sessionId}, phoneNumber=${maskedPhone}`);
       this.logger.log(
         `[TELEGRAM] ✅ Session saved (userId=${payload.userId}, sessionId=${payload.sessionId})`,
       );

@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
+import { TelegramConnectionMonitorService } from '../services/telegram-connection-monitor.service';
 import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard';
 import { TelegramSessionGuard } from '../guards/telegram-session.guard';
 import { UserSendMessageDto, UserSendMediaDto } from '../dto/user-send-message.dto';
@@ -26,7 +27,10 @@ import { TelegramSessionStatusDto } from '../dto/telegram-session-status.dto';
 export class TelegramUserController {
   private readonly logger = new Logger(TelegramUserController.name);
 
-  constructor(private readonly telegramUserClientService: TelegramUserClientService) {}
+  constructor(
+    private readonly telegramUserClientService: TelegramUserClientService,
+    private readonly connectionMonitorService?: TelegramConnectionMonitorService,
+  ) {}
 
   /**
    * Вспомогательный метод для получения активной сессии пользователя
@@ -476,14 +480,185 @@ export class TelegramUserController {
         throw new UnauthorizedException('Failed to get messages');
       }
 
-      // Преобразуем результат в удобный формат
+      // Вспомогательная функция для обработки медиа
+      const processMedia = (media: any) => {
+        if (!media) return null;
+
+        const mediaType = media._;
+        
+        switch (mediaType) {
+          case 'messageMediaPhoto': {
+            // Фото
+            const photo = media.photo;
+            if (!photo || photo._ !== 'photo') return null;
+            
+            // Получаем размеры фото
+            const sizes = photo.sizes || [];
+            const largestSize = sizes.reduce((prev: any, curr: any) => {
+              if (!prev) return curr;
+              const prevSize = (prev.w || 0) * (prev.h || 0);
+              const currSize = (curr.w || 0) * (curr.h || 0);
+              return currSize > prevSize ? curr : prev;
+            }, null);
+            
+            return {
+              type: 'photo',
+              photoId: photo.id?.toString(),
+              accessHash: photo.access_hash?.toString(),
+              dcId: photo.dc_id,
+              sizes: sizes.map((size: any) => ({
+                type: size._,
+                width: size.w,
+                height: size.h,
+                size: size.size,
+                location: size.location ? {
+                  dcId: size.location.dc_id,
+                  volumeId: size.location.volume_id?.toString(),
+                  localId: size.location.local_id,
+                  secret: size.location.secret?.toString(),
+                } : null,
+              })),
+              largestSize: largestSize ? {
+                width: largestSize.w,
+                height: largestSize.h,
+                size: largestSize.size,
+              } : null,
+            };
+          }
+          
+          case 'messageMediaDocument': {
+            // Документ (видео, файл, и т.д.)
+            const document = media.document;
+            if (!document || document._ !== 'document') return null;
+            
+            // Определяем тип документа по mime_type
+            let docType = 'document';
+            const mimeType = document.mime_type || '';
+            if (mimeType.startsWith('video/')) {
+              docType = 'video';
+            } else if (mimeType.startsWith('audio/')) {
+              docType = 'audio';
+            } else if (mimeType.startsWith('image/')) {
+              docType = 'image';
+            }
+            
+            // Получаем атрибуты документа
+            const attributes = document.attributes || [];
+            const videoAttr = attributes.find((attr: any) => attr._ === 'documentAttributeVideo');
+            const audioAttr = attributes.find((attr: any) => attr._ === 'documentAttributeAudio');
+            const filenameAttr = attributes.find((attr: any) => attr._ === 'documentAttributeFilename');
+            
+            return {
+              type: docType,
+              documentId: document.id?.toString(),
+              accessHash: document.access_hash?.toString(),
+              dcId: document.dc_id,
+              mimeType: document.mime_type,
+              size: document.size?.toString(),
+              date: document.date,
+              ...(videoAttr && {
+                video: {
+                  duration: videoAttr.duration,
+                  width: videoAttr.w,
+                  height: videoAttr.h,
+                  supportsStreaming: videoAttr.supports_streaming || false,
+                },
+              }),
+              ...(audioAttr && {
+                audio: {
+                  duration: audioAttr.duration,
+                  performer: audioAttr.performer,
+                  title: audioAttr.title,
+                },
+              }),
+              ...(filenameAttr && {
+                fileName: filenameAttr.file_name,
+              }),
+            };
+          }
+          
+          case 'messageMediaWebPage': {
+            // Веб-страница (ссылка)
+            const webpage = media.webpage;
+            if (!webpage) return null;
+            
+            return {
+              type: 'webpage',
+              url: webpage.url,
+              displayUrl: webpage.display_url,
+              siteName: webpage.site_name,
+              title: webpage.title,
+              description: webpage.description,
+              photo: webpage.photo ? {
+                photoId: webpage.photo.id?.toString(),
+                accessHash: webpage.photo.access_hash?.toString(),
+                dcId: webpage.photo.dc_id,
+              } : null,
+            };
+          }
+          
+          case 'messageMediaGeo': {
+            // Геолокация
+            return {
+              type: 'geo',
+              lat: media.geo?.lat,
+              long: media.geo?.long,
+            };
+          }
+          
+          case 'messageMediaContact': {
+            // Контакт
+            return {
+              type: 'contact',
+              phoneNumber: media.phone_number,
+              firstName: media.first_name,
+              lastName: media.last_name,
+              userId: media.user_id?.toString(),
+            };
+          }
+          
+          default:
+            // Неизвестный тип медиа
+            return {
+              type: 'unknown',
+              raw: media,
+            };
+        }
+      };
+
+      // Преобразуем результат в удобный формат с расширенной информацией
       const messages = result.messages.map((msg: any) => ({
         id: msg.id,
         fromId: msg.from_id?.user_id?.toString() || null,
-        message: msg.message,
+        message: msg.message || '',
         date: msg.date,
-        out: msg.out,
-        media: msg.media,
+        out: msg.out || false,
+        // Статусы доставки и прочтения
+        readOutbox: msg.out ? (msg.outbox_read || false) : null, // Прочитано получателем (для исходящих)
+        readInbox: !msg.out ? (msg.inbox_read || false) : null, // Прочитано отправителем (для входящих)
+        // Реакции
+        reactions: msg.reactions ? {
+          results: (msg.reactions.results || []).map((reaction: any) => ({
+            reaction: reaction.reaction,
+            count: reaction.count,
+          })),
+          recentReactions: (msg.reactions.recent_reactions || []).map((reaction: any) => ({
+            reaction: reaction.reaction,
+            peerId: reaction.peer_id?.user_id?.toString() || reaction.peer_id?.channel_id?.toString() || null,
+          })),
+        } : null,
+        // Обработанное медиа
+        media: processMedia(msg.media),
+        // Дополнительные поля
+        editDate: msg.edit_date || null,
+        replyTo: msg.reply_to ? {
+          replyToMsgId: msg.reply_to.reply_to_msg_id,
+          replyToPeerId: msg.reply_to.reply_to_peer_id?.user_id?.toString() || 
+                        msg.reply_to.reply_to_peer_id?.channel_id?.toString() || null,
+        } : null,
+        forwards: msg.forwards || null,
+        views: msg.views || null,
+        pinned: msg.pinned || false,
       }));
 
       this.logger.log(`Получено ${messages.length} сообщений для пользователя ${userId} из чата ${chatId}`);
@@ -758,6 +933,128 @@ export class TelegramUserController {
     } catch (error: any) {
       this.logger.error(`Ошибка деактивации других сессий: ${error.message}`, error.stack);
       throw new UnauthorizedException(`Failed to deactivate other sessions: ${error.message}`);
+    }
+  }
+
+  @Post('messages/:chatId/:messageId/forward')
+  @UseGuards(TelegramSessionGuard)
+  @ApiOperation({ summary: 'Переслать сообщение в другой чат' })
+  @ApiParam({ name: 'chatId', description: 'ID чата-источника' })
+  @ApiParam({ name: 'messageId', description: 'ID сообщения для пересылки' })
+  @ApiResponse({ status: 200, description: 'Сообщение успешно переслано' })
+  @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
+  async forwardMessage(
+    @Param('chatId') chatId: string,
+    @Param('messageId') messageId: string,
+    @Body('toChatId') toChatId: string,
+    @Request() req,
+  ) {
+    try {
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+
+      const userId = req.user.sub;
+      const sessionId = req.telegramSessionId;
+      if (!sessionId) {
+        throw new UnauthorizedException('No active Telegram session found.');
+      }
+
+      const client = await this.telegramUserClientService.getClient(sessionId);
+      if (!client) {
+        throw new UnauthorizedException('Failed to get Telegram client for active session.');
+      }
+
+      const chatIdNum = parseInt(chatId, 10);
+      const toChatIdNum = parseInt(toChatId, 10);
+      const messageIdNum = parseInt(messageId, 10);
+
+      if (isNaN(chatIdNum) || isNaN(toChatIdNum) || isNaN(messageIdNum)) {
+        throw new UnauthorizedException('Invalid chat ID or message ID');
+      }
+
+      // Пересылаем сообщение через messages.forwardMessages
+      const result = await client.invoke({
+        _: 'messages.forwardMessages',
+        from_peer: {
+          _: 'inputPeerUser',
+          user_id: BigInt(chatIdNum),
+          access_hash: BigInt(0),
+        },
+        to_peer: {
+          _: 'inputPeerUser',
+          user_id: BigInt(toChatIdNum),
+          access_hash: BigInt(0),
+        },
+        id: [messageIdNum] as any,
+        random_id: [BigInt(Date.now())] as any,
+        silent: false as any,
+      }) as any;
+
+      this.logger.log(`Сообщение ${messageId} переслано от пользователя ${userId} из чата ${chatId} в чат ${toChatId}`);
+
+      return {
+        success: true,
+        messageId: result.updates?.[0]?.message?.id || null,
+        result,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка пересылки сообщения: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Failed to forward message: ${error.message}`);
+    }
+  }
+
+  @Delete('messages/:chatId/:messageId')
+  @UseGuards(TelegramSessionGuard)
+  @ApiOperation({ summary: 'Удалить сообщение' })
+  @ApiParam({ name: 'chatId', description: 'ID чата' })
+  @ApiParam({ name: 'messageId', description: 'ID сообщения для удаления' })
+  @ApiResponse({ status: 200, description: 'Сообщение успешно удалено' })
+  @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
+  async deleteMessage(
+    @Param('chatId') chatId: string,
+    @Param('messageId') messageId: string,
+    @Request() req,
+  ) {
+    try {
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+
+      const userId = req.user.sub;
+      const sessionId = req.telegramSessionId;
+      if (!sessionId) {
+        throw new UnauthorizedException('No active Telegram session found.');
+      }
+
+      const client = await this.telegramUserClientService.getClient(sessionId);
+      if (!client) {
+        throw new UnauthorizedException('Failed to get Telegram client for active session.');
+      }
+
+      const chatIdNum = parseInt(chatId, 10);
+      const messageIdNum = parseInt(messageId, 10);
+
+      if (isNaN(chatIdNum) || isNaN(messageIdNum)) {
+        throw new UnauthorizedException('Invalid chat ID or message ID');
+      }
+
+      // Удаляем сообщение через messages.deleteMessages
+      const result = await client.invoke({
+        _: 'messages.deleteMessages',
+        id: [messageIdNum] as any,
+        revoke: true, // Удалить для всех (если это наше сообщение)
+      }) as any;
+
+      this.logger.log(`Сообщение ${messageId} удалено пользователем ${userId} из чата ${chatId}`);
+
+      return {
+        success: true,
+        result,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка удаления сообщения: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Failed to delete message: ${error.message}`);
     }
   }
 }

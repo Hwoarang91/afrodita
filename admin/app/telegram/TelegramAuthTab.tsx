@@ -13,6 +13,8 @@ import { Loader2, Smartphone, QrCode } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Telegram2FATab } from './components/Telegram2FATab';
+import { AuthStepper, type AuthStep, type StepStatus } from './components/AuthStepper';
+import { CountdownTimer } from './components/CountdownTimer';
 
 interface TelegramAuthTabProps {
   onAuthSuccess?: () => void;
@@ -35,6 +37,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
   const [twoFAPassword, setTwoFAPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRequestingCode, setIsRequestingCode] = useState(false);
+  const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null); // Время истечения кода (timestamp в секундах)
 
   // Проверка статуса авторизации
   const { data: sessionsData, refetch: refetchSessions } = useQuery({
@@ -203,6 +206,8 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         phoneNumber,
       });
       setPhoneCodeHash(response.data.phoneCodeHash);
+      // Код Telegram живет 60 секунд по умолчанию (можно расширить, если backend будет возвращать timeout)
+      setCodeExpiresAt(Math.floor(Date.now() / 1000) + 60);
       toast.success('Код отправлен на ваш телефон');
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Ошибка отправки кода');
@@ -238,6 +243,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
         setPhoneNumber('');
         setCode('');
         setPhoneCodeHash('');
+        setCodeExpiresAt(null);
         setRequires2FA(false);
         // Вызываем callback для переключения на таб личных сообщений
         if (onAuthSuccess) {
@@ -252,6 +258,7 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       if (errorMessage.includes('PHONE_CODE_EXPIRED') || errorMessage.includes('expired') || errorMessage.includes('истек')) {
         setPhoneCodeHash('');
         setCode('');
+        setCodeExpiresAt(null);
         toast.info('Код истек. Пожалуйста, запросите новый код.');
       }
     } finally {
@@ -440,7 +447,48 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="phone" className="space-y-4 mt-4">
+              <TabsContent value="phone" className="space-y-6 mt-4">
+                {/* Stepper для визуализации процесса авторизации */}
+                {(() => {
+                  const steps: AuthStep[] = [
+                    {
+                      id: 'phone',
+                      label: 'Телефон',
+                      status: phoneCodeHash
+                        ? ('completed' as StepStatus)
+                        : phoneNumber.trim() && !phoneCodeHash
+                        ? ('active' as StepStatus)
+                        : ('pending' as StepStatus),
+                    },
+                    {
+                      id: 'code',
+                      label: 'Код',
+                      status: requires2FA
+                        ? ('completed' as StepStatus)
+                        : phoneCodeHash && !requires2FA
+                        ? isLoading
+                          ? ('active' as StepStatus)
+                          : ('active' as StepStatus)
+                        : ('pending' as StepStatus),
+                    },
+                    {
+                      id: '2fa',
+                      label: '2FA',
+                      status: requires2FA
+                        ? isLoading
+                          ? ('active' as StepStatus)
+                          : ('active' as StepStatus)
+                        : phoneCodeHash && !requires2FA
+                        ? ('pending' as StepStatus)
+                        : ('pending' as StepStatus),
+                    },
+                  ];
+
+                  const currentStepIndex = steps.findIndex((s) => s.status === 'active');
+
+                  return <AuthStepper steps={steps} currentStepIndex={currentStepIndex >= 0 ? currentStepIndex : undefined} />;
+                })()}
+
                 {requires2FA ? (
                   <Telegram2FATab
                     phoneNumber={phoneNumber}
@@ -505,6 +553,22 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                             maxLength={6}
                             autoFocus
                           />
+                          {codeExpiresAt !== null && codeExpiresAt > Math.floor(Date.now() / 1000) && (
+                            <CountdownTimer
+                              initialSeconds={Math.max(0, codeExpiresAt - Math.floor(Date.now() / 1000))}
+                              onExpire={() => {
+                                setCodeExpiresAt(null);
+                                setPhoneCodeHash('');
+                                setCode('');
+                              }}
+                              onReset={() => {
+                                // Запрашиваем новый код при истечении времени
+                                handleRequestCode();
+                              }}
+                              variant="compact"
+                              className="mt-2"
+                            />
+                          )}
                         </div>
                         <Button
                           onClick={handleVerifyCode}

@@ -95,6 +95,33 @@ class EnvironmentVariables {
   @IsOptional()
   TELEGRAM_BOT_TOKEN?: string;
 
+  // Telegram Heartbeat
+  @IsString()
+  @IsOptional()
+  TELEGRAM_HEARTBEAT_ENABLED?: string;
+
+  @IsInt()
+  @Min(60000) // Минимум 60 секунд
+  @Max(600000) // Максимум 10 минут
+  @IsOptional()
+  @Type(() => Number)
+  TELEGRAM_HEARTBEAT_INTERVAL?: number;
+
+  @IsInt()
+  @Min(5000) // Минимум 5 секунд
+  @Max(60000) // Максимум 60 секунд
+  @IsOptional()
+  @Type(() => Number)
+  TELEGRAM_HEARTBEAT_TIMEOUT?: number;
+
+  // Telegram Event Log
+  @IsInt()
+  @Min(100) // Минимум 100 событий
+  @Max(10000) // Максимум 10000 событий
+  @IsOptional()
+  @Type(() => Number)
+  TELEGRAM_EVENT_LOG_HISTORY_SIZE?: number;
+
   // CORS
   @IsString()
   @IsOptional()

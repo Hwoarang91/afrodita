@@ -22,6 +22,10 @@ import { TelegramUserSession } from '../../entities/telegram-user-session.entity
 import { TelegramUserClientService } from './services/telegram-user-client.service';
 import { SessionEncryptionService } from './services/session-encryption.service';
 import { TelegramSessionService } from './services/telegram-session.service';
+import { TelegramHeartbeatService } from './services/telegram-heartbeat.service';
+import { TelegramClientEventEmitter } from './services/telegram-client-event-emitter.service';
+import { TelegramConnectionMonitorService } from './services/telegram-connection-monitor.service';
+import { TelegramEventLoggerService } from './services/telegram-event-logger.service';
 import { TelegramSessionGuard } from './guards/telegram-session.guard';
 import { UsersModule } from '../users/users.module';
 import { ServicesModule } from '../services/services.module';
@@ -57,6 +61,10 @@ import { WebSocketModule } from '../websocket/websocket.module';
     TelegramUserClientService,
     SessionEncryptionService,
     TelegramSessionService,
+    TelegramHeartbeatService,
+    TelegramClientEventEmitter,
+    TelegramConnectionMonitorService,
+    TelegramEventLoggerService,
     TelegramSessionGuard,
   ],
   exports: [
@@ -68,6 +76,10 @@ import { WebSocketModule } from '../websocket/websocket.module';
     TelegramUserClientService,
     SessionEncryptionService,
     TelegramSessionService,
+    TelegramHeartbeatService,
+    TelegramClientEventEmitter,
+    TelegramConnectionMonitorService,
+    TelegramEventLoggerService,
   ],
 })
 export class TelegramModule {}
