@@ -618,7 +618,12 @@ export class AuthService implements OnModuleDestroy {
       const phoneCodeHash = result.phone_code_hash;
       const timeout = result.timeout || 60;
       const expiresAt = new Date(Date.now() + timeout * 1000);
-      this.logger.log(`[requestPhoneCode] Код отправлен успешно, phoneCodeHash: ${phoneCodeHash.substring(0, 20)}..., timeout: ${timeout} секунд`);
+      
+      // Логируем тип отправки кода для диагностики
+      const codeType = result.type?._ || 'unknown';
+      const codeTypeDetails = result.type ? JSON.stringify(result.type) : 'N/A';
+      this.logger.log(`[requestPhoneCode] Код отправлен успешно, phoneCodeHash: ${phoneCodeHash.substring(0, 20)}..., timeout: ${timeout} секунд, type: ${codeType}`);
+      this.logger.debug(`[requestPhoneCode] Детали типа отправки кода: ${codeTypeDetails}`);
 
       // КРИТИЧНО: Нормализуем номер телефона для единообразного хранения
       const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
