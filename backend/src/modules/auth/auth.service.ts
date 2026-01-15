@@ -594,6 +594,8 @@ export class AuthService implements OnModuleDestroy {
           phone_number: phoneNumber,
           settings: {
             _: 'codeSettings',
+            allow_appless: true, // Принудительно запрашиваем SMS, а не код в приложении
+            allow_flashcall: false, // Отключаем flash call
           },
         } as any);
         this.logger.log(`[requestPhoneCode] auth.sendCode успешно выполнен, результат: ${result._}, phoneCodeHash: ${result.phone_code_hash ? result.phone_code_hash.substring(0, 20) + '...' : 'N/A'}`);
