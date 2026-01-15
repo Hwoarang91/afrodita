@@ -867,43 +867,25 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       // КРИТИЧНО: Сохраняем сессию в request.session для следующего запроса
       // Это нужно для Guard который проверяет request.session.telegramSession
-      // КРИТИЧНО: userId должен совпадать с userId из JWT (request.user.sub)
+      // КРИТИЧНО: При авторизации через 2FA/phone/QR используем userId из параметра (пользователь по телефону)
+      // НЕ используем userId из JWT, так как это новая авторизация Telegram, а не использование существующей сессии
       if (expressRequest) {
-        // Проверяем, что userId в expressRequest совпадает с переданным userId
-        const jwtUserId = expressRequest.user?.sub;
-        if (jwtUserId && jwtUserId !== userId) {
-          this.logger.warn(`[saveSession] ⚠️ userId mismatch: JWT userId=${jwtUserId}, provided userId=${userId}. Using JWT userId.`);
-          // Используем userId из JWT для согласованности
-          const correctedUserId = jwtUserId;
-          this.logger.log(`[saveSession] Saving session to request.session: userId=${correctedUserId}, sessionId=${sessionId}, phoneNumber=${phoneNumber}`);
-          try {
-            this.telegramSessionService.save(expressRequest, {
-              userId: correctedUserId, // Используем userId из JWT
-              sessionId: sessionId,
-              phoneNumber: phoneNumber,
-              sessionData: null, // MTProto данные уже в БД через DatabaseStorage
-              createdAt: Date.now(),
-            });
-            this.logger.log(`[saveSession] ✅ Session saved to request.session successfully: userId=${correctedUserId}, sessionId=${sessionId}`);
-          } catch (error: any) {
-            this.logger.error(`[saveSession] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
-            // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
-          }
-        } else {
-          this.logger.log(`[saveSession] Saving session to request.session: userId=${userId}, sessionId=${sessionId}, phoneNumber=${phoneNumber}, JWT userId=${jwtUserId || 'N/A'}`);
-          try {
-            this.telegramSessionService.save(expressRequest, {
-              userId: userId,
-              sessionId: sessionId,
-              phoneNumber: phoneNumber,
-              sessionData: null, // MTProto данные уже в БД через DatabaseStorage
-              createdAt: Date.now(),
-            });
-            this.logger.log(`[saveSession] ✅ Session saved to request.session successfully: userId=${userId}, sessionId=${sessionId}`);
-          } catch (error: any) {
-            this.logger.error(`[saveSession] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
-            // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
-          }
+        // КРИТИЧНО: При авторизации Telegram (2FA/phone/QR) всегда используем userId из параметра
+        // Это гарантирует, что сессия сохраняется для правильного пользователя (найденного/созданного по телефону)
+        // JWT userId может быть админом, который авторизует Telegram для другого пользователя
+        this.logger.log(`[saveSession] Saving session to request.session: userId=${userId}, sessionId=${sessionId}, phoneNumber=${phoneNumber}, JWT userId=${expressRequest.user?.sub || 'N/A'}`);
+        try {
+          this.telegramSessionService.save(expressRequest, {
+            userId: userId, // КРИТИЧНО: Используем userId из параметра (пользователь по телефону), не из JWT
+            sessionId: sessionId,
+            phoneNumber: phoneNumber,
+            sessionData: null, // MTProto данные уже в БД через DatabaseStorage
+            createdAt: Date.now(),
+          });
+          this.logger.log(`[saveSession] ✅ Session saved to request.session successfully: userId=${userId}, sessionId=${sessionId}`);
+        } catch (error: any) {
+          this.logger.error(`[saveSession] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
+          // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
         }
       } else {
         this.logger.warn(`[saveSession] ⚠️ expressRequest is not provided, cannot save session to request.session`);

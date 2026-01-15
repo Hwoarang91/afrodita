@@ -146,7 +146,9 @@ export function MediaPreview({ media, className, compact = false }: MediaPreview
 
   // Обработка фото
   if (media.type === 'photo') {
-    const photoUrl = getPhotoUrl(media.largestSize);
+    // Ищем размер с location из массива sizes
+    const sizeWithLocation = media.sizes?.find((s) => s.location);
+    const photoUrl = getPhotoUrl(sizeWithLocation);
     const hasUrl = !!photoUrl;
 
     return (

@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '../../entities/user.entity';
 import { ROLES_KEY } from '../decorators/roles.decorator';
@@ -23,7 +23,9 @@ export class RolesGuard implements CanActivate {
 
     if (!user) {
       this.logger.warn('RolesGuard: Пользователь не аутентифицирован');
-      return false;
+      // КРИТИЧНО: Выбрасываем UnauthorizedException вместо возврата false
+      // Это гарантирует правильный статус код 401 вместо 403
+      throw new UnauthorizedException('Authentication required. Please log in first.');
     }
 
     const hasRole = requiredRoles.some((role) => user.role?.includes(role));

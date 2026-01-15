@@ -10,6 +10,7 @@ import {
   Logger,
   UnauthorizedException,
   Delete,
+  Optional,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
@@ -29,7 +30,7 @@ export class TelegramUserController {
 
   constructor(
     private readonly telegramUserClientService: TelegramUserClientService,
-    private readonly connectionMonitorService?: TelegramConnectionMonitorService,
+    @Optional() private readonly connectionMonitorService?: TelegramConnectionMonitorService,
   ) {}
 
   /**
@@ -299,9 +300,34 @@ export class TelegramUserController {
         throw new UnauthorizedException('Failed to get dialogs');
       }
 
-      // Преобразуем результат в удобный формат
+      // Преобразуем результат в удобный формат с информацией о последнем сообщении
       const chats = [];
       for (const dialog of result.dialogs) {
+        // Находим последнее сообщение для этого диалога
+        const lastMessage = result.messages?.find((msg: any) => {
+          if (dialog.peer._ === 'peerUser') {
+            return msg.peer_id?._ === 'peerUser' && msg.peer_id?.user_id === dialog.peer.user_id;
+          } else if (dialog.peer._ === 'peerChat') {
+            return msg.peer_id?._ === 'peerChat' && msg.peer_id?.chat_id === dialog.peer.chat_id;
+          } else if (dialog.peer._ === 'peerChannel') {
+            return msg.peer_id?._ === 'peerChannel' && msg.peer_id?.channel_id === dialog.peer.channel_id;
+          }
+          return false;
+        });
+
+        // Определяем статус последнего отправленного сообщения
+        let lastMessageStatus: 'sent' | 'delivered' | 'read' | null = null;
+        if (lastMessage && lastMessage.out) {
+          // Исходящее сообщение
+          if (lastMessage.outbox_read) {
+            lastMessageStatus = 'read';
+          } else if (lastMessage.out) {
+            lastMessageStatus = 'delivered';
+          } else {
+            lastMessageStatus = 'sent';
+          }
+        }
+
         if (dialog.peer._ === 'peerUser') {
           const user = result.users.find((u: any) => u.id === dialog.peer.user_id);
           if (user && (!type || type === 'private' || type === 'all')) {
@@ -313,6 +339,17 @@ export class TelegramUserController {
               firstName: user.first_name,
               lastName: user.last_name,
               phone: user.phone,
+              // Информация о последнем сообщении
+              lastMessage: lastMessage ? {
+                id: lastMessage.id,
+                text: lastMessage.message || '',
+                date: lastMessage.date,
+                out: lastMessage.out || false,
+                status: lastMessageStatus,
+              } : null,
+              // Дополнительная информация из dialog
+              unreadCount: dialog.unread_count || 0,
+              pinned: dialog.pinned || false,
             });
           }
         } else if (dialog.peer._ === 'peerChat' || dialog.peer._ === 'peerChannel') {
@@ -323,6 +360,17 @@ export class TelegramUserController {
               type: dialog.peer._ === 'peerChannel' ? 'channel' : 'group',
               title: chat.title,
               username: chat.username,
+              // Информация о последнем сообщении
+              lastMessage: lastMessage ? {
+                id: lastMessage.id,
+                text: lastMessage.message || '',
+                date: lastMessage.date,
+                out: lastMessage.out || false,
+                status: lastMessageStatus,
+              } : null,
+              // Дополнительная информация из dialog
+              unreadCount: dialog.unread_count || 0,
+              pinned: dialog.pinned || false,
             });
           }
         }
@@ -933,6 +981,77 @@ export class TelegramUserController {
     } catch (error: any) {
       this.logger.error(`Ошибка деактивации других сессий: ${error.message}`, error.stack);
       throw new UnauthorizedException(`Failed to deactivate other sessions: ${error.message}`);
+    }
+  }
+
+  @Get('connection-status')
+  @UseGuards(TelegramSessionGuard)
+  @ApiOperation({
+    summary: 'Получение статуса соединения Telegram сессии',
+    description: 'Возвращает детальную информацию о статусе соединения активной Telegram сессии, включая последнюю активность и статус heartbeat.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Статус соединения успешно получен',
+  })
+  @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
+  async getConnectionStatus(@Request() req) {
+    try {
+      if (!req.user?.sub) {
+        throw new UnauthorizedException('Authentication required');
+      }
+
+      const userId = req.user.sub;
+      const sessionId = req.telegramSessionId;
+      
+      if (!sessionId) {
+        throw new UnauthorizedException('No active Telegram session found.');
+      }
+
+      // Получаем статус соединения из TelegramConnectionMonitorService
+      if (!this.connectionMonitorService) {
+        // Если сервис недоступен, возвращаем базовую информацию
+        return {
+          success: true,
+          sessionId,
+          isConnected: true,
+          connectionState: 'connected',
+          lastActivity: null,
+        };
+      }
+
+      const status = this.connectionMonitorService.getConnectionStatus(sessionId);
+      
+      if (!status) {
+        return {
+          success: true,
+          sessionId,
+          isConnected: false,
+          connectionState: 'unknown',
+          lastActivity: null,
+        };
+      }
+
+      return {
+        success: true,
+        sessionId: status.sessionId,
+        userId: status.userId,
+        phoneNumber: status.phoneNumber,
+        isConnected: status.isConnected,
+        connectionState: status.connectionState,
+        lastActivity: status.lastActivity ? status.lastActivity.toISOString() : null,
+        lastHeartbeatCheck: status.lastHeartbeatCheck ? status.lastHeartbeatCheck.toISOString() : null,
+        lastHeartbeatStatus: status.lastHeartbeatStatus,
+        consecutiveHeartbeatFailures: status.consecutiveHeartbeatFailures,
+        lastError: status.lastError,
+        lastInvokeMethod: status.lastInvokeMethod,
+        lastInvokeDuration: status.lastInvokeDuration,
+        createdAt: status.createdAt.toISOString(),
+        lastUsedAt: status.lastUsedAt ? status.lastUsedAt.toISOString() : null,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка получения статуса соединения: ${error.message}`, error.stack);
+      throw new UnauthorizedException(`Failed to get connection status: ${error.message}`);
     }
   }
 

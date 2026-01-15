@@ -1,4 +1,4 @@
-import { Injectable, ExecutionContext, Logger } from '@nestjs/common';
+import { Injectable, ExecutionContext, Logger, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
@@ -23,7 +23,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       this.logger.warn('JwtAuthGuard: Passport canActivate failed', {
         error: (error as Error)?.message,
       });
-      return false;
+      // КРИТИЧНО: Выбрасываем UnauthorizedException вместо возврата false
+      // Это гарантирует правильный статус код 401 вместо 403
+      throw new UnauthorizedException('Authentication required. Please log in first.');
     }
   }
 

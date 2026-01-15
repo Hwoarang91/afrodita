@@ -16,6 +16,12 @@ import {
   TelegramClientFloodWaitEvent,
 } from '../telegram/services/telegram-client-event-emitter.service';
 
+interface EventLogSubscription {
+  socketId: string;
+  eventTypes?: string[]; // Фильтр по типам событий: 'connect', 'disconnect', 'error', 'invoke', 'flood-wait'
+  sessionIds?: string[]; // Фильтр по sessionId (если не указан - все сессии)
+}
+
 @WSGateway({
   cors: {
     origin: '*',
@@ -32,11 +38,6 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   private clientSubscriptions: Map<string, Set<string>> = new Map(); // sessionId -> Set<socketId>
   
   // Храним подписки клиентов на event log с фильтрами
-  interface EventLogSubscription {
-    socketId: string;
-    eventTypes?: string[]; // Фильтр по типам событий: 'connect', 'disconnect', 'error', 'invoke', 'flood-wait'
-    sessionIds?: string[]; // Фильтр по sessionId (если не указан - все сессии)
-  }
   private eventLogSubscriptions: Map<string, EventLogSubscription> = new Map(); // socketId -> subscription
   
   // Rate limiting для event log (события в секунду)
@@ -193,7 +194,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
    * Клиент будет получать события статуса соединения для указанной sessionId
    */
   @SubscribeMessage('subscribe-telegram-status')
-  handleSubscribeTelegramStatus(client: Socket, data: { sessionId: string }) {
+  handleSubscribeTelegramStatus(client: Socket, data: { sessionId: string }): void {
     if (!data?.sessionId) {
       this.logger.warn(`Client ${client.id} attempted to subscribe without sessionId`);
       client.emit('telegram-status-error', { error: 'sessionId is required' });
@@ -222,7 +223,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
    * Отписка клиента от статуса соединения Telegram сессии
    */
   @SubscribeMessage('unsubscribe-telegram-status')
-  handleUnsubscribeTelegramStatus(client: Socket, data: { sessionId: string }) {
+  handleUnsubscribeTelegramStatus(client: Socket, data: { sessionId: string }): void {
     if (!data?.sessionId) {
       this.logger.warn(`Client ${client.id} attempted to unsubscribe without sessionId`);
       return;
@@ -255,7 +256,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
    * @param status Статус соединения: 'connected' | 'disconnected' | 'error' | 'heartbeat'
    * @param data Дополнительные данные события
    */
-  emitTelegramConnectionStatus(
+  public emitTelegramConnectionStatus(
     sessionId: string,
     status: 'connected' | 'disconnected' | 'error' | 'heartbeat',
     data: {
@@ -357,7 +358,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
    */
   private checkRateLimit(socketId: string): boolean {
     const now = Date.now();
-    const limit = this.eventLogRateLimiter.get(socketId);
+    const limit = this.eventLogRateLimiter.get(socketId) || null;
 
     if (!limit || now >= limit.resetAt) {
       // Создаем новый лимит или сбрасываем существующий

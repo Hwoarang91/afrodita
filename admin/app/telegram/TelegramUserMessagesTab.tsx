@@ -24,10 +24,19 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Send, MessageSquare, Image, Video, File, Loader2, Shield, Trash2, X, Pin, History } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Send, MessageSquare, Image, Video, File, Loader2, Shield, Trash2, X, Pin, History, Check, CheckCheck, Circle, Wifi, WifiOff, Clock } from 'lucide-react';
 import { MediaPreview, MediaData } from './components/MediaPreview';
 import { MessageDeliveryStatus } from './components/MessageDeliveryStatus';
 import { MessageActions } from './components/MessageActions';
+import { ConnectionStatusIndicator, ConnectionStatusData } from './components/ConnectionStatusIndicator';
+import { EventLogViewer } from './components/EventLogViewer';
+import { TelegramEventLog } from '@/lib/hooks/useTelegramWebSocket';
 
 interface Message {
   id: number;
@@ -76,13 +85,15 @@ interface SessionInfo {
 
 
 export default function TelegramUserMessagesTab() {
-  const [selectedTab, setSelectedTab] = useState<'send' | 'sessions'>('send');
+  const [selectedTab, setSelectedTab] = useState<'send' | 'sessions' | 'events'>('send');
   const [selectedChatId, setSelectedChatId] = useState('');
   const [message, setMessage] = useState('');
   const [mediaType, setMediaType] = useState<'text' | 'photo' | 'video' | 'document'>('text');
   const [mediaUrl, setMediaUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [floodWaitEvent, setFloodWaitEvent] = useState<FloodWaitEvent | null>(null);
+  const [eventLogs, setEventLogs] = useState<TelegramEventLog[]>([]);
+  const [showEventLog, setShowEventLog] = useState(false);
   const queryClient = useQueryClient();
 
   // КРИТИЧНО: Проверяем статус Telegram сессии перед загрузкой данных
@@ -92,11 +103,43 @@ export default function TelegramUserMessagesTab() {
   // Получаем sessionId из активной сессии
   const currentSessionId = sessionData?.sessionId;
 
-  // WebSocket подключение для получения FloodWait событий
+  // Состояние статуса соединения
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatusData | null>(null);
+
+  // Получение статуса соединения
+  const { data: connectionStatusData } = useQuery({
+    queryKey: ['telegram-connection-status', currentSessionId],
+    queryFn: async () => {
+      if (!currentSessionId) return null;
+      const response = await apiClient.get('/telegram/user/connection-status');
+      return response.data;
+    },
+    enabled: sessionStatus === 'active' && !!currentSessionId,
+    refetchInterval: 10000, // Обновляем каждые 10 секунд
+  });
+
+  // Обновляем состояние статуса соединения
+  useEffect(() => {
+    if (connectionStatusData) {
+      setConnectionStatus({
+        isConnected: connectionStatusData.isConnected || false,
+        connectionState: connectionStatusData.connectionState || 'unknown',
+        lastActivity: connectionStatusData.lastActivity || null,
+        lastHeartbeatCheck: connectionStatusData.lastHeartbeatCheck || null,
+        lastHeartbeatStatus: connectionStatusData.lastHeartbeatStatus ?? null,
+        consecutiveHeartbeatFailures: connectionStatusData.consecutiveHeartbeatFailures || 0,
+        lastError: connectionStatusData.lastError,
+        lastInvokeMethod: connectionStatusData.lastInvokeMethod,
+        lastInvokeDuration: connectionStatusData.lastInvokeDuration,
+      });
+    }
+  }, [connectionStatusData]);
+
+  // WebSocket подключение для получения FloodWait событий и обновления статусов
   useTelegramWebSocket({
     enabled: sessionStatus === 'active' && !!currentSessionId,
-    sessionId: currentSessionId,
-    eventTypes: ['flood-wait'],
+    sessionId: currentSessionId || undefined,
+    eventTypes: ['flood-wait', 'invoke', 'connect', 'disconnect'],
     onEventLog: (event) => {
       if (event.type === 'flood-wait') {
         setFloodWaitEvent({
@@ -107,8 +150,44 @@ export default function TelegramUserMessagesTab() {
           timestamp: event.timestamp,
         });
       }
+      // Обновляем список чатов при успешных invoke операциях (могут изменить статусы сообщений)
+      if (event.type === 'invoke' && event.data?.method?.includes('messages')) {
+        // Небольшая задержка перед обновлением, чтобы дать Telegram время обновить статусы
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['telegram-user-chats'] });
+        }, 1000);
+      }
+      // Обновляем статус соединения при connect/disconnect
+      if (event.type === 'connect' || event.type === 'disconnect') {
+        queryClient.invalidateQueries({ queryKey: ['telegram-connection-status', currentSessionId] });
+      }
+      
+      // Добавляем событие в лог
+      setEventLogs((prev) => {
+        const newLogs = [...prev, event];
+        // Ограничиваем размер лога до 1000 событий
+        return newLogs.slice(-1000);
+      });
+    },
+    onConnectionStatus: (status) => {
+      setConnectionStatus({
+        isConnected: status.isConnected || false,
+        connectionState: (status.status === 'heartbeat' ? 'connected' : status.status === 'connected' ? 'connected' : status.status === 'disconnected' ? 'disconnected' : status.status === 'error' ? 'error' : 'unknown') as 'connected' | 'disconnected' | 'unknown' | 'error',
+        lastActivity: status.timestamp || null,
+      });
     },
   });
+  
+  // Периодическое обновление статусов чатов (каждые 30 секунд)
+  useEffect(() => {
+    if (sessionStatus !== 'active') return;
+    
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['telegram-user-chats'] });
+    }, 30000); // 30 секунд
+    
+    return () => clearInterval(interval);
+  }, [sessionStatus, queryClient]);
   
   // Определяем, можем ли мы загружать Telegram данные
   const canLoadTelegramData = sessionStatus === 'active';
@@ -189,6 +268,8 @@ export default function TelegramUserMessagesTab() {
       setMessage('');
       // Обновляем историю сообщений после отправки
       queryClient.invalidateQueries({ queryKey: ['telegram-user-messages', variables.chatId] });
+      // Обновляем список чатов для обновления статуса последнего сообщения
+      queryClient.invalidateQueries({ queryKey: ['telegram-user-chats'] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Ошибка при отправке сообщения');
@@ -211,6 +292,8 @@ export default function TelegramUserMessagesTab() {
       setCaption('');
       // Обновляем историю сообщений после отправки
       queryClient.invalidateQueries({ queryKey: ['telegram-user-messages', variables.chatId] });
+      // Обновляем список чатов для обновления статуса последнего сообщения
+      queryClient.invalidateQueries({ queryKey: ['telegram-user-chats'] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Ошибка при отправке медиа');
@@ -375,7 +458,7 @@ export default function TelegramUserMessagesTab() {
     );
   }
 
-  // ✅ Сессия активна - показываем основной интерфейс
+  // Сессия активна - показываем основной интерфейс
   return (
     <div className="space-y-6">
       {/* Таймер FloodWait */}
@@ -388,10 +471,10 @@ export default function TelegramUserMessagesTab() {
       
       <Tabs 
         value={selectedTab} 
-        onValueChange={(value) => setSelectedTab(value as 'send' | 'sessions')} 
+        onValueChange={(value) => setSelectedTab(value as 'send' | 'sessions' | 'events')} 
         className="w-full"
       >
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="send">
             <Send className="w-4 h-4 mr-2" />
             Отправка сообщений
@@ -399,6 +482,10 @@ export default function TelegramUserMessagesTab() {
           <TabsTrigger value="sessions">
             <Shield className="w-4 h-4 mr-2" />
             Управление сессиями
+          </TabsTrigger>
+          <TabsTrigger value="events">
+            <History className="w-4 h-4 mr-2" />
+            Event Log
           </TabsTrigger>
         </TabsList>
 
@@ -419,11 +506,35 @@ export default function TelegramUserMessagesTab() {
                   </div>
                 </div>
               ) : (chatsData?.chats?.length > 0 || contactsData?.contacts?.length > 0) ? (
-                <Select value={selectedChatId} onValueChange={setSelectedChatId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите чат или контакт" />
-                  </SelectTrigger>
-                  <SelectContent>
+                <TooltipProvider>
+                  <Select value={selectedChatId} onValueChange={setSelectedChatId}>
+                    <SelectTrigger>
+                      <div className="flex items-center gap-2 w-full">
+                        <SelectValue placeholder="Выберите чат или контакт" />
+                        {connectionStatus && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="ml-auto">
+                                {connectionStatus.isConnected ? (
+                                  <Wifi className="w-4 h-4 text-green-500" />
+                                ) : (
+                                  <WifiOff className="w-4 h-4 text-red-500" />
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Статус соединения: {connectionStatus.isConnected ? 'Активно' : 'Неактивно'}</p>
+                              {connectionStatus.lastActivity && (
+                                <p className="text-xs mt-1">
+                                  Последняя активность: {new Date(connectionStatus.lastActivity).toLocaleString('ru-RU')}
+                                </p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
                     {chatsData?.chats?.length > 0 && (
                       <>
                         <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Чаты</div>
@@ -440,13 +551,141 @@ export default function TelegramUserMessagesTab() {
                             return bUnread - aUnread;
                           })
                           .map((chat: any) => {
-                            const pinnedIcon = chat.pinned ? '📌 ' : '';
-                            const unreadBadge = (chat.unreadCount && chat.unreadCount > 0) 
-                              ? ` [${chat.unreadCount > 99 ? '99+' : chat.unreadCount}]` 
-                              : '';
+                            // Форматирование времени последнего сообщения
+                            const formatLastMessageTime = (timestamp: number) => {
+                              if (!timestamp) return '';
+                              const date = new Date(timestamp * 1000);
+                              const now = new Date();
+                              const diff = now.getTime() - date.getTime();
+                              const minutes = Math.floor(diff / 60000);
+                              const hours = Math.floor(diff / 3600000);
+                              const days = Math.floor(diff / 86400000);
+                              
+                              if (minutes < 1) return 'только что';
+                              if (minutes < 60) return `${minutes} мин назад`;
+                              if (hours < 24) return `${hours} ч назад`;
+                              if (days < 7) return `${days} дн назад`;
+                              return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+                            };
+                            
+                            // Индикатор статуса последнего отправленного сообщения
+                            let StatusIcon: React.ReactNode = null;
+                            if (chat.lastMessage?.out && chat.lastMessage?.status) {
+                              switch (chat.lastMessage.status) {
+                                case 'read':
+                                  StatusIcon = (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <CheckCheck 
+                                          className="w-3.5 h-3.5 text-primary ml-2" 
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Прочитано</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  );
+                                  break;
+                                case 'delivered':
+                                  StatusIcon = (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <CheckCheck 
+                                          className="w-3.5 h-3.5 text-muted-foreground ml-2" 
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Доставлено</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  );
+                                  break;
+                                case 'sent':
+                                  StatusIcon = (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Check 
+                                          className="w-3.5 h-3.5 text-muted-foreground ml-2" 
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Отправлено</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  );
+                                  break;
+                              }
+                            }
+                            
+                            // Индикатор статуса соединения
+                            const ConnectionIcon = connectionStatus?.isConnected ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Wifi className="w-3 h-3 text-green-500 ml-1" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Соединение активно</p>
+                                  {connectionStatus.lastActivity && (
+                                    <p className="text-xs mt-1">
+                                      Активность: {formatLastMessageTime(Math.floor(new Date(connectionStatus.lastActivity).getTime() / 1000))}
+                                    </p>
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <WifiOff className="w-3 h-3 text-red-500 ml-1" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Соединение неактивно</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                            
+                            // Информация для tooltip
+                            const tooltipInfo = [
+                              chat.pinned && 'Закреплен',
+                              chat.unreadCount > 0 && `Непрочитанных: ${chat.unreadCount}`,
+                              chat.lastMessage && `Последнее сообщение: ${formatLastMessageTime(chat.lastMessage.date)}`,
+                              chat.type && `Тип: ${chat.type}`,
+                            ].filter(Boolean).join('\n');
+                            
                             return (
-                              <SelectItem key={chat.id} value={chat.id}>
-                                {pinnedIcon}{chat.title} ({chat.type}){unreadBadge}
+                              <SelectItem key={chat.id} value={chat.id} className={chat.pinned ? 'bg-muted/50' : ''}>
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    {chat.pinned && (
+                                      <Pin className="w-3 h-3 text-primary flex-shrink-0" />
+                                    )}
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="truncate flex-1">
+                                          {chat.title} ({chat.type})
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="max-w-xs">
+                                        <div className="space-y-1">
+                                          <p className="font-semibold">{chat.title}</p>
+                                          {tooltipInfo && (
+                                            <div className="text-xs text-muted-foreground whitespace-pre-line">
+                                              {tooltipInfo}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    {chat.unreadCount > 0 && (
+                                      <Badge variant="default" className="text-xs px-1.5 py-0 h-5 flex-shrink-0">
+                                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                                    {StatusIcon}
+                                    {connectionStatus && ConnectionIcon}
+                                  </div>
+                                </div>
                               </SelectItem>
                             );
                           })}
@@ -465,6 +704,7 @@ export default function TelegramUserMessagesTab() {
                     )}
                   </SelectContent>
                 </Select>
+                </TooltipProvider>
               ) : (
                 <div className="space-y-2">
                   {chatsError || contactsError ? (
@@ -917,6 +1157,23 @@ export default function TelegramUserMessagesTab() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Таб: Event Log */}
+        <TabsContent value="events" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">MTProto Event Log</h3>
+              <p className="text-sm text-muted-foreground">
+                Просмотр событий MTProto в реальном времени
+              </p>
+            </div>
+            <ConnectionStatusIndicator status={connectionStatus} showDetails />
+          </div>
+          <EventLogViewer
+            events={eventLogs}
+            onClear={() => setEventLogs([])}
+          />
         </TabsContent>
       </Tabs>
     </div>

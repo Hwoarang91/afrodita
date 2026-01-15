@@ -568,30 +568,57 @@ export class AuthService implements OnModuleDestroy {
       // НЕ используем StorageMemory - это нарушает lifecycle MTKruto
       const { client, sessionId } = await this.telegramUserClientService.createClientForAuth(userId, apiId, apiHash);
       
-      // Клиент уже подключен в createClientForAuth
+      // КРИТИЧНО: Проверяем, что клиент подключен перед вызовом auth.sendCode
+      if (!client.connected) {
+        this.logger.warn(`[requestPhoneCode] Клиент не подключен, пытаемся подключиться...`);
+        try {
+          await client.connect();
+          this.logger.log(`[requestPhoneCode] Клиент успешно подключен`);
+        } catch (connectError: any) {
+          this.logger.error(`[requestPhoneCode] Ошибка подключения клиента: ${connectError.message}`, connectError.stack);
+          const errorResponse = mapTelegramErrorToResponse(connectError);
+          throw new HttpException(errorResponse, errorResponse.statusCode);
+        }
+      } else {
+        this.logger.log(`[requestPhoneCode] Клиент уже подключен`);
+      }
 
       // Вызываем auth.sendCode
-      const result: any = await client.invoke({
-        _: 'auth.sendCode',
-        api_id: apiId,
-        api_hash: apiHash,
-        phone_number: phoneNumber,
-        settings: {
-          _: 'codeSettings',
-        },
-      } as any);
+      this.logger.log(`[requestPhoneCode] Вызываем auth.sendCode для телефона: ${phoneNumber}, apiId: ${apiId}, sessionId: ${sessionId}`);
+      let result: any;
+      try {
+        result = await client.invoke({
+          _: 'auth.sendCode',
+          api_id: apiId,
+          api_hash: apiHash,
+          phone_number: phoneNumber,
+          settings: {
+            _: 'codeSettings',
+          },
+        } as any);
+        this.logger.log(`[requestPhoneCode] auth.sendCode успешно выполнен, результат: ${result._}, phoneCodeHash: ${result.phone_code_hash ? result.phone_code_hash.substring(0, 20) + '...' : 'N/A'}`);
+      } catch (invokeError: any) {
+        this.logger.error(`[requestPhoneCode] Ошибка при вызове auth.sendCode: ${invokeError.message}`, invokeError.stack);
+        // КРИТИЧНО: Используем mapTelegramErrorToResponse для правильной обработки Telegram ошибок
+        const errorResponse = mapTelegramErrorToResponse(invokeError);
+        this.logger.error(`[requestPhoneCode] Mapped error: ${JSON.stringify(errorResponse)}`);
+        throw new HttpException(errorResponse, errorResponse.statusCode);
+      }
 
       if (result._ !== 'auth.sentCode') {
+        this.logger.error(`[requestPhoneCode] Неожиданный результат от auth.sendCode: ${result._}, полный результат: ${JSON.stringify(result)}`);
         const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
           ErrorCode.INTERNAL_SERVER_ERROR,
-          'Failed to send code',
+          `Failed to send code: unexpected result type ${result._}`,
         );
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
 
       const phoneCodeHash = result.phone_code_hash;
-      const expiresAt = new Date(Date.now() + (result.timeout || 60) * 1000);
+      const timeout = result.timeout || 60;
+      const expiresAt = new Date(Date.now() + timeout * 1000);
+      this.logger.log(`[requestPhoneCode] Код отправлен успешно, phoneCodeHash: ${phoneCodeHash.substring(0, 20)}..., timeout: ${timeout} секунд`);
 
       // КРИТИЧНО: Нормализуем номер телефона для единообразного хранения
       const normalizedPhone = this.usersService.normalizePhone(phoneNumber);

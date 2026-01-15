@@ -23,6 +23,7 @@ export class TelegramHeartbeatService implements OnModuleInit, OnModuleDestroy {
   private heartbeatStatuses: Map<string, HeartbeatStatus> = new Map();
 
   constructor(
+    @Inject(forwardRef(() => TelegramUserClientService))
     private readonly telegramUserClientService: TelegramUserClientService,
     private readonly configService: ConfigService,
     private readonly schedulerRegistry: SchedulerRegistry,
