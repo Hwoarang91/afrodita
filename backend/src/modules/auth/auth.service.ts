@@ -595,7 +595,7 @@ export class AuthService implements OnModuleDestroy {
           settings: {
             _: 'codeSettings',
             allow_appless: true, // Принудительно запрашиваем SMS, а не код в приложении
-            allow_flashcall: false, // Отключаем flash call
+            // allow_flashcall не указываем - Telegram API не принимает false
           },
         } as any);
         this.logger.log(`[requestPhoneCode] auth.sendCode успешно выполнен, результат: ${result._}, phoneCodeHash: ${result.phone_code_hash ? result.phone_code_hash.substring(0, 20) + '...' : 'N/A'}`);
