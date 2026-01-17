@@ -946,12 +946,29 @@ export class AuthService implements OnModuleDestroy {
       };
     } catch (error: any) {
       this.logger.error(`Error generating QR code: ${error.message}`, error.stack);
+      
+      // Если ошибка уже является HttpException, пробрасываем её как есть
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      // Если отсутствуют API credentials, возвращаем более информативную ошибку
+      if (error.message?.includes('TELEGRAM_API_ID') || error.message?.includes('TELEGRAM_API_HASH')) {
+        const errorResponse = buildErrorResponse(
+          HttpStatus.BAD_REQUEST,
+          ErrorCode.INTERNAL_SERVER_ERROR,
+          error.message || 'Telegram API credentials not configured',
+        );
+        throw new HttpException(errorResponse, HttpStatus.BAD_REQUEST);
+      }
+      
+      // Для других ошибок возвращаем 500 с информативным сообщением
       const errorResponse = buildErrorResponse(
-        HttpStatus.UNAUTHORIZED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
         ErrorCode.INTERNAL_SERVER_ERROR,
-        'Failed to generate QR code',
+        `Failed to generate QR code: ${error.message || 'Unknown error'}`,
       );
-      throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
+      throw new HttpException(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

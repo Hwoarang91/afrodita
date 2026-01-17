@@ -536,13 +536,22 @@ export class AuthController {
     description: 'QR-код успешно сгенерирован',
     type: TelegramQrGenerateResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Ошибка генерации QR-кода' })
-  async generateQrCode(): Promise<TelegramQrGenerateResponseDto> {
-    this.logger.debug('Запрос на генерацию QR-кода');
+  @ApiResponse({ status: 400, description: 'Ошибка конфигурации (отсутствуют API credentials)' })
+  @ApiResponse({ status: 500, description: 'Внутренняя ошибка сервера' })
+  async generateQrCode(@Request() req): Promise<TelegramQrGenerateResponseDto> {
+    this.logger.log('Запрос на генерацию QR-кода', {
+      url: req.url,
+      method: req.method,
+      hasUser: !!req.user,
+      userId: req.user?.sub || req.user?.id,
+    });
     try {
-      return await this.authService.generateQrCode();
+      const result = await this.authService.generateQrCode();
+      this.logger.log('QR-код успешно сгенерирован', { tokenId: result.tokenId });
+      return result;
     } catch (error: any) {
-      this.logger.error(`Ошибка генерации QR-кода: ${error.message}`);
+      this.logger.error(`Ошибка генерации QR-кода: ${error.message}`, error.stack);
+      // Пробрасываем ошибку как есть (authService уже создал правильный HttpException)
       throw error;
     }
   }
