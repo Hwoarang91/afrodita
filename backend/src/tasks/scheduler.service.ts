@@ -204,13 +204,14 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
     const yesterdayEnd = new Date(yesterday);
     yesterdayEnd.setHours(23, 59, 59, 999);
 
-    const appointments = await this.appointmentRepository.find({
-      where: {
-        startTime: Between(yesterday, yesterdayEnd),
-        status: AppointmentStatus.COMPLETED,
-      },
-      relations: ['client', 'master', 'service'],
-    });
+    const appointments = await this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.client', 'client')
+      .leftJoinAndSelect('appointment.master', 'master')
+      .leftJoinAndSelect('appointment.service', 'service')
+      .where('appointment.startTime BETWEEN :yesterday AND :yesterdayEnd', { yesterday, yesterdayEnd })
+      .andWhere('appointment.status = :status', { status: AppointmentStatus.COMPLETED })
+      .getMany();
 
     for (const appointment of appointments) {
       // Проверяем, не отправляли ли уже запрос
@@ -313,13 +314,13 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
   // Начисление бонусов после завершенной записи
   @Cron(CronExpression.EVERY_HOUR)
   async processBonusPoints() {
-    const completedAppointments = await this.appointmentRepository.find({
-      where: {
-        status: AppointmentStatus.COMPLETED,
-        bonusPointsEarned: 0,
-      },
-      relations: ['service', 'client'],
-    });
+    const completedAppointments = await this.appointmentRepository
+      .createQueryBuilder('appointment')
+      .leftJoinAndSelect('appointment.client', 'client')
+      .leftJoinAndSelect('appointment.service', 'service')
+      .where('appointment.status = :status', { status: AppointmentStatus.COMPLETED })
+      .andWhere('appointment.bonusPointsEarned = :bonusPointsEarned', { bonusPointsEarned: 0 })
+      .getMany();
 
     for (const appointment of completedAppointments) {
       const service = await this.serviceRepository.findOne({
