@@ -83,13 +83,14 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
       const maxHoursAhead = 48;
       const maxTimeFromNow = new Date(now.getTime() + maxHoursAhead * 60 * 60 * 1000);
       
-      const appointments = await this.appointmentRepository.find({
-        where: {
-          startTime: MoreThanOrEqual(now),
-          status: AppointmentStatus.CONFIRMED,
-        },
-        relations: ['client', 'master', 'service'],
-      });
+      const appointments = await this.appointmentRepository
+        .createQueryBuilder('appointment')
+        .leftJoinAndSelect('appointment.client', 'client')
+        .leftJoinAndSelect('appointment.master', 'master')
+        .leftJoinAndSelect('appointment.service', 'service')
+        .where('appointment.startTime >= :now', { now })
+        .andWhere('appointment.status = :status', { status: AppointmentStatus.CONFIRMED })
+        .getMany();
 
       // Фильтруем записи, которые начинаются не позже maxTimeFromNow
       const filteredAppointments = appointments.filter(apt => {
