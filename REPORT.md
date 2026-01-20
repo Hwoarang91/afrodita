@@ -95,8 +95,14 @@ docker rm n8n
 **Выполнено:**
 - ✅ Исправлена циклическая зависимость между SettingsModule и UsersModule через forwardRef()
 - ✅ Исправлена циклическая зависимость между FinancialModule и UsersModule через forwardRef()
+- ✅ Исправлена ошибка в SchedulerService - добавлены явные имена колонок (referral_code, referred_by_user_id) в User entity
 - ✅ Backend успешно запущен на сервере после исправлений
 - ✅ Все контейнеры работают корректно (backend, admin, app, nginx, postgres, redis)
+
+**Исправление ошибки SchedulerService:**
+- ✅ Проблема: TypeORM пытался выбрать колонку referralCode через неправильный алиас
+- ✅ Решение: Добавлены явные имена колонок в декоратор @Column для referralCode и referredByUserId
+- ✅ Файлы изменены: `backend/src/entities/user.entity.ts` - добавлены name: 'referral_code' и name: 'referred_by_user_id'
 
 ✅ **Реализация реферальной системы "Приведи друга" с бонусами (18.01.2026):**
 
