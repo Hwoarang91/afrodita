@@ -244,6 +244,54 @@ export class SettingsController {
     }
   }
 
+  @Get('bonuses')
+  @ApiOperation({ summary: 'Получить настройки бонусов' })
+  async getBonusSettings() {
+    const settings = await this.settingsService.getBonusSettings();
+    // Маппим pointsForReferral на referralBonus для frontend
+    return {
+      value: {
+        enabled: settings.enabled,
+        pointsPerRuble: settings.pointsPerRuble,
+        pointsForRegistration: settings.pointsForRegistration,
+        referralBonus: settings.pointsForReferral || 50, // Маппинг на frontend поле
+      },
+    };
+  }
+
+  @Put('bonuses')
+  @ApiOperation({ summary: 'Установить настройки бонусов' })
+  async setBonusSettings(@Request() req, @Body() body: { value: { enabled: boolean; pointsPerRuble: number; pointsForRegistration: number; referralBonus: number } }) {
+    // Маппим referralBonus из запроса на pointsForReferral в сервисе
+    const result = await this.settingsService.setBonusSettings({
+      enabled: body.value.enabled,
+      pointsPerRuble: body.value.pointsPerRuble,
+      pointsForRegistration: body.value.pointsForRegistration,
+      pointsForReferral: body.value.referralBonus, // Маппинг на backend поле
+    });
+    
+    await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+      entityType: 'settings',
+      entityId: 'bonuses',
+      description: 'Обновлены настройки бонусной системы',
+      changes: { value: body.value },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+    
+    // Маппим pointsForReferral обратно на referralBonus для ответа
+    const response = result.value;
+    return {
+      success: true,
+      value: {
+        enabled: response.enabled,
+        pointsPerRuble: response.pointsPerRuble,
+        pointsForRegistration: response.pointsForRegistration,
+        referralBonus: response.pointsForReferral || 50, // Маппинг на frontend поле
+      },
+    };
+  }
+
   @Put('telegram-admin-user')
   @ApiOperation({ summary: 'Установить администратора Telegram бота и веб-приложения' })
   async setTelegramAdminUser(@Request() req, @Body() body: { userId: string | null }) {

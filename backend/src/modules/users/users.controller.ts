@@ -1,8 +1,11 @@
-import { Controller, Get, Post, Put, Delete, UseGuards, Request, Body, Query, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, UseGuards, Request, Body, Query, Param, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
+import { ReferralService } from './referral.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../entities/user.entity';
 import { AuditAction } from '../../entities/audit-log.entity';
 
@@ -13,6 +16,7 @@ import { AuditAction } from '../../entities/audit-log.entity';
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
+    private readonly referralService: ReferralService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -235,6 +239,29 @@ export class UsersController {
     });
     
     return { success: true };
+  }
+
+  @Get('me/referral')
+  @ApiOperation({ summary: 'Получение реферального кода текущего пользователя' })
+  async getReferralCode(@Request() req: any) {
+    const userId = req.user.sub;
+    const referralCode = await this.referralService.getOrGenerateReferralCode(userId);
+    return { referralCode };
+  }
+
+  @Get('me/referral/stats')
+  @ApiOperation({ summary: 'Получение статистики по рефералам текущего пользователя' })
+  async getReferralStats(@Request() req: any) {
+    const userId = req.user.sub;
+    return await this.referralService.getReferralStats(userId);
+  }
+
+  @Get(':id/referral/stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Получение статистики по рефералам пользователя (только для админов)' })
+  async getClientReferralStats(@Param('id') id: string) {
+    return await this.referralService.getReferralStats(id);
   }
 }
 

@@ -49,6 +49,7 @@ interface Settings {
     enabled: boolean;
     pointsPerRuble: number;
     pointsForRegistration: number;
+    referralBonus: number;
   };
   firstVisitDiscount: {
     enabled: boolean;
@@ -105,6 +106,7 @@ export default function SettingsPage() {
         enabled: true,
         pointsPerRuble: 0.1,
         pointsForRegistration: 100,
+        referralBonus: 50,
       },
       firstVisitDiscount: {
         enabled: false,
@@ -121,12 +123,13 @@ export default function SettingsPage() {
         const defaultSettings = getDefaultSettings();
         
         // Загружаем настройки с сервера
-        const [settingsData, timezoneData, reminderIntervalsData, firstVisitDiscountData, telegramAdminData] = await Promise.all([
+        const [settingsData, timezoneData, reminderIntervalsData, firstVisitDiscountData, telegramAdminData, bonusData] = await Promise.all([
           apiClient.get('/settings').catch(() => ({ data: {} })),
           apiClient.get('/settings/timezone').catch(() => ({ data: { value: 'Europe/Moscow' } })),
           apiClient.get('/settings/reminder-intervals').catch(() => ({ data: { value: defaultSettings.notifications.reminderIntervals } })),
           apiClient.get('/settings/first-visit-discount').catch(() => ({ data: { value: defaultSettings.firstVisitDiscount } })),
           apiClient.get('/settings/telegram-admin-user').catch(() => ({ data: { value: null } })),
+          apiClient.get('/settings/bonuses').catch(() => ({ data: { value: defaultSettings.bonuses } })),
         ]);
         
         // Объединяем настройки из API с дефолтными значениями
@@ -143,6 +146,7 @@ export default function SettingsPage() {
             reminderIntervals: reminderIntervalsData.data.value || defaultSettings.notifications.reminderIntervals,
           },
           firstVisitDiscount: firstVisitDiscountData.data.value || defaultSettings.firstVisitDiscount,
+          bonuses: bonusData.data.value || defaultSettings.bonuses,
         };
         return mergedSettings;
       } catch (error) {
@@ -217,6 +221,13 @@ export default function SettingsPage() {
         if (data.firstVisitDiscount) {
           await apiClient.put('/settings/first-visit-discount', {
             value: data.firstVisitDiscount,
+          });
+        }
+        
+        // Сохраняем настройки бонусов
+        if (data.bonuses) {
+          await apiClient.put('/settings/bonuses', {
+            value: data.bonuses,
           });
         }
         
@@ -708,6 +719,29 @@ export default function SettingsPage() {
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         Сколько бонусных баллов начисляется при регистрации
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">
+                        Баллов за приглашение друга
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.bonuses.referralBonus}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            bonuses: {
+                              ...formData.bonuses,
+                              referralBonus: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-input rounded-lg bg-background"
+                        min="0"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Сколько бонусных баллов начисляется за приглашение друга (и новому пользователю, и пригласившему)
                       </p>
                     </div>
                   </div>

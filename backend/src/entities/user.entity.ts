@@ -58,6 +58,14 @@ export class User {
   @Column({ type: 'int', default: 0 })
   bonusPoints!: number;
 
+  @Column({ unique: true, nullable: true })
+  @Index()
+  referralCode!: string; // Уникальный реферальный код пользователя
+
+  @Column({ nullable: true })
+  @Index()
+  referredByUserId!: string; // ID пользователя, который пригласил этого пользователя
+
   @Column({ type: 'boolean', default: true })
   isActive!: boolean;
 

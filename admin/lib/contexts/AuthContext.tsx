@@ -247,8 +247,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (autoLogin) {
         }
       } else {
-        // Если токен недействителен и включен autoLogin, пытаемся обновить через refresh
-        if (autoLogin && response.status === 401) {
+        // Если ответ 401 (неавторизован), это нормально - пользователь не залогинен
+        // Не логируем ошибку для 401, так как это ожидаемое поведение
+        if (response.status === 401) {
+          // Если токен недействителен и включен autoLogin, пытаемся обновить через refresh
+          if (autoLogin) {
           try {
             // Используем route handler для refresh, который работает с httpOnly cookies
             const refreshResponse = await fetch('/api/auth/refresh', {
@@ -282,11 +285,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 return;
               }
             }
-          } catch (refreshError) {
+            } catch (refreshError) {
+              // Тихая обработка ошибки refresh - пользователь просто не авторизован
+            }
           }
-        }
 
-        // Если токен недействителен, очищаем состояние
+        // Если токен недействителен, очищаем состояние (тихо, без ошибок)
         setAuthState({
           user: null,
           isAuthenticated: false,
@@ -295,7 +299,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         });
       }
     } catch (error) {
-      console.error('Auth check error:', error);
+      // Тихая обработка ошибок при проверке аутентификации
+      // 401 ошибки являются нормальными для неавторизованных пользователей
       setAuthState({
         user: null,
         isAuthenticated: false,

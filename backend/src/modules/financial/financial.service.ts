@@ -49,17 +49,21 @@ export class FinancialService {
 
   async awardBonusPoints(
     userId: string,
-    appointmentId: string,
+    appointmentId: string | null,
     points: number,
+    description?: string,
   ): Promise<Transaction> {
     await this.usersService.updateBonusPoints(userId, points);
+
+    const transactionDescription = description || 
+      (appointmentId ? `Bonus points earned for appointment ${appointmentId}` : 'Bonus points earned');
 
     const transaction = this.transactionRepository.create({
       userId,
       appointmentId,
       type: TransactionType.BONUS_EARNED,
       amount: points,
-      description: `Bonus points earned for appointment ${appointmentId}`,
+      description: transactionDescription,
     });
 
     return await this.transactionRepository.save(transaction);

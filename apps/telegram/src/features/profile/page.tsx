@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { appointmentsApi } from '../../shared/api/appointments';
+import { usersApi } from '../../shared/api/users';
 import { ProfileSkeleton } from '../../shared/components/SkeletonLoader';
 import EmptyState from '../../shared/components/EmptyState';
 import { format } from 'date-fns';
@@ -22,6 +23,11 @@ export default function Profile() {
   const { data: appointments, isLoading } = useQuery({
     queryKey: ['appointments', 'upcoming'],
     queryFn: () => appointmentsApi.getAll('confirmed'),
+  });
+
+  const { data: referralStats } = useQuery({
+    queryKey: ['referral', 'stats'],
+    queryFn: () => usersApi.getReferralStats(),
   });
 
   const cancelMutation = useMutation({
@@ -73,6 +79,56 @@ export default function Profile() {
             </p>
           </div>
         </div>
+
+        {referralStats && (
+          <div className="bg-card rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6 border border-border">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-3 sm:mb-4">👥 Пригласи друга</h2>
+            <div className="space-y-3 sm:space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground mb-2">Реферальный код:</p>
+                <div className="flex items-center gap-2">
+                  <code className="bg-secondary px-3 py-2 rounded-lg text-sm sm:text-base font-mono text-foreground border border-border">
+                    {referralStats.referralCode}
+                  </code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(referralStats.referralCode);
+                      hapticFeedback.notificationOccurred('success');
+                      toast.success('Код скопирован!');
+                    }}
+                    className="bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-semibold hover:bg-primary/90 transition"
+                  >
+                    Копировать
+                  </button>
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-sm font-semibold text-foreground mb-2">Приглашено друзей:</p>
+                <p className="text-lg sm:text-xl font-bold text-primary">{referralStats.totalReferrals}</p>
+              </div>
+
+              {referralStats.referrals.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-foreground mb-2">Последние приглашенные:</p>
+                  <div className="space-y-1">
+                    {referralStats.referrals.slice(0, 3).map((ref) => (
+                      <div key={ref.id} className="text-sm text-muted-foreground">
+                        {ref.firstName} {ref.lastName} - {format(new Date(ref.createdAt), 'd MMM yyyy', { locale: ru })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs sm:text-sm text-muted-foreground mb-2">
+                  💡 Поделитесь своим реферальным кодом с друзьями. При регистрации по вашему коду вы оба получите бонусы!
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="bg-card rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6 border border-border">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-2">

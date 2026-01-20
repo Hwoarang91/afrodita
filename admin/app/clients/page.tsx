@@ -234,8 +234,8 @@ export default function ClientsPage() {
             ) : (
             <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
               <span className="text-primary font-semibold">
-                {client.firstName[0]}
-                {client.lastName?.[0]}
+                {(client.firstName || '')[0] || '?'}
+                {(client.lastName || '')[0] || ''}
               </span>
             </div>
             )}
@@ -422,8 +422,8 @@ export default function ClientsPage() {
                     <Link href={`/clients/${client.id}`} className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
                         <span className="text-primary font-semibold text-sm">
-                          {client.firstName[0]}
-                          {client.lastName?.[0]}
+                          {(client.firstName || '')[0] || '?'}
+                          {(client.lastName || '')[0] || ''}
                         </span>
                       </div>
                       <div>

@@ -10,6 +10,7 @@ import { Appointment, AppointmentStatus } from '../../entities/appointment.entit
 import { TelegramChat, ChatType } from '../../entities/telegram-chat.entity';
 import { GroupSettings } from '../../entities/group-settings.entity';
 import { UsersService } from '../users/users.service';
+import { ReferralService } from '../users/referral.service';
 import { ServicesService } from '../services/services.service';
 import { MastersService } from '../masters/masters.service';
 import { AppointmentsService } from '../appointments/appointments.service';
@@ -59,6 +60,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(GroupSettings)
     private groupSettingsRepository: Repository<GroupSettings>,
     private usersService: UsersService,
+    private referralService: ReferralService,
     private servicesService: ServicesService,
     private mastersService: MastersService,
     @Inject(forwardRef(() => AppointmentsService))
@@ -94,10 +96,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       // Устанавливаем команды бота через Bot API (после регистрации обработчиков)
       try {
         await this.bot.telegram.setMyCommands([
-          { command: 'start', description: 'Главное меню' },
-          { command: 'help', description: 'Справка по командам' },
-          { command: 'book', description: 'Записаться на услугу' },
-          { command: 'appointments', description: 'Мои записи' },
+        { command: 'start', description: 'Главное меню' },
+        { command: 'help', description: 'Справка по командам' },
+        { command: 'book', description: 'Записаться на услугу' },
+        { command: 'appointments', description: 'Мои записи' },
+        { command: 'referral', description: 'Пригласить друга' },
           { command: 'services', description: 'Список услуг' },
           { command: 'profile', description: 'Мой профиль' },
           { command: 'bonus', description: 'Баланс и история бонусов' },
@@ -560,6 +563,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       // Ищем пользователя по номеру телефона
       const userByPhone = await this.usersService.findByPhone(normalizedPhone);
       
+      const isNewUser = !user && !userByPhone;
+
       if (!user && !userByPhone) {
         // Создаем нового пользователя
         user = this.userRepository.create({
@@ -606,6 +611,30 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       await this.userRepository.save(user);
 
+      // Обрабатываем реферальную регистрацию для нового пользователя
+      if (isNewUser) {
+        try {
+          const bonusInfo = await this.referralService.processReferralRegistration(user.id);
+          this.logger.log(`Обработана регистрация через контакт для пользователя ${user.id}: ${JSON.stringify(bonusInfo)}`);
+          
+          // Обновляем информацию о пользователе после начисления бонусов
+          user = await this.usersService.findById(user.id);
+          
+          // Уведомляем пользователя о начисленных бонусах
+          if (bonusInfo.registrationBonus > 0) {
+            setTimeout(async () => {
+              try {
+                await ctx.reply(`🎉 Добро пожаловать!\n\n✅ Вам начислено ${bonusInfo.registrationBonus} бонусов за регистрацию!\n\nВаш баланс бонусов: ${user.bonusPoints} баллов.`);
+              } catch (err) {
+                this.logger.error(`Ошибка отправки сообщения о бонусах: ${err}`);
+              }
+            }, 2000);
+          }
+        } catch (error: any) {
+          this.logger.error(`Ошибка обработки регистрации через контакт: ${error.message}`);
+        }
+      }
+
       // Отправляем приветственное сообщение с клавиатурой
       const keyboard = Markup.keyboard([
         [Markup.button.text('📅 Записаться'), Markup.button.text('📋 Мои записи')],
@@ -634,6 +663,17 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       const telegramId = ctx.from.id.toString();
       let user = await this.usersService.findByTelegramId(telegramId);
 
+      // Извлекаем реферальный код из параметра команды /start
+      let referralCode: string | undefined;
+      const commandText = ctx.message.text || '';
+      const match = commandText.match(/^\/start\s+(\w+)$/);
+      if (match && match[1]) {
+        referralCode = match[1].toUpperCase();
+        this.logger.debug(`Обнаружен реферальный код: ${referralCode}`);
+      }
+
+      const isNewUser = !user;
+
       if (!user) {
         // Создание нового пользователя
         this.logger.debug(`Создание нового пользователя ${telegramId}`);
@@ -645,6 +685,36 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           role: 'client' as any,
         });
         await this.userRepository.save(user);
+
+        // Обрабатываем реферальную регистрацию для нового пользователя
+        if (isNewUser) {
+          try {
+            const bonusInfo = await this.referralService.processReferralRegistration(user.id, referralCode);
+            this.logger.log(`Обработана реферальная регистрация для пользователя ${user.id}: ${JSON.stringify(bonusInfo)}`);
+            
+            // Обновляем информацию о пользователе после начисления бонусов
+            user = await this.usersService.findById(user.id);
+            
+            // Можно отправить уведомление пользователю о начисленных бонусах
+            if (bonusInfo.registrationBonus > 0 || bonusInfo.referralBonus || bonusInfo.referrerBonus) {
+              const bonusMessage = `🎉 Добро пожаловать!\n\n` +
+                (bonusInfo.registrationBonus > 0 ? `✅ Вам начислено ${bonusInfo.registrationBonus} бонусов за регистрацию!\n` : '') +
+                (bonusInfo.referralBonus ? `✅ Вам начислено ${bonusInfo.referralBonus} бонусов за регистрацию по реферальному коду!\n` : '') +
+                `\nВаш баланс бонусов: ${user.bonusPoints} баллов.`;
+              
+              // Отправим это сообщение после основного приветствия
+              setTimeout(async () => {
+                try {
+                  await ctx.reply(bonusMessage);
+                } catch (err) {
+                  this.logger.error(`Ошибка отправки сообщения о бонусах: ${err}`);
+                }
+              }, 2000);
+            }
+          } catch (error: any) {
+            this.logger.error(`Ошибка обработки реферальной регистрации: ${error.message}`);
+          }
+        }
       }
 
       // Определяем контекст чата
@@ -750,6 +820,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 /appointments - Мои записи
 /services - Список услуг
 /profile - Мой профиль
+/bonus - Баланс бонусов
+/referral - Пригласить друга
 /reschedule - Перенести запись
 /cancel - Отменить запись
       `;
@@ -807,6 +879,16 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       await this.showBonusInfo(ctx);
     });
 
+    // Команда /referral - реферальная программа и статистика
+    this.bot.command('referral', async (ctx) => {
+      await this.showReferralInfo(ctx);
+    });
+
+    // Команда /invite - пригласить друга (аналог /referral)
+    this.bot.command('invite', async (ctx) => {
+      await this.showReferralInfo(ctx);
+    });
+
     // Команда /cancel - отмена записи или отмена текущей операции
     this.bot.command('cancel', async (ctx) => {
       const session = this.getSession(ctx.from.id);
@@ -859,6 +941,22 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         return;
       }
       await this.showProfile(ctx);
+    });
+
+    this.bot.hears('🎁 Бонусы', async (ctx) => {
+      if (this.isGroupChat(ctx.chat)) {
+        await this.sendPrivateReply(ctx, '❌ Эта команда доступна только в личном чате. Используйте кнопку "Перейти в личный чат" или напишите мне в личные сообщения.');
+        return;
+      }
+      await this.showBonusInfo(ctx);
+    });
+
+    this.bot.hears('👥 Пригласить друга', async (ctx) => {
+      if (this.isGroupChat(ctx.chat)) {
+        await this.sendPrivateReply(ctx, '❌ Эта команда доступна только в личном чате. Используйте кнопку "Перейти в личный чат" или напишите мне в личные сообщения.');
+        return;
+      }
+      await this.showReferralInfo(ctx);
     });
 
     this.bot.hears('ℹ️ Помощь', async (ctx) => {
@@ -1473,6 +1571,13 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
               await this.showBonusHistory(ctx);
             } else if (params[0] === 'info') {
               await this.showBonusInfo(ctx);
+            }
+            break;
+          case 'referral':
+            if (params[0] === 'info') {
+              await this.showReferralInfo(ctx);
+            } else if (params[0] === 'stats') {
+              await this.showReferralStats(ctx);
             }
             break;
           case 'profile':
@@ -2809,6 +2914,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       [Markup.button.callback('📅 Мои записи', 'appointments:list')],
       [Markup.button.callback('📅 Новая запись', 'service:list')],
       [Markup.button.callback('🎁 История бонусов', 'bonus:history')],
+      [Markup.button.callback('👥 Пригласить друга', 'referral:info')],
     ]);
 
     await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
@@ -2988,6 +3094,115 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     ]);
 
     await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
+  }
+
+  /**
+   * Показать информацию о реферальной программе
+   */
+  private async showReferralInfo(ctx: Context) {
+    const telegramId = ctx.from!.id.toString();
+    const user = await this.usersService.findByTelegramId(telegramId);
+
+    if (!user) {
+      await ctx.reply('Пользователь не найден. Используйте /start');
+      return;
+    }
+
+    try {
+      const stats = await this.referralService.getReferralStats(user.id);
+      const botInfo = await this.bot.telegram.getMe();
+      const botUsername = botInfo.username;
+      const referralLink = `https://t.me/${botUsername}?start=${stats.referralCode}`;
+
+      const bonusSettings = await this.settingsService.getBonusSettings();
+      
+      let message = `👥 *Пригласи друга и получи бонусы!*\n\n`;
+      message += `📋 *Ваш реферальный код:* \`${stats.referralCode}\`\n\n`;
+      message += `🔗 *Ваша реферальная ссылка:*\n${referralLink}\n\n`;
+      
+      if (bonusSettings.enabled && bonusSettings.pointsForReferral > 0) {
+        message += `💰 *Что вы получите:*\n`;
+        message += `• Вы: ${bonusSettings.pointsForReferral} бонусов за каждого приглашенного друга\n`;
+        message += `• Ваш друг: ${bonusSettings.pointsForRegistration + bonusSettings.pointsForReferral} бонусов (${bonusSettings.pointsForRegistration} за регистрацию + ${bonusSettings.pointsForReferral} за ваш код)\n\n`;
+      }
+      
+      message += `📊 *Ваша статистика:*\n`;
+      message += `• Всего приглашено друзей: ${stats.totalReferrals}\n`;
+      
+      if (stats.referrals.length > 0) {
+        message += `\n👥 *Последние приглашенные друзья:*\n`;
+        stats.referrals.slice(0, 5).forEach((ref, index) => {
+          const date = new Date(ref.createdAt);
+          const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+          message += `${index + 1}. ${ref.firstName} ${ref.lastName} (${dateStr})\n`;
+        });
+        if (stats.referrals.length > 5) {
+          message += `\n... и еще ${stats.referrals.length - 5} друзей`;
+        }
+      } else {
+        message += `\n💡 *Совет:* Поделитесь своей реферальной ссылкой с друзьями!`;
+      }
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📊 Подробная статистика', 'referral:stats')],
+        [Markup.button.url('📤 Поделиться ссылкой', `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=Присоединяйся%20к%20салону%20красоты%20Афродита!`)],
+        [Markup.button.callback('◀️ Назад в профиль', 'appointments:list')],
+      ]);
+
+      await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
+    } catch (error: any) {
+      this.logger.error(`Ошибка при показе реферальной информации: ${error.message}`);
+      await ctx.reply('Произошла ошибка при загрузке реферальной информации. Попробуйте позже.');
+    }
+  }
+
+  /**
+   * Показать подробную статистику по рефералам
+   */
+  private async showReferralStats(ctx: Context) {
+    const telegramId = ctx.from!.id.toString();
+    const user = await this.usersService.findByTelegramId(telegramId);
+
+    if (!user) {
+      await ctx.reply('Пользователь не найден. Используйте /start');
+      return;
+    }
+
+    try {
+      const stats = await this.referralService.getReferralStats(user.id);
+      const bonusSettings = await this.settingsService.getBonusSettings();
+      
+      let message = `📊 *Подробная статистика по рефералам*\n\n`;
+      message += `📋 *Реферальный код:* \`${stats.referralCode}\`\n`;
+      message += `👥 *Всего приглашено друзей:* ${stats.totalReferrals}\n`;
+      
+      if (bonusSettings.enabled && bonusSettings.pointsForReferral > 0) {
+        const totalBonus = stats.totalReferrals * bonusSettings.pointsForReferral;
+        message += `💰 *Получено бонусов:* ${totalBonus} баллов\n`;
+      }
+      
+      if (stats.referrals.length > 0) {
+        message += `\n👥 *Все приглашенные друзья:*\n\n`;
+        stats.referrals.forEach((ref, index) => {
+          const date = new Date(ref.createdAt);
+          const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+          message += `${index + 1}. ${ref.firstName} ${ref.lastName}\n`;
+          message += `   📅 Приглашен: ${dateStr}\n\n`;
+        });
+      } else {
+        message += `\n💡 У вас пока нет приглашенных друзей.\n`;
+        message += `Поделитесь своей реферальной ссылкой, чтобы начать зарабатывать бонусы!`;
+      }
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('◀️ Назад', 'referral:info')],
+      ]);
+
+      await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
+    } catch (error: any) {
+      this.logger.error(`Ошибка при показе статистики рефералов: ${error.message}`);
+      await ctx.reply('Произошла ошибка при загрузке статистики. Попробуйте позже.');
+    }
   }
 
   // Вспомогательные методы
@@ -3912,6 +4127,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     return Markup.keyboard([
       [Markup.button.text('📅 Записаться'), Markup.button.text('📋 Мои записи')],
       [Markup.button.text('💆 Услуги'), Markup.button.text('👤 Профиль')],
+      [Markup.button.text('🎁 Бонусы'), Markup.button.text('👥 Пригласить друга')],
       [Markup.button.text('ℹ️ Помощь')],
     ])
       .resize()

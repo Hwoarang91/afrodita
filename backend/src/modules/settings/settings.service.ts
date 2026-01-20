@@ -111,5 +111,37 @@ export class SettingsService {
   async setTelegramAdminUserId(userId: string | null): Promise<Settings> {
     return await this.set('telegramAdminUserId', userId);
   }
+
+  async getBonusSettings(): Promise<{
+    enabled: boolean;
+    pointsPerRuble: number;
+    pointsForRegistration: number;
+    pointsForReferral: number; // Бонусы за приглашение друга
+  }> {
+    const settings = await this.settingsRepository.findOne({
+      where: { key: 'bonuses' },
+    });
+
+    if (settings) {
+      return settings.value;
+    }
+
+    // Дефолтные значения
+    return {
+      enabled: true,
+      pointsPerRuble: 0.1,
+      pointsForRegistration: 100,
+      pointsForReferral: 200, // По умолчанию 200 бонусов за приглашение друга
+    };
+  }
+
+  async setBonusSettings(settings: {
+    enabled: boolean;
+    pointsPerRuble: number;
+    pointsForRegistration: number;
+    pointsForReferral: number;
+  }): Promise<Settings> {
+    return await this.set('bonuses', settings);
+  }
 }
 

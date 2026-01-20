@@ -124,6 +124,31 @@ export default function ClientDetailPage() {
     },
   });
 
+  const { data: referralStats } = useQuery({
+    queryKey: ['client-referral-stats', clientId],
+    queryFn: async () => {
+      try {
+        const { data } = await apiClient.get(`/users/${clientId}/referral/stats`);
+        return data;
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  const { data: transactions } = useQuery({
+    queryKey: ['client-transactions', clientId],
+    queryFn: async () => {
+      try {
+        // Получаем транзакции клиента через финансовый сервис для админа
+        const { data } = await apiClient.get(`/financial/users/${clientId}/transactions`);
+        return data || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
   const sendMessageMutation = useMutation({
     mutationFn: async (message: string) => {
       if (!client?.telegramId) {
@@ -696,6 +721,129 @@ export default function ClientDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Карточка реферальной программы */}
+      {referralStats && (
+        <div className="bg-card rounded-lg shadow-lg p-6 mb-6 transition-colors">
+          <div className="flex items-center gap-2 mb-4">
+            <User className="w-6 h-6 text-primary" />
+            <h2 className="text-xl font-semibold text-foreground">Реферальная программа</h2>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-muted/50 rounded-lg p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Реферальный код:</p>
+                  <p className="text-lg font-mono font-semibold text-foreground">{referralStats.referralCode}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Всего приглашено:</p>
+                  <p className="text-lg font-semibold text-foreground">{referralStats.totalReferrals}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Бонусы клиента:</p>
+                  <p className="text-lg font-semibold text-primary">{client?.bonusPoints || 0} баллов</p>
+                </div>
+              </div>
+            </div>
+
+            {referralStats.referrals && referralStats.referrals.length > 0 ? (
+              <div>
+                <h3 className="text-lg font-semibold text-foreground mb-3">Приглашенные друзья:</h3>
+                <div className="space-y-3">
+                  {referralStats.referrals.map((ref: any) => {
+                    // Проверяем, прошла ли окончательная регистрация (есть телефон - значит прошел полную регистрацию)
+                    const hasCompletedRegistration = !!ref.phone;
+                    
+                    // Находим транзакции бонусов за этого реферала
+                    // Ищем транзакции, которые:
+                    // 1. Имеют тип BONUS_EARNED
+                    // 2. Созданы в день регистрации реферала или позже
+                    // 3. Содержат в описании информацию о реферале или "приглашение друга"
+                    const refRegistrationDate = new Date(ref.createdAt);
+                    const refDateStr = refRegistrationDate.toISOString().split('T')[0];
+                    
+                    const bonusForThisReferral = transactions?.find((t: any) => {
+                      // Проверяем тип транзакции (может быть enum или строка)
+                      if (t.type !== 'BONUS_EARNED' && t.type !== 'bonus_earned') return false;
+                      const tDateStr = new Date(t.createdAt).toISOString().split('T')[0];
+                      // Транзакция должна быть создана в день регистрации реферала или позже
+                      if (tDateStr < refDateStr) return false;
+                      // Описание должно содержать информацию о реферале или "приглашение друга"
+                      const description = (t.description || '').toLowerCase();
+                      const refNameLower = (ref.firstName || '').toLowerCase();
+                      return description.includes('приглашение друга') || 
+                             description.includes('referral') ||
+                             (refNameLower && description.includes(refNameLower));
+                    });
+
+                    return (
+                      <div
+                        key={ref.id}
+                        className="border border-border rounded-lg p-4 hover:bg-accent/50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Link
+                                href={`/clients/${ref.id}`}
+                                className="font-semibold text-foreground hover:text-primary transition-colors"
+                              >
+                                {ref.firstName} {ref.lastName}
+                              </Link>
+                              {hasCompletedRegistration ? (
+                                <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded">
+                                  Зарегистрирован
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded">
+                                  Незавершена регистрация
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              Приглашен: {format(new Date(ref.createdAt), 'd MMMM yyyy, HH:mm', { locale: ru })}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {bonusForThisReferral && (
+                          <div className="mt-2 pt-2 border-t border-border">
+                            <p className="text-sm text-muted-foreground">
+                              <span className="font-medium text-foreground">Получено бонусов:</span>{' '}
+                              <span className="text-primary font-semibold">+{bonusForThisReferral.amount}</span> баллов{' '}
+                              <span className="text-muted-foreground/70">
+                                ({bonusForThisReferral.description || 'За приглашение друга'})
+                              </span>
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Начислено: {format(new Date(bonusForThisReferral.createdAt), 'd MMMM yyyy, HH:mm', { locale: ru })}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {!bonusForThisReferral && hasCompletedRegistration && (
+                          <div className="mt-2 pt-2 border-t border-border">
+                            <p className="text-xs text-muted-foreground italic">
+                              Бонусы за этого реферала еще не начислены или не найдены в транзакциях
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground border border-dashed border-border rounded-lg">
+                <User className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>Клиент еще не пригласил никого по реферальной программе</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* История взаимодействий */}
       <div className="bg-card rounded-lg shadow p-6 mb-6 transition-colors">

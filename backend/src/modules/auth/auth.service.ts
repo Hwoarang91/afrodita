@@ -10,6 +10,7 @@ import { User, UserRole } from '../../entities/user.entity';
 import { AuthLog, AuthAction } from '../../entities/auth-log.entity';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
+import { ReferralService } from '../users/referral.service';
 import { JwtAuthService } from './services/jwt.service';
 import { TelegramUserClientService } from '../telegram/services/telegram-user-client.service';
 import { TelegramSessionService } from '../telegram/services/telegram-session.service';
@@ -86,6 +87,7 @@ export class AuthService implements OnModuleDestroy {
     private jwtService: JwtService,
     private configService: ConfigService,
     private usersService: UsersService,
+    private referralService: ReferralService,
     private jwtAuthService: JwtAuthService,
     private telegramUserClientService: TelegramUserClientService,
     private telegramSessionService: TelegramSessionService,
@@ -281,6 +283,14 @@ export class AuthService implements OnModuleDestroy {
         role: UserRole.CLIENT,
       });
       await this.userRepository.save(user);
+
+      // Обрабатываем реферальную регистрацию для нового пользователя
+      try {
+        await this.referralService.processReferralRegistration(user.id);
+        this.logger.log(`Обработана регистрация через Telegram Web App для пользователя ${user.id}`);
+      } catch (error: any) {
+        this.logger.error(`Ошибка обработки реферальной регистрации: ${error.message}`);
+      }
     } else {
       // Обновление данных существующего пользователя
       // Роль сохраняется (если пользователь был назначен админом/мастером через админ-панель)
@@ -1079,6 +1089,8 @@ export class AuthService implements OnModuleDestroy {
                 });
               }
 
+              const isNewUser = !user;
+
               if (!user) {
                 // Создаем нового пользователя
                 user = this.userRepository.create({
@@ -1091,6 +1103,16 @@ export class AuthService implements OnModuleDestroy {
                   isActive: true,
                 });
                 await this.userRepository.save(user);
+
+                // Обрабатываем реферальную регистрацию для нового пользователя
+                if (isNewUser) {
+                  try {
+                    await this.referralService.processReferralRegistration(user.id);
+                    this.logger.log(`Обработана регистрация через QR-код для пользователя ${user.id}`);
+                  } catch (error: any) {
+                    this.logger.error(`Ошибка обработки реферальной регистрации через QR-код: ${error.message}`);
+                  }
+                }
               } else {
                 // Обновляем данные существующего пользователя
                 user.firstName = authUser.first_name || user.firstName;
