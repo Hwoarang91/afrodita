@@ -186,16 +186,20 @@ docker rm n8n
 
 **Статус:** Завершено ✅ (вся функциональность реферальной системы реализована и готова к использованию)
 
-✅ **Исправление ошибок в админке (18.01.2026):**
+✅ **Исправление ошибок в админке (18-19.01.2026):**
 
 **Выполнено:**
 - ✅ Исправлена ошибка "Cannot read properties of null (reading '0')" на странице admin/clients
 - ✅ Добавлена правильная обработка firstName и lastName (используется fallback на пустую строку, так как поля nullable в БД)
+- ✅ Обновлен интерфейс Client для корректной типизации (firstName и lastName могут быть null)
+- ✅ Добавлена фильтрация null значений в массиве clients
 - ✅ Исправлена ошибка при обращении к ref.firstName.toLowerCase() в секции реферальной программы
+- ✅ Исправлена синтаксическая ошибка в AuthContext.tsx (структура try-catch)
 
 **Исправления:**
-- ✅ `admin/app/clients/page.tsx` - исправлена обработка firstName[0] и lastName[0] с использованием fallback на пустую строку (поля nullable в БД, но должны отображаться корректно)
+- ✅ `admin/app/clients/page.tsx` - обновлен интерфейс Client (firstName/lastName могут быть null), исправлена обработка firstName[0] и lastName[0] с использованием fallback на пустую строку во всех местах, добавлена фильтрация null значений
 - ✅ `admin/app/clients/[id]/page.tsx` - добавлена проверка на null при обращении к ref.firstName.toLowerCase()
+- ✅ `admin/lib/contexts/AuthContext.tsx` - исправлена структура try-catch блока, убраны лишние console.error
 
 **Ошибки 401 Unauthorized:**
 - ✅ Ошибки 401 при запросах к /api/auth/me и /api/auth/refresh являются ожидаемыми, когда пользователь не авторизован

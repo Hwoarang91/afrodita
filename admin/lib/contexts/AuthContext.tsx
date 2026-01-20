@@ -252,51 +252,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (response.status === 401) {
           // Если токен недействителен и включен autoLogin, пытаемся обновить через refresh
           if (autoLogin) {
-          try {
-            // Используем route handler для refresh, который работает с httpOnly cookies
-            const refreshResponse = await fetch('/api/auth/refresh', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': csrfToken,
-              },
-              credentials: 'include',
-              body: JSON.stringify({ refreshToken: '' }), // Route handler получит из cookies
-            });
-
-            if (refreshResponse.ok) {
-              // После успешного refresh повторно проверяем аутентификацию
-              const meResponse = await fetch('/api/auth/me', {
-                method: 'GET',
+            try {
+              // Используем route handler для refresh, который работает с httpOnly cookies
+              const refreshResponse = await fetch('/api/auth/refresh', {
+                method: 'POST',
                 headers: {
+                  'Content-Type': 'application/json',
                   'X-CSRF-Token': csrfToken,
                 },
                 credentials: 'include',
+                body: JSON.stringify({ refreshToken: '' }), // Route handler получит из cookies
               });
 
-              if (meResponse.ok) {
-                const user = await meResponse.json();
-                setAuthState({
-                  user,
-                  isAuthenticated: true,
-                  isLoading: false,
-                  csrfToken,
+              if (refreshResponse.ok) {
+                // После успешного refresh повторно проверяем аутентификацию
+                const meResponse = await fetch('/api/auth/me', {
+                  method: 'GET',
+                  headers: {
+                    'X-CSRF-Token': csrfToken,
+                  },
+                  credentials: 'include',
                 });
-                return;
+
+                if (meResponse.ok) {
+                  const user = await meResponse.json();
+                  setAuthState({
+                    user,
+                    isAuthenticated: true,
+                    isLoading: false,
+                    csrfToken,
+                  });
+                  return;
+                }
               }
-            }
             } catch (refreshError) {
               // Тихая обработка ошибки refresh - пользователь просто не авторизован
             }
           }
 
-        // Если токен недействителен, очищаем состояние (тихо, без ошибок)
-        setAuthState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          csrfToken: null,
-        });
+          // Если токен недействителен, очищаем состояние (тихо, без ошибок)
+          setAuthState({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            csrfToken: null,
+          });
+        }
       }
     } catch (error) {
       // Тихая обработка ошибок при проверке аутентификации

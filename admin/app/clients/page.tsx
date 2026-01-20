@@ -21,8 +21,8 @@ import { cn } from '@/lib/utils';
 
 interface Client {
   id: string;
-  firstName: string;
-  lastName: string;
+  firstName: string | null;
+  lastName: string | null;
   phone?: string;
   email?: string;
   bonusPoints: number;
@@ -60,7 +60,7 @@ export default function ClientsPage() {
     },
   });
 
-  const clients = useMemo(() => clientsData?.data || [], [clientsData?.data]);
+  const clients = useMemo(() => (clientsData?.data || []).filter((client: Client) => client != null), [clientsData?.data]);
   const totalPages = useMemo(() => clientsData?.totalPages || 1, [clientsData?.totalPages]);
 
   // Сбрасываем на первую страницу при изменении поиска (используем debounced значение)
@@ -213,7 +213,7 @@ export default function ClientsPage() {
   }, []);
 
   const handleDeleteClick = useCallback((client: Client) => {
-    setDeleteConfirm({ id: client.id, name: `${client.firstName} ${client.lastName}` });
+    setDeleteConfirm({ id: client.id, name: `${client.firstName || ''} ${client.lastName || ''}` });
   }, []);
 
   // Мемоизированный компонент карточки клиента
@@ -223,12 +223,12 @@ export default function ClientsPage() {
         <Link href={`/clients/${client.id}`} className="block">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">
-              {client.firstName} {client.lastName}
+              {client.firstName || ''} {client.lastName || ''}
             </h3>
             {client.photoUrl ? (
               <img
                 src={client.photoUrl}
-                alt={`${client.firstName} ${client.lastName}`}
+                alt={`${client.firstName || ''} ${client.lastName || ''}`}
                 className="w-12 h-12 rounded-full object-cover border-2 border-border"
               />
             ) : (
@@ -428,7 +428,7 @@ export default function ClientsPage() {
                       </div>
                       <div>
                         <div className="font-medium">
-                          {client.firstName} {client.lastName}
+                          {client.firstName || ''} {client.lastName || ''}
                         </div>
                         {client.telegramId && (
                           <div className="text-xs text-muted-foreground">Telegram ID: {client.telegramId}</div>
