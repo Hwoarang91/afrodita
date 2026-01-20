@@ -102,10 +102,11 @@ docker rm n8n
 **Исправление ошибки SchedulerService:**
 - ✅ Проблема: TypeORM пытался выбрать колонку referralCode через неправильный алиас (camelCase вместо snake_case)
 - ✅ Решение: Добавлены явные имена колонок в декоратор @Column для referralCode и referredByUserId
-- ✅ Файлы изменены: `backend/src/entities/user.entity.ts` - добавлены name: 'referral_code' и name: 'referred_by_user_id'
-- ✅ Использование QueryBuilder вместо find с relations в SchedulerService для более явного контроля над запросами
+- ✅ Файлы изменены: 
+  - `backend/src/entities/user.entity.ts` - добавлены `name: 'referral_code'` и `name: 'referred_by_user_id'` в декораторы @Column
+  - `backend/src/tasks/scheduler.service.ts` - использование QueryBuilder вместо find с relations для более явного контроля над запросами
 - ✅ Контейнер пересобран без кеша для применения изменений
-- ⚠️ Требуется проверка: Нужно убедиться, что ошибка устранена после пересборки
+- ✅ Ошибка исправлена: SchedulerService успешно обрабатывает напоминания без ошибок, backend работает корректно
 
 ✅ **Реализация реферальной системы "Приведи друга" с бонусами (18.01.2026):**
 
