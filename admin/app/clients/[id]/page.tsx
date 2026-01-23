@@ -9,27 +9,26 @@ import { ru } from 'date-fns/locale';
 import Link from 'next/link';
 import { useState, useEffect, useMemo } from 'react';
 import TelegramIcon from '../../components/TelegramIcon';
-import { Mail, Edit, Plus, Trash2, Calendar, Scale, Ruler, Upload, X, User } from 'lucide-react';
+import { Mail, Edit, Plus, Trash2, Calendar, Scale, Ruler, Upload, X, User, Settings } from 'lucide-react';
 import { VirtualizedList } from '@/app/components/VirtualizedList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function ClientDetailPage() {
   const params = useParams();
   const clientId = params.id as string;
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageText, setMessageText] = useState('');
-  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [settingsMenuTab, setSettingsMenuTab] = useState('personal');
   const [adminNotes, setAdminNotes] = useState('');
-  const [showNotificationSettingsModal, setShowNotificationSettingsModal] = useState(false);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
-  const [showEditPersonalDataModal, setShowEditPersonalDataModal] = useState(false);
   const [showMeasurementModal, setShowMeasurementModal] = useState(false);
   const [editingMeasurement, setEditingMeasurement] = useState<any>(null);
-  const [showPhotoUploadModal, setShowPhotoUploadModal] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -66,21 +65,23 @@ export default function ClientDetailPage() {
     },
   });
 
-  // Инициализируем adminNotes при загрузке клиента
+  // Инициализируем adminNotes при загрузке клиента или открытии меню
   useEffect(() => {
-    if (client?.adminNotes) {
-      setAdminNotes(client.adminNotes);
+    if (client?.adminNotes !== undefined) {
+      setAdminNotes(client.adminNotes || '');
     }
-  }, [client?.adminNotes]);
+  }, [client?.adminNotes, showSettingsMenu]);
 
-  // Инициализируем настройки уведомлений при загрузке клиента
+  // Инициализируем настройки уведомлений при загрузке клиента или открытии меню
   useEffect(() => {
-    if (client?.notificationSettings) {
-      setRemindersEnabled(client.notificationSettings.remindersEnabled !== false);
-    } else {
-      setRemindersEnabled(true);
+    if (showSettingsMenu && client) {
+      if (client.notificationSettings) {
+        setRemindersEnabled(client.notificationSettings.remindersEnabled !== false);
+      } else {
+        setRemindersEnabled(true);
+      }
     }
-  }, [client?.notificationSettings]);
+  }, [client?.notificationSettings, showSettingsMenu]);
 
   const { data: appointments, isLoading: appointmentsLoading } = useQuery({
     queryKey: ['client-appointments', clientId],
@@ -176,7 +177,6 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', clientId] });
-      setShowNotesModal(false);
       toast.success('Комментарий сохранен');
     },
     onError: (error: any) => {
@@ -194,7 +194,6 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', clientId] });
-      setShowNotificationSettingsModal(false);
       toast.success('Настройки уведомлений сохранены');
     },
     onError: (error: any) => {
@@ -208,7 +207,6 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', clientId] });
-      setShowEditPersonalDataModal(false);
       toast.success('Данные сохранены');
     },
   });
@@ -247,7 +245,6 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', clientId] });
-      setShowPhotoUploadModal(false);
       setPhotoFile(null);
       setPhotoPreview(null);
       toast.success('Фото загружено');
@@ -323,7 +320,10 @@ export default function ClientDetailPage() {
                   className="w-24 h-24 rounded-full object-cover border-4 border-border"
                 />
                 <button
-                  onClick={() => setShowPhotoUploadModal(true)}
+                  onClick={() => {
+                    setShowSettingsMenu(true);
+                    setSettingsMenuTab('photo');
+                  }}
                   className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-full flex items-center justify-center transition-opacity"
                 >
                   <Edit className="w-6 h-6 text-white" />
@@ -335,7 +335,10 @@ export default function ClientDetailPage() {
                   <User className="w-12 h-12 text-muted-foreground" />
                 </div>
                 <button
-                  onClick={() => setShowPhotoUploadModal(true)}
+                  onClick={() => {
+                    setShowSettingsMenu(true);
+                    setSettingsMenuTab('photo');
+                  }}
                   className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-full flex items-center justify-center transition-opacity"
                 >
                   <Upload className="w-6 h-6 text-white" />
@@ -343,7 +346,10 @@ export default function ClientDetailPage() {
               </div>
             )}
             <button
-              onClick={() => setShowPhotoUploadModal(true)}
+              onClick={() => {
+                setShowSettingsMenu(true);
+                setSettingsMenuTab('photo');
+              }}
               className="absolute -bottom-2 -right-2 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors shadow-lg"
               title="Изменить фото"
             >
@@ -351,9 +357,24 @@ export default function ClientDetailPage() {
             </button>
           </div>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              {client?.firstName} {client?.lastName}
-            </h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold text-foreground">
+                {client?.firstName} {client?.lastName}
+              </h1>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowSettingsMenu(true);
+                  setSettingsMenuTab('personal');
+                }}
+                className="flex items-center gap-2"
+                title="Настройки клиента"
+              >
+                <Settings className="w-4 h-4" />
+                Настройки
+              </Button>
+            </div>
             {client?.photoUrl && (
               <button
                 onClick={() => {
@@ -449,7 +470,10 @@ export default function ClientDetailPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowEditPersonalDataModal(true)}
+                onClick={() => {
+                  setShowSettingsMenu(true);
+                  setSettingsMenuTab('personal');
+                }}
                 className="flex items-center gap-2"
               >
                 <Edit className="w-4 h-4" />
@@ -504,7 +528,21 @@ export default function ClientDetailPage() {
               </div>
             </div>
             <div className="mt-4">
-              <h3 className="text-md font-semibold text-foreground mb-2">Комментарий админа</h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-md font-semibold text-foreground">Комментарий админа</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowSettingsMenu(true);
+                    setSettingsMenuTab('notes');
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <Edit className="w-4 h-4" />
+                  Редактировать
+                </Button>
+              </div>
               <div className="bg-muted/50 rounded-lg p-3 min-h-[100px]">
                 {client?.adminNotes ? (
                   <p className="text-foreground whitespace-pre-wrap">{client.adminNotes}</p>
@@ -512,18 +550,23 @@ export default function ClientDetailPage() {
                   <p className="text-muted-foreground/70 italic">Нет комментариев</p>
                 )}
               </div>
-              <button
-                onClick={() => {
-                  setAdminNotes(client?.adminNotes || '');
-                  setShowNotesModal(true);
-                }}
-                className="mt-2 px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors text-sm"
-              >
-                {client?.adminNotes ? 'Редактировать' : 'Добавить'} комментарий
-              </button>
             </div>
             <div className="mt-6">
-              <h3 className="text-md font-semibold text-foreground mb-2">Настройки уведомлений</h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-md font-semibold text-foreground">Настройки уведомлений</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowSettingsMenu(true);
+                    setSettingsMenuTab('notifications');
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <Edit className="w-4 h-4" />
+                  Редактировать
+                </Button>
+              </div>
               <div className="bg-muted/50 rounded-lg p-3">
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between">
@@ -537,15 +580,6 @@ export default function ClientDetailPage() {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setRemindersEnabled(client?.notificationSettings?.remindersEnabled !== false);
-                  setShowNotificationSettingsModal(true);
-                }}
-                className="mt-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-sm"
-              >
-                Редактировать настройки
-              </button>
             </div>
           </div>
         </div>
@@ -1030,104 +1064,137 @@ export default function ClientDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Модальное окно для редактирования комментария */}
-      <Dialog open={showNotesModal} onOpenChange={setShowNotesModal}>
-        <DialogContent>
+      {/* Единое меню настроек клиента */}
+      <Dialog open={showSettingsMenu} onOpenChange={setShowSettingsMenu}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Комментарий админа</DialogTitle>
+            <DialogTitle>Настройки клиента</DialogTitle>
             <DialogDescription>
-              Комментарий виден только администраторам
+              Управление персональными данными, фото, комментариями и уведомлениями
             </DialogDescription>
           </DialogHeader>
-          <Textarea
-            value={adminNotes}
-            onChange={(e) => setAdminNotes(e.target.value)}
-            placeholder="Введите комментарий (виден только админам)..."
-            rows={5}
-            className="mb-4"
-          />
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowNotesModal(false);
-                setAdminNotes(client?.adminNotes || '');
-              }}
-            >
-              Отмена
-            </Button>
-            <Button
-              onClick={() => {
-                updateNotesMutation.mutate(adminNotes);
-              }}
-              disabled={updateNotesMutation.isPending}
-            >
-              {updateNotesMutation.isPending ? 'Сохранение...' : 'Сохранить'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Модальное окно для настройки уведомлений */}
-      <Dialog open={showNotificationSettingsModal} onOpenChange={setShowNotificationSettingsModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Настройки уведомлений</DialogTitle>
-            <DialogDescription>
-              Настройте напоминания о записях для этого клиента. Интервалы напоминаний настраиваются в глобальных настройках системы.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="remindersEnabled" className="text-sm font-medium">
-                Включить напоминания о записях
-              </Label>
-              <input
-                id="remindersEnabled"
-                type="checkbox"
-                checked={remindersEnabled}
-                onChange={(e) => setRemindersEnabled(e.target.checked)}
-                className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+          <Tabs value={settingsMenuTab} onValueChange={setSettingsMenuTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="personal">Личные данные</TabsTrigger>
+              <TabsTrigger value="photo">Фото</TabsTrigger>
+              <TabsTrigger value="notes">Комментарии</TabsTrigger>
+              <TabsTrigger value="notifications">Уведомления</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="personal" className="space-y-4 mt-4">
+              <PersonalDataTab
+                client={client}
+                onSave={(data) => {
+                  updatePersonalDataMutation.mutate(data);
+                }}
+                isLoading={updatePersonalDataMutation.isPending}
               />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Интервалы напоминаний (48ч, 24ч, 12ч, 6ч, 2ч, 1ч) настраиваются в разделе &quot;Настройки&quot; → &quot;Уведомления&quot;
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowNotificationSettingsModal(false);
-                setRemindersEnabled(client?.notificationSettings?.remindersEnabled !== false);
-              }}
-            >
-              Отмена
-            </Button>
-            <Button
-              onClick={() => {
-                updateNotificationSettingsMutation.mutate({
-                  remindersEnabled,
-                });
-              }}
-              disabled={updateNotificationSettingsMutation.isPending}
-            >
-              {updateNotificationSettingsMutation.isPending ? 'Сохранение...' : 'Сохранить'}
-            </Button>
-          </DialogFooter>
+            </TabsContent>
+            
+            <TabsContent value="photo" className="space-y-4 mt-4">
+              <PhotoUploadTab
+                client={client}
+                photoFile={photoFile}
+                photoPreview={photoPreview}
+                onPhotoSelect={handlePhotoSelect}
+                onPhotoUpload={handlePhotoUpload}
+                onPhotoDelete={() => {
+                  if (confirm('Удалить фото клиента?')) {
+                    deletePhotoMutation.mutate();
+                  }
+                }}
+                onClear={() => {
+                  setPhotoPreview(null);
+                  setPhotoFile(null);
+                }}
+                isLoading={uploadPhotoMutation.isPending}
+              />
+            </TabsContent>
+            
+            <TabsContent value="notes" className="space-y-4 mt-4">
+              <div>
+                <Label htmlFor="adminNotes">Комментарий админа</Label>
+                <Textarea
+                  id="adminNotes"
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  placeholder="Введите комментарий (виден только админам)..."
+                  rows={8}
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Комментарий виден только администраторам
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSettingsMenu(false);
+                    setAdminNotes(client?.adminNotes || '');
+                  }}
+                >
+                  Отмена
+                </Button>
+                <Button
+                  onClick={() => {
+                    updateNotesMutation.mutate(adminNotes);
+                  }}
+                  disabled={updateNotesMutation.isPending}
+                >
+                  {updateNotesMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+            
+            <TabsContent value="notifications" className="space-y-4 mt-4">
+              <div>
+                <Label htmlFor="remindersEnabled" className="text-sm font-medium mb-4 block">
+                  Настройки уведомлений
+                </Label>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="remindersEnabled" className="text-sm font-medium">
+                      Включить напоминания о записях
+                    </Label>
+                    <input
+                      id="remindersEnabled"
+                      type="checkbox"
+                      checked={remindersEnabled}
+                      onChange={(e) => setRemindersEnabled(e.target.checked)}
+                      className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Интервалы напоминаний (48ч, 24ч, 12ч, 6ч, 2ч, 1ч) настраиваются в разделе &quot;Настройки&quot; → &quot;Уведомления&quot;
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSettingsMenu(false);
+                    setRemindersEnabled(client?.notificationSettings?.remindersEnabled !== false);
+                  }}
+                >
+                  Отмена
+                </Button>
+                <Button
+                  onClick={() => {
+                    updateNotificationSettingsMutation.mutate({
+                      remindersEnabled,
+                    });
+                  }}
+                  disabled={updateNotificationSettingsMutation.isPending}
+                >
+                  {updateNotificationSettingsMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
-
-      {/* Модальное окно для редактирования персональных данных */}
-      <PersonalDataModal
-        open={showEditPersonalDataModal}
-        onOpenChange={setShowEditPersonalDataModal}
-        client={client}
-        onSave={(data) => {
-          updatePersonalDataMutation.mutate(data);
-        }}
-        isLoading={updatePersonalDataMutation.isPending}
-      />
 
       {/* Модальное окно для редактирования замера */}
       <MeasurementModal
@@ -1139,80 +1206,16 @@ export default function ClientDetailPage() {
         }}
         isLoading={saveMeasurementMutation.isPending}
       />
-
-      {/* Модальное окно для загрузки фото */}
-      <Dialog open={showPhotoUploadModal} onOpenChange={setShowPhotoUploadModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Загрузить фото клиента</DialogTitle>
-            <DialogDescription>
-              Выберите изображение (JPG, PNG, размер до 5MB)
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="photo">Выберите файл</Label>
-              <Input
-                id="photo"
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoSelect}
-                className="mt-1"
-              />
-            </div>
-            {photoPreview && (
-              <div className="relative">
-                <img
-                  src={photoPreview}
-                  alt="Preview"
-                  className="w-full max-h-64 object-contain rounded-lg border border-border"
-                />
-                <button
-                  onClick={() => {
-                    setPhotoPreview(null);
-                    setPhotoFile(null);
-                  }}
-                  className="absolute top-2 right-2 w-8 h-8 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center hover:bg-destructive/90 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowPhotoUploadModal(false);
-                setPhotoFile(null);
-                setPhotoPreview(null);
-              }}
-            >
-              Отмена
-            </Button>
-            <Button
-              onClick={handlePhotoUpload}
-              disabled={!photoFile || uploadPhotoMutation.isPending}
-            >
-              {uploadPhotoMutation.isPending ? 'Загрузка...' : 'Загрузить'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
 
-// Компонент модального окна для персональных данных
-function PersonalDataModal({
-  open,
-  onOpenChange,
+// Компонент вкладки для персональных данных
+function PersonalDataTab({
   client,
   onSave,
   isLoading,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   client: any;
   onSave: (data: { dateOfBirth?: string; weight?: number }) => void;
   isLoading: boolean;
@@ -1231,7 +1234,7 @@ function PersonalDataModal({
       );
       setWeight(client.weight ? Number(client.weight).toFixed(1) : '');
     }
-  }, [client, open]);
+  }, [client]);
 
   const handleSave = () => {
     const data: any = {};
@@ -1245,49 +1248,113 @@ function PersonalDataModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Редактировать личные данные</DialogTitle>
-          <DialogDescription>
-            Укажите дату рождения и вес клиента
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div>
-            <Label htmlFor="dateOfBirth">Дата рождения</Label>
-            <Input
-              id="dateOfBirth"
-              type="date"
-              value={dateOfBirth}
-              onChange={(e) => setDateOfBirth(e.target.value)}
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="weight">Вес (кг)</Label>
-            <Input
-              id="weight"
-              type="number"
-              step="0.1"
-              min="0"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              className="mt-1"
-              placeholder="0.0"
-            />
-          </div>
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="dateOfBirth">Дата рождения</Label>
+        <Input
+          id="dateOfBirth"
+          type="date"
+          value={dateOfBirth}
+          onChange={(e) => setDateOfBirth(e.target.value)}
+          className="mt-1"
+        />
+      </div>
+      <div>
+        <Label htmlFor="weight">Вес (кг)</Label>
+        <Input
+          id="weight"
+          type="number"
+          step="0.1"
+          min="0"
+          value={weight}
+          onChange={(e) => setWeight(e.target.value)}
+          className="mt-1"
+          placeholder="0.0"
+        />
+      </div>
+      <DialogFooter>
+        <Button onClick={handleSave} disabled={isLoading}>
+          {isLoading ? 'Сохранение...' : 'Сохранить'}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
+// Компонент вкладки для загрузки фото
+function PhotoUploadTab({
+  client,
+  photoFile,
+  photoPreview,
+  onPhotoSelect,
+  onPhotoUpload,
+  onPhotoDelete,
+  onClear,
+  isLoading,
+}: {
+  client: any;
+  photoFile: File | null;
+  photoPreview: string | null;
+  onPhotoSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onPhotoUpload: () => void;
+  onPhotoDelete: () => void;
+  onClear: () => void;
+  isLoading: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      {client?.photoUrl && !photoPreview && (
+        <div className="relative">
+          <img
+            src={client.photoUrl}
+            alt="Текущее фото"
+            className="w-full max-h-64 object-contain rounded-lg border border-border"
+          />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Отмена
+      )}
+      <div>
+        <Label htmlFor="photo">Выберите файл</Label>
+        <Input
+          id="photo"
+          type="file"
+          accept="image/*"
+          onChange={onPhotoSelect}
+          className="mt-1"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          JPG, PNG, размер до 5MB
+        </p>
+      </div>
+      {photoPreview && (
+        <div className="relative">
+          <img
+            src={photoPreview}
+            alt="Preview"
+            className="w-full max-h-64 object-contain rounded-lg border border-border"
+          />
+          <button
+            onClick={onClear}
+            className="absolute top-2 right-2 w-8 h-8 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center hover:bg-destructive/90 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      <DialogFooter className="flex-col sm:flex-row gap-2">
+        {client?.photoUrl && (
+          <Button variant="destructive" onClick={onPhotoDelete} className="w-full sm:w-auto">
+            Удалить фото
           </Button>
-          <Button onClick={handleSave} disabled={isLoading}>
-            {isLoading ? 'Сохранение...' : 'Сохранить'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        )}
+        <Button
+          onClick={onPhotoUpload}
+          disabled={!photoFile || isLoading}
+          className="w-full sm:w-auto"
+        >
+          {isLoading ? 'Загрузка...' : 'Загрузить'}
+        </Button>
+      </DialogFooter>
+    </div>
   );
 }
 

@@ -53,13 +53,17 @@ docker run -d --name n8n --restart unless-stopped \
   -e TZ="Europe/Moscow" \
   -e N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true \
   -e N8N_RUNNERS_ENABLED=true \
+  -e N8N_HOST=n8n.realmary.ru \
+  -e N8N_PROTOCOL=https \
+  -e N8N_PORT=443 \
   -v n8n_data:/home/node/.n8n \
   docker.n8n.io/n8nio/n8n
 ```
 
 **Доступ:**
-- Веб-интерфейс: `http://<server_ip>:5678`
+- Веб-интерфейс: `https://n8n.realmary.ru` (через Nginx с SSL)
 - Локально: `http://localhost:5678`
+- Прямой доступ: `http://<server_ip>:5678`
 
 **Управление:**
 ```bash
@@ -81,6 +85,12 @@ docker stop n8n
 docker rm n8n
 # Затем запустить снова командой выше
 ```
+
+**Настройка Nginx:**
+- Добавлен server блок для `n8n.realmary.ru` в `infrastructure/nginx/nginx.conf`
+- HTTP редирект на HTTPS для поддомена n8n
+- HTTPS проксирование на `localhost:5678` с поддержкой WebSocket
+- SSL сертификаты используются те же, что и для основного домена
 
 **Примечание:** n8n установлен отдельно от основного проекта и не зависит от него.
 
@@ -1303,6 +1313,23 @@ docker rm n8n
 - Удаление записей, клиентов, мастеров и услуг
 - Отображение статистики по мастерам и услугам
 - Интеграция с существующими API endpoints backend
+
+#### Обновление и настройка n8n на сервере (23.01.2026)
+
+✅ Обновлен и настроен n8n контейнер:
+- Обновлен образ n8n с версии 1.123.5 до 2.4.5 (latest stable)
+- Контейнер перезапущен с новым образом
+- Добавлены переменные окружения для работы через домен:
+  - `N8N_HOST=n8n.realmary.ru`
+  - `N8N_PROTOCOL=https`
+  - `N8N_PORT=443`
+- Настроен Nginx для проксирования `n8n.realmary.ru` на `localhost:5678`
+- Добавлен HTTP редирект на HTTPS для поддомена n8n
+- Настроена поддержка WebSocket для n8n через Nginx
+- Веб-интерфейс доступен по адресу: `https://n8n.realmary.ru`
+
+**Файлы изменены:**
+- `infrastructure/nginx/nginx.conf` - добавлен server блок для n8n.realmary.ru
 
 #### Установка n8n на сервер (15.12.2025)
 
