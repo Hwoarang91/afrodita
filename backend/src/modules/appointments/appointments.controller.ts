@@ -38,23 +38,26 @@ export class AppointmentsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Получение списка записей' })
+  @ApiOperation({ summary: 'Получение списка записей (с пагинацией)' })
   @ApiQuery({ name: 'status', required: false, enum: AppointmentStatus })
   @ApiQuery({ name: 'date', required: false, description: 'Фильтр по дате (YYYY-MM-DD)' })
   @ApiQuery({ name: 'startDate', required: false, description: 'Начало диапазона дат (YYYY-MM-DD)' })
   @ApiQuery({ name: 'endDate', required: false, description: 'Конец диапазона дат (YYYY-MM-DD)' })
   @ApiQuery({ name: 'masterId', required: false, description: 'Фильтр по мастеру' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Страница (по умолчанию 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Записей на странице (макс. 100, по умолчанию 20)' })
   async findAll(
     @Query('status') status: AppointmentStatus,
     @Query('date') date?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('masterId') masterId?: string,
-    @Request() req?: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: { user?: { role?: string; sub?: string } },
   ) {
-    // Для админов возвращаем все записи, для обычных пользователей - только свои
     const userId = req?.user?.role === 'admin' ? undefined : req?.user?.sub;
-    return await this.appointmentsService.findAll(userId, status, date, startDate, endDate, masterId);
+    return await this.appointmentsService.findAll(userId, status, date, startDate, endDate, masterId, page, limit);
   }
 
   @Get('slots')

@@ -7,16 +7,11 @@ import {
   Body,
   Param,
   Query,
-  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../../entities/user.entity';
 
 @ApiTags('services')
 @Controller('services')
@@ -41,8 +36,8 @@ export class ServicesController {
   ) {
     return await this.servicesService.findAll(
       category,
-      page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 20,
+      page,
+      limit,
       search,
       isActive !== undefined ? isActive === 'true' : undefined,
       includeSubcategories !== undefined ? includeSubcategories === 'true' : false,

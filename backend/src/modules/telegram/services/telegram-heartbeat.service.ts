@@ -1,9 +1,10 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, Optional, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Interval, SchedulerRegistry } from '@nestjs/schedule';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { TelegramUserClientService } from './telegram-user-client.service';
 import { TelegramConnectionMonitorService } from './telegram-connection-monitor.service';
 import { Client } from '@mtkruto/node';
+import { invokeWithRetry } from '../utils/mtproto-retry.utils';
 
 interface HeartbeatStatus {
   sessionId: string;
@@ -198,9 +199,8 @@ export class TelegramHeartbeatService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Выполняем легковесный запрос для проверки соединения
-      // Используем users.getFullUser с inputUserSelf - это легкий запрос
-      const checkPromise = client.invoke({
+      // Выполняем легковесный запрос для проверки соединения (с retry при FLOOD_WAIT)
+      const checkPromise = invokeWithRetry(client, {
         _: 'users.getFullUser',
         id: { _: 'inputUserSelf' },
       });

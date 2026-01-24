@@ -9,8 +9,10 @@ import {
   Query,
   Logger,
   UnauthorizedException,
+  BadRequestException,
   Delete,
   Optional,
+  StreamableFile,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
@@ -18,7 +20,7 @@ import { TelegramConnectionMonitorService } from '../services/telegram-connectio
 import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard';
 import { TelegramSessionGuard } from '../guards/telegram-session.guard';
 import { UserSendMessageDto, UserSendMediaDto } from '../dto/user-send-message.dto';
-import { DeactivateSessionDto, SessionInfoDto } from '../dto/session-management.dto';
+import { SessionInfoDto } from '../dto/session-management.dto';
 import { TelegramSessionStatusDto } from '../dto/telegram-session-status.dto';
 
 @ApiTags('telegram')
@@ -32,15 +34,6 @@ export class TelegramUserController {
     private readonly telegramUserClientService: TelegramUserClientService,
     @Optional() private readonly connectionMonitorService?: TelegramConnectionMonitorService,
   ) {}
-
-  /**
-   * Вспомогательный метод для получения активной сессии пользователя
-   */
-  private async getActiveSessionId(userId: string): Promise<string | null> {
-    const sessions = await this.telegramUserClientService.getUserSessions(userId);
-    const activeSession = sessions.find(s => s.status === 'active' && s.isActive);
-    return activeSession?.id || null;
-  }
 
   @Post('send-message')
   @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
@@ -117,7 +110,7 @@ export class TelegramUserController {
       }
 
       // Вызываем messages.sendMessage через MTProto
-      // @ts-ignore - временно игнорируем ошибку типов MTProto
+      // @ts-expect-error — MTProto messages.sendMessage/invoke: типы @mtkruto не совпадают с декларациями
       const result = await client.invoke({
         _: 'messages.sendMessage',
         peer,
@@ -301,7 +294,19 @@ export class TelegramUserController {
       }
 
       // Преобразуем результат в удобный формат с информацией о последнем сообщении
-      const chats = [];
+      type ChatItem = {
+        id: string;
+        type: string;
+        title?: string;
+        username?: unknown;
+        firstName?: unknown;
+        lastName?: unknown;
+        phone?: unknown;
+        lastMessage?: { id: unknown; text: unknown; date: unknown; out: unknown; status: 'sent' | 'delivered' | 'read' | null } | null;
+        unreadCount: unknown;
+        pinned: boolean;
+      };
+      const chats: ChatItem[] = [];
       for (const dialog of result.dialogs) {
         // Находим последнее сообщение для этого диалога
         const lastMessage = result.messages?.find((msg: any) => {
@@ -554,6 +559,7 @@ export class TelegramUserController {
               photoId: photo.id?.toString(),
               accessHash: photo.access_hash?.toString(),
               dcId: photo.dc_id,
+              fileReference: photo.file_reference ? Buffer.from(photo.file_reference).toString('base64') : undefined,
               sizes: sizes.map((size: any) => ({
                 type: size._,
                 width: size.w,
@@ -720,6 +726,64 @@ export class TelegramUserController {
       this.logger.error(`Ошибка получения истории сообщений: ${error.message}`, error.stack);
       throw new UnauthorizedException(`Failed to get messages: ${error.message}`);
     }
+  }
+
+  @Get('file')
+  @UseGuards(TelegramSessionGuard)
+  @ApiOperation({ summary: 'Получение файла (фото) по MTProto inputFileLocation для превью в MediaPreview' })
+  @ApiQuery({ name: 'volumeId', required: true, description: 'volume_id из size.location' })
+  @ApiQuery({ name: 'localId', required: true, description: 'local_id из size.location' })
+  @ApiQuery({ name: 'secret', required: true, description: 'secret из size.location' })
+  @ApiQuery({ name: 'fileReference', required: false, description: 'file_reference из photo (base64)' })
+  @ApiResponse({ status: 200, description: 'Бинарное содержимое файла (image/jpeg)' })
+  @ApiResponse({ status: 400, description: 'Не указаны volumeId, localId или secret' })
+  @ApiResponse({ status: 401, description: 'Нет активной Telegram сессии' })
+  async getFile(
+    @Query('volumeId') volumeId: string,
+    @Query('localId') localId: string,
+    @Query('secret') secret: string,
+    @Query('fileReference') fileReference: string | undefined,
+    @Request() req,
+  ): Promise<StreamableFile> {
+    if (!req.user?.sub || !req.telegramSessionId) {
+      throw new UnauthorizedException('No active Telegram session found.');
+    }
+    if (!volumeId?.trim() || !localId?.trim() || !secret?.trim()) {
+      throw new BadRequestException('Query volumeId, localId, secret are required.');
+    }
+    const localIdNum = parseInt(localId, 10);
+    if (isNaN(localIdNum)) {
+      throw new BadRequestException('Invalid localId.');
+    }
+    const client = await this.telegramUserClientService.getClient(req.telegramSessionId);
+    if (!client) {
+      throw new UnauthorizedException('Failed to get Telegram client.');
+    }
+    const fileRef = fileReference?.trim()
+      ? new Uint8Array(Buffer.from(fileReference, 'base64'))
+      : new Uint8Array(0);
+    let result: { bytes?: Uint8Array; _?: string };
+    try {
+      result = (await client.invoke({
+        _: 'upload.getFile',
+        location: {
+          _: 'inputFileLocation',
+          volume_id: BigInt(volumeId),
+          local_id: localIdNum,
+          secret: BigInt(secret),
+          file_reference: fileRef,
+        },
+        offset: BigInt(0),
+        limit: 512 * 1024,
+      })) as { bytes?: Uint8Array; _?: string };
+    } catch (e) {
+      this.logger.warn(`upload.getFile failed: ${e instanceof Error ? e.message : String(e)}`);
+      throw new UnauthorizedException('Failed to download file from Telegram.');
+    }
+    if (!result?.bytes || !(result.bytes instanceof Uint8Array)) {
+      throw new UnauthorizedException('Empty or invalid file response from Telegram.');
+    }
+    return new StreamableFile(Buffer.from(result.bytes), { type: 'image/jpeg' });
   }
 
   @Get('session-status')
@@ -1001,7 +1065,6 @@ export class TelegramUserController {
         throw new UnauthorizedException('Authentication required');
       }
 
-      const userId = req.user.sub;
       const sessionId = req.telegramSessionId;
       
       if (!sessionId) {

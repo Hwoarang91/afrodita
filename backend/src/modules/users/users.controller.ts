@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, UseGuards, Request, Body, Query, Param, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, UseGuards, Request, Body, Query, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { ReferralService } from './referral.service';
@@ -37,12 +37,7 @@ export class UsersController {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
-    return await this.usersService.findAll(
-      role,
-      search,
-      page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 20,
-    );
+    return await this.usersService.findAll(role, search, page, limit);
   }
 
   @Get(':id')

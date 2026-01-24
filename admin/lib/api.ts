@@ -1,7 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 
-// API URL для новой авторизации
-const getApiUrl = (): string => {
+// API URL (экспорт для MediaPreview и др.)
+export function getApiUrl(): string {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     // Если запущено на localhost, используем полный URL к backend

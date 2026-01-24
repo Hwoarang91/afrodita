@@ -17,6 +17,7 @@ export class CreateContactRequestDto {
   @ApiProperty({ description: 'Сообщение', example: 'Хочу записаться на массаж', required: false })
   @IsString()
   @IsOptional()
+  @MaxLength(5000, { message: 'Сообщение не более 5000 символов' })
   message?: string;
 }
 

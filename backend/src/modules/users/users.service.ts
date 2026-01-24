@@ -8,6 +8,7 @@ import { Notification } from '../../entities/notification.entity';
 import { BodyMeasurement } from '../../entities/body-measurement.entity';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
+import { normalizePagination } from '../../common/dto/pagination.dto';
 
 @Injectable()
 export class UsersService {
@@ -24,7 +25,14 @@ export class UsersService {
     private bodyMeasurementRepository: Repository<BodyMeasurement>,
   ) {}
 
-  async findAll(role?: UserRole, search?: string, page: number = 1, limit: number = 20): Promise<{ data: User[]; total: number; page: number; limit: number; totalPages: number }> {
+  async findAll(
+    role?: UserRole,
+    search?: string,
+    page?: number | string,
+    limit?: number | string,
+  ): Promise<{ data: User[]; total: number; page: number; limit: number; totalPages: number }> {
+    const { page: p, limit: l } = normalizePagination(page, limit);
+
     const query = this.userRepository.createQueryBuilder('user');
     if (role) {
       query.where('user.role = :role', { role });
@@ -38,17 +46,16 @@ export class UsersService {
     query.orderBy('user.createdAt', 'DESC');
 
     const total = await query.getCount();
-    const skip = (page - 1) * limit;
-    query.skip(skip).take(limit);
+    query.skip((p - 1) * l).take(l);
 
     const data = await query.getMany();
 
     return {
       data,
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      page: p,
+      limit: l,
+      totalPages: Math.ceil(total / l),
     };
   }
 

@@ -9,13 +9,14 @@ import {
   Request,
   Response,
   UnauthorizedException,
-  BadRequestException,
   Logger,
   Param,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Request as ExpressRequest } from 'express';
 import { Response as ExpressResponse } from 'express';
 import { AuthService, TelegramAuthData } from '../auth.service';
+import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
 import { JwtAuthService, TokenPair } from '../services/jwt.service';
 import { CsrfService } from '../services/csrf.service';
 import { TelegramSessionService } from '../../telegram/services/telegram-session.service';
@@ -28,6 +29,7 @@ import { RefreshResponseDto } from '../dto/refresh-response.dto';
 import { TelegramPhoneRequestDto } from '../dto/telegram-phone-request.dto';
 import { TelegramPhoneVerifyDto } from '../dto/telegram-phone-verify.dto';
 import { TelegramAuthResponseDto } from '../dto/telegram-auth-response.dto';
+import { RegisterDto } from '../dto/register.dto';
 import { TelegramQrGenerateResponseDto } from '../dto/telegram-qr-generate.dto';
 import { TelegramQrStatusResponseDto, QrTokenStatus } from '../dto/telegram-qr-status.dto';
 import { Telegram2FAVerifyDto } from '../dto/telegram-2fa-verify.dto';
@@ -107,8 +109,8 @@ export class AuthController {
           bonusPoints: user.bonusPoints,
         },
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка входа для ${loginDto.email}: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка входа для ${loginDto.email}: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -179,15 +181,11 @@ export class AuthController {
         accessTokenExpiresAt: tokenPair.accessTokenExpiresAt,
         refreshTokenExpiresAt: tokenPair.refreshTokenExpiresAt,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка обновления токенов: ${error.message}`, error.stack);
-      // Если это ошибка валидации токена, возвращаем более информативное сообщение
-      if (error.message?.includes('expired')) {
-        throw new UnauthorizedException('Refresh token expired');
-      }
-      if (error.message?.includes('not found') || error.message?.includes('Invalid')) {
-        throw new UnauthorizedException('Invalid refresh token');
-      }
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error);
+      this.logger.error(`Ошибка обновления токенов: ${msg}`, getErrorStack(error));
+      if (msg.includes('expired')) throw new UnauthorizedException('Refresh token expired');
+      if (msg.includes('not found') || msg.includes('Invalid')) throw new UnauthorizedException('Invalid refresh token');
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
@@ -220,8 +218,8 @@ export class AuthController {
       this.logger.log(`Пользователь ${user.sub} вышел из системы`);
 
       return { message: 'Logged out successfully' };
-    } catch (error: any) {
-      this.logger.error(`Ошибка выхода: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка выхода: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -246,8 +244,8 @@ export class AuthController {
       this.logger.log(`Пользователь ${user.sub} вышел из системы на всех устройствах`);
 
       return { message: 'Logged out from all devices' };
-    } catch (error: any) {
-      this.logger.error(`Ошибка выхода со всех устройств: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка выхода со всех устройств: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -298,7 +296,7 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'Администратор успешно зарегистрирован' })
   @ApiResponse({ status: 400, description: 'Администратор уже существует' })
   async register(
-    @Body() registerDto: any, // TODO: Create proper DTO
+    @Body() registerDto: RegisterDto,
     @Request() req,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
@@ -308,7 +306,7 @@ export class AuthController {
       const result = await this.authService.registerFirstAdmin(
         registerDto.email,
         registerDto.password,
-        registerDto.firstName,
+        registerDto.firstName ?? '',
         registerDto.lastName,
         req.ip,
         req.get('user-agent'),
@@ -330,8 +328,8 @@ export class AuthController {
       this.logger.log(`Успешная регистрация первого администратора: ${registerDto.email}`);
 
       return result;
-    } catch (error: any) {
-      this.logger.error(`Ошибка регистрации для ${registerDto.email}: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка регистрации для ${registerDto.email}: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -388,8 +386,8 @@ export class AuthController {
     @Request() req,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
-    console.log(`[TELEGRAM AUTH] Telegram Mini App авторизация: ${data.id}`);
-    console.log(`[TELEGRAM AUTH] Полученные данные:`, JSON.stringify({ ...data, hash: data.hash ? `${data.hash.substring(0, 20)}...` : 'empty' }, null, 2));
+    this.logger.log(`[TELEGRAM AUTH] Telegram Mini App авторизация: ${data.id}`);
+    this.logger.debug(`[TELEGRAM AUTH] Полученные данные: ${JSON.stringify({ ...data, hash: data.hash ? `${data.hash.substring(0, 20)}...` : 'empty' })}`);
     this.logger.log(`[TELEGRAM AUTH] Telegram Mini App авторизация: ${data.id}`);
     this.logger.log(`[TELEGRAM AUTH] Полученные данные: ${JSON.stringify({ ...data, hash: data.hash ? `${data.hash.substring(0, 20)}...` : 'empty' })}`);
     try {
@@ -434,8 +432,8 @@ export class AuthController {
           bonusPoints: user.bonusPoints,
         },
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка авторизации через Telegram Mini App: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка авторизации через Telegram Mini App: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -460,11 +458,10 @@ export class AuthController {
   ): Promise<{ phoneCodeHash: string }> {
     this.logger.debug(`Запрос кода для телефона: ${dto.phoneNumber}`);
     try {
-      // Передаем userId авторизованного пользователя, если он есть
       const authenticatedUserId = req.user?.sub || undefined;
       return await this.authService.requestPhoneCode(dto.phoneNumber, authenticatedUserId);
-    } catch (error: any) {
-      this.logger.error(`Ошибка запроса кода: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка запроса кода: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -480,21 +477,19 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Неверный код или ошибка авторизации' })
   async verifyPhoneCode(
     @Body() dto: TelegramPhoneVerifyDto,
-    @Request() req,
+    @Request() req: ExpressRequest,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramAuthResponseDto> {
     this.logger.log(`[Phone Verify] Запрос на проверку кода для телефона: ${dto?.phoneNumber || 'не указан'}`);
     this.logger.log(`[Phone Verify] Полученные данные: phoneNumber=${dto?.phoneNumber || 'не указан'}, code=${dto?.code ? '***' : 'не указан'}, phoneCodeHash=${dto?.phoneCodeHash ? dto.phoneCodeHash.substring(0, 20) + '...' : 'не указан'}`);
     try {
-      // Сессия сохраняется для пользователя, найденного/созданного по телефону
-      // КРИТИЧНО: Передаем req для сохранения сессии в request.session
       const result = await this.authService.verifyPhoneCode(
         dto.phoneNumber,
         dto.code,
         dto.phoneCodeHash,
         req.ip,
         req.get('user-agent'),
-        req as any, // Передаем request для сохранения сессии в request.session
+        req,
       );
 
       if (result.requires2FA) {
@@ -520,10 +515,10 @@ export class AuthController {
           lastName: result.user.lastName,
           username: result.user.username,
         },
-        tokens: null, // Не возвращаем токены для дашборда
+        tokens: undefined, // Не возвращаем токены для дашборда
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка проверки кода: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка проверки кода: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -549,9 +544,8 @@ export class AuthController {
       const result = await this.authService.generateQrCode();
       this.logger.log('QR-код успешно сгенерирован', { tokenId: result.tokenId });
       return result;
-    } catch (error: any) {
-      this.logger.error(`Ошибка генерации QR-кода: ${error.message}`, error.stack);
-      // Пробрасываем ошибку как есть (authService уже создал правильный HttpException)
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка генерации QR-кода: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -568,22 +562,16 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'QR токен не найден или истек' })
   async checkQrTokenStatus(
     @Param('tokenId') tokenId: string,
-    @Request() req,
+    @Request() req: ExpressRequest & { user?: { sub?: string } },
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramQrStatusResponseDto> {
     this.logger.debug(`Проверка статуса QR токена: ${tokenId}`);
-    
-    // ВАЖНО: Telegram авторизация доступна только для авторизованных админов
-    // Если нет JWT - выбрасываем ошибку
     if (!req.user?.sub) {
       this.logger.warn('[QR] Попытка проверки статуса QR токена без JWT токена');
       throw new UnauthorizedException('Telegram авторизация доступна только для авторизованных пользователей админ-панели');
     }
-    
     try {
-      // КРИТИЧНО: Передаем expressRequest для сохранения сессии в request.session
-      // saveSession() внутри checkQrTokenStatus теперь сохраняет сессию в request.session
-      const result = await this.authService.checkQrTokenStatus(tokenId, req.user?.sub, req as any);
+      const result = await this.authService.checkQrTokenStatus(tokenId, req.user.sub, req);
 
       if (result.status === 'accepted' && result.user && result.sessionId) {
         // КРИТИЧНО: Дополнительное сохранение в request.session на случай, если saveSession() не сохранил
@@ -598,9 +586,8 @@ export class AuthController {
             createdAt: Date.now(),
           });
           this.logger.log(`[QR] ✅ Telegram session saved to request.session successfully`);
-        } catch (error: any) {
-          this.logger.error(`[QR] ⚠️ Failed to save session to request.session (non-critical): ${error.message}`);
-          // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
+        } catch (error: unknown) {
+          this.logger.error(`[QR] ⚠️ Failed to save session to request.session (non-critical): ${getErrorMessage(error)}`);
         }
         
         this.logger.log(`Telegram сессия создана через QR для пользователя: ${result.user.id}, sessionId: ${result.sessionId}`);
@@ -617,12 +604,12 @@ export class AuthController {
               username: result.user.username,
             }
           : undefined,
-        tokens: result.tokens,
+        tokens: result.tokens ?? undefined,
         expiresAt: result.expiresAt,
         timeRemaining: result.timeRemaining,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка проверки статуса QR токена: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка проверки статуса QR токена: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -638,26 +625,17 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Неверный 2FA пароль или ошибка авторизации' })
   async verify2FA(
     @Body() dto: Telegram2FAVerifyDto,
-    @Request() req,
+    @Request() req: ExpressRequest,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramAuthResponseDto> {
-    // КРИТИЧНО: Контроллер = ТРУБА
-    // Он НЕ проверяет поля (это делает ValidationPipe через DTO)
-    // Он НЕ обрабатывает ошибки (это делают фильтры)
-    // Он НЕ форматирует ответы (это делает сервис)
-    // Он только: принимает DTO → вызывает сервис → возвращает результат
-    
     this.logger.log('[2FA] verify2FA called');
-
-    // Сессия сохраняется для пользователя, найденного/созданного по телефону
-    // КРИТИЧНО: Передаем req для сохранения сессии в request.session
     const result = await this.authService.verify2FAPassword(
       dto.phoneNumber,
       dto.password,
       dto.phoneCodeHash,
       req.ip,
       req.get('user-agent'),
-      req as any, // Передаем request для сохранения сессии в request.session
+      req,
     );
 
     // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
@@ -675,7 +653,7 @@ export class AuthController {
         lastName: result.user.lastName,
         username: result.user.username,
       },
-      tokens: null, // Не возвращаем токены для дашборда
+      tokens: undefined, // Не возвращаем токены для дашборда
     };
   }
 

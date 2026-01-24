@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Image, Video, File, Link, MapPin, User, ExternalLink, Maximize2, X } from 'lucide-react';
+import { Image, Video, File, Link, MapPin, User, ExternalLink, Maximize2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getApiUrl } from '@/lib/api';
 
 export interface MediaData {
   type: 'photo' | 'video' | 'audio' | 'document' | 'image' | 'webpage' | 'geo' | 'contact' | 'unknown';
@@ -13,6 +13,7 @@ export interface MediaData {
   photoId?: string;
   accessHash?: string;
   dcId?: number;
+  fileReference?: string; // base64, для upload.getFile
   sizes?: Array<{
     type: string;
     width?: number;
@@ -78,7 +79,9 @@ export function MediaPreview({ media, className, compact = false }: MediaPreview
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [photoBlobUrl, setPhotoBlobUrl] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const blobUrlRef = useRef<string | null>(null);
 
   // Lazy loading: загружаем изображение только когда оно видимо
   useEffect(() => {
@@ -103,20 +106,43 @@ export function MediaPreview({ media, className, compact = false }: MediaPreview
     };
   }, [media]);
 
+  // Загрузка фото через /telegram/user/file (MTProto inputFileLocation)
+  useEffect(() => {
+    if (!media || media.type !== 'photo' || !isLoaded) return;
+    const loc = media.sizes?.find((s) => s.location)?.location;
+    if (!loc?.volumeId || loc?.localId == null || !loc?.secret) return;
+
+    setPhotoBlobUrl(null);
+    const params: Record<string, string> = {
+      volumeId: String(loc.volumeId),
+      localId: String(loc.localId),
+      secret: String(loc.secret),
+    };
+    if (media.fileReference) params.fileReference = media.fileReference;
+    fetch(`${getApiUrl()}/telegram/user/file?${new URLSearchParams(params)}`, { credentials: 'include' })
+      .then((r) => {
+        if (!r.ok) throw new Error();
+        return r.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = url;
+        setPhotoBlobUrl(url);
+      })
+      .catch(() => setImageError(true));
+
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
+  }, [media, isLoaded]);
+
   if (!media) {
     return null;
   }
-
-  // Генерация URL для фото (нужно будет реализовать endpoint для получения файлов)
-  const getPhotoUrl = (size?: { location?: { dcId: number; volumeId: string; localId: number; secret: string } | null }) => {
-    // TODO: Реализовать endpoint для получения файлов через Telegram API
-    // Пока возвращаем placeholder
-    if (size?.location) {
-      // В будущем: `/api/v1/telegram/user/file?dcId=${size.location.dcId}&volumeId=${size.location.volumeId}&localId=${size.location.localId}&secret=${size.location.secret}`
-      return null;
-    }
-    return null;
-  };
 
   // Форматирование размера файла
   const formatFileSize = (bytes: string | number | undefined): string => {
@@ -146,10 +172,9 @@ export function MediaPreview({ media, className, compact = false }: MediaPreview
 
   // Обработка фото
   if (media.type === 'photo') {
-    // Ищем размер с location из массива sizes
+    const hasUrl = !!photoBlobUrl;
     const sizeWithLocation = media.sizes?.find((s) => s.location);
-    const photoUrl = getPhotoUrl(sizeWithLocation);
-    const hasUrl = !!photoUrl;
+    const canLoad = !!sizeWithLocation?.location?.volumeId && sizeWithLocation?.location?.localId != null && !!sizeWithLocation?.location?.secret;
 
     return (
       <>
@@ -161,7 +186,15 @@ export function MediaPreview({ media, className, compact = false }: MediaPreview
           )}
           onClick={() => setIsModalOpen(true)}
         >
-          {!isLoaded || !hasUrl ? (
+          {!isLoaded ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <Skeleton className="w-full h-full" />
+            </div>
+          ) : !canLoad ? (
+            <div className="w-full h-full flex items-center justify-center p-2">
+              <p className="text-xs text-muted-foreground text-center">Превью недоступно</p>
+            </div>
+          ) : !hasUrl && !imageError ? (
             <div className="w-full h-full flex items-center justify-center">
               <Skeleton className="w-full h-full" />
             </div>
@@ -169,7 +202,7 @@ export function MediaPreview({ media, className, compact = false }: MediaPreview
             <>
               <img
                 ref={imgRef}
-                src={photoUrl || undefined}
+                src={photoBlobUrl || undefined}
                 alt="Photo preview"
                 className={cn(
                   'w-full h-full object-cover transition-opacity duration-300',
@@ -195,7 +228,6 @@ export function MediaPreview({ media, className, compact = false }: MediaPreview
           )}
         </div>
 
-        {/* Модальное окно для просмотра фото в полном размере */}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="max-w-7xl max-h-[90vh] p-0">
             <DialogHeader className="p-6 pb-0">
@@ -204,17 +236,22 @@ export function MediaPreview({ media, className, compact = false }: MediaPreview
             <div className="p-6 flex items-center justify-center bg-black/5 dark:bg-black/20">
               {hasUrl ? (
                 <img
-                  src={photoUrl || undefined}
+                  src={photoBlobUrl || undefined}
                   alt="Full size photo"
                   className="max-w-full max-h-[70vh] object-contain rounded-lg"
                 />
-              ) : (
+              ) : !canLoad ? (
                 <div className="text-center py-12">
                   <Image className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">
-                    Превью фото недоступно. Endpoint для получения файлов еще не реализован.
-                  </p>
+                  <p className="text-muted-foreground">Превью недоступно: нет данных location.</p>
                 </div>
+              ) : imageError ? (
+                <div className="text-center py-12">
+                  <Image className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Не удалось загрузить фото.</p>
+                </div>
+              ) : (
+                <Skeleton className="w-full max-w-md h-64" />
               )}
             </div>
           </DialogContent>

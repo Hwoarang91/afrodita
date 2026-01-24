@@ -278,20 +278,16 @@ export class NotificationsService {
         where: filters.userIds.map(id => ({ id })),
       });
     } else {
-      // Рассылка всем пользователям с фильтром по роли
+      // Рассылка всем пользователям с фильтром по роли (лимит 5000 — защита от DoS)
       const query = this.userRepository.createQueryBuilder('user')
         .where('user.isActive = :isActive', { isActive: true });
-      
-      // Для Telegram рассылки фильтруем только пользователей с telegramId
       if (channel === NotificationChannel.TELEGRAM) {
         query.andWhere('user.telegramId IS NOT NULL');
       }
-      
       if (filters?.role) {
         query.andWhere('user.role = :role', { role: filters.role });
       }
-      
-      users = await query.getMany();
+      users = await query.take(5000).getMany();
     }
 
     // Генерируем уникальный ID для всей рассылки (один для всех получателей)

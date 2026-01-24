@@ -1,4 +1,4 @@
-﻿## Отчёт по проекту
+## Отчёт по проекту
 
 ## Инструкции по запуску
 
@@ -99,6 +99,458 @@ docker rm n8n
 ## Отчёт по проекту
 
 ### Изменения
+
+✅ **Выполнение плана COMPREHENSIVE_ANALYSIS_PLAN — Фаза 1 (часть) (23.01.2026):**
+
+**Источник:** COMPREHENSIVE_ANALYSIS_PLAN.md (файл TODO_EXECUTION_PLAN.md не найден).
+
+**Выполнено:**
+
+1. **Задача 2 — Архитектурные принципы (message.includes вне mapper):**
+   - ✅ В `telegram-error-mapper.ts` добавлена `isRequire2faActionError()` — единая проверка для SESSION_PASSWORD_NEEDED, PHONE_CODE_*, PASSWORD_HASH_INVALID, PHONE_NUMBER_INVALID.
+   - ✅ В `mtproto-error.handler.ts` убраны все `message.includes()`; проверки через `isRequire2faActionError()` и `isRetryableTelegramError()`. Удалён отдельный блок FLOOD_WAIT (обрабатывается в retryable).
+   - ✅ В `auth.service.ts` удалена проверка `error.message.includes('SESSION_PASSWORD_NEEDED')`; используется только `errorResponse.errorCode === ErrorCode.INVALID_2FA_PASSWORD`.
+
+2. **Задача 3 — Пагинация в критичных запросах:**
+   - ✅ `appointments.service.findAll()` — добавлены `page`, `limit`, ответ `{ data, total, page, limit, totalPages }`.
+   - ✅ `reviews.service.findAll()` — добавлены `page`, `limit`, ответ `{ data, total, page, limit, totalPages }`.
+   - ✅ `notifications.service.sendBroadcast()` — для выборки «все пользователи» добавлен `.take(5000)` для защиты от DoS.
+
+3. **Задача 6 — PaginationDto и валидация limit:**
+   - ✅ Создан `backend/src/common/dto/pagination.dto.ts`: `PaginationDto`, `normalizePagination()`, `PAGINATION_MAX_LIMIT=100`, `PAGINATION_DEFAULT_LIMIT=20`.
+   - ✅ `normalizePagination()` применяется в: `appointments`, `reviews`, `users`, `services`, `masters` (limit ограничен 100).
+
+**Файлы изменены:**
+- `backend/src/modules/telegram/utils/telegram-error-mapper.ts`
+- `backend/src/modules/telegram/utils/mtproto-error.handler.ts`
+- `backend/src/modules/auth/auth.service.ts`
+- `backend/src/common/dto/pagination.dto.ts` (создан)
+- `backend/src/modules/appointments/appointments.service.ts`, `appointments.controller.ts`
+- `backend/src/modules/reviews/reviews.service.ts`, `reviews.controller.ts`
+- `backend/src/modules/notifications/notifications.service.ts`
+- `backend/src/modules/users/users.service.ts`, `users.controller.ts`
+- `backend/src/modules/services/services.service.ts`, `services.controller.ts`
+- `backend/src/modules/masters/masters.service.ts`, `masters.controller.ts`
+
+**Примечание:** `GET /appointments` и `GET /reviews` теперь возвращают `{ data, total, page, limit, totalPages }` вместо массива. Фронтенд/админке при использовании этих эндпоинтов нужно перейти на `response.data`.
+
+---
+
+✅ **§13 Rate limiting и §16 транзакции в processPayment (23.01.2026):**
+
+**Выполнено:**
+
+1. **§13 — Rate limiting на auth endpoints:**
+   - ✅ В `main.ts`: импорт `authLimiter` из `rate-limit.middleware`, применение `app.use('/api/v1/auth/login', authLimiter)` и `app.use('/api/v1/auth/register', authLimiter)`.
+   - ✅ Защита от brute-force на логин и регистрацию (лимит из authLimiter: 5 попыток / 15 мин, `skipSuccessfulRequests: true`).
+
+2. **§16 — Транзакции в financial.processPayment:**
+   - ✅ В `financial.service.ts` метод `processPayment` обёрнут в `this.transactionRepository.manager.transaction()`.
+   - ✅ В одной транзакции: списание `User.bonusPoints` через `manager.getRepository(User)` (при `bonusPointsUsed > 0`) и сохранение `Transaction` через `manager.getRepository(Transaction)`.
+   - ✅ Снижен риск race conditions и неконсистентности при одновременном списании баллов и создании записи транзакции.
+
+**Файлы изменены:**
+- `backend/src/main.ts` — импорт и `app.use` для `authLimiter` на `/api/v1/auth/login`, `/api/v1/auth/register`
+- `backend/src/modules/financial/financial.service.ts` — транзакция в `processPayment`, импорт `User`
+
+---
+
+✅ **§15 Валидация размера входных данных (23.01.2026):**
+
+**Выполнено:**
+
+1. **Body parser limits в main.ts:**
+   - ✅ `bodyParser: false` в `NestFactory.create` и явные `express.json({ limit })` и `express.urlencoded({ extended: true, limit })`.
+   - ✅ Лимит по умолчанию `10mb` (переменная `BODY_PARSER_LIMIT`).
+   - ✅ Защита от DoS через слишком большие тела запросов.
+
+2. **@MaxLength в DTO для текстовых полей:**
+   - ✅ `BroadcastDto`: title 500, message 10000.
+   - ✅ `UserSendMessageDto`: message 4096 (лимит Telegram), `UserSendMediaDto`: caption 1024.
+   - ✅ `SendMessageDto`: message 4096; `SendPhotoDto`, `SendMediaDto`: caption 1024; `SetChatTitleDto`: title 255; `SetChatDescriptionDto`: description 500; `SendPollDto`: question 300.
+   - ✅ `CreateContactRequestDto`: message 5000; `UpdateContactRequestDto`: comment 5000.
+   - ✅ `CreateTemplateDto` / `UpdateTemplateDto`: name 200, subject 500, body 20000.
+   - ✅ `CreateServiceDto` / `UpdateServiceDto`: description 10000.
+   - ✅ `RescheduleAppointmentDto`: reason 2000.
+
+**Файлы изменены:**
+- `backend/src/main.ts` — body parser с limit
+- `backend/src/modules/notifications/dto/broadcast.dto.ts`
+- `backend/src/modules/telegram/dto/user-send-message.dto.ts`, `send-message.dto.ts`
+- `backend/src/modules/contact-requests/dto/create-contact-request.dto.ts`, `update-contact-request.dto.ts`
+- `backend/src/modules/templates/dto/template.dto.ts`
+- `backend/src/modules/services/dto/create-service.dto.ts`, `update-service.dto.ts`
+- `backend/src/modules/appointments/dto/reschedule-appointment.dto.ts`
+
+**§14 @ts-ignore:** замена на `@ts-expect-error` в текущем tsconfig дала «Unused» или ошибки типов (MTProto/Storage/Telegraf). Оставлены `@ts-ignore` с уточнёнными комментариями.
+
+---
+
+✅ **§7 Тесты ReferralService и правка telegram-bot после пагинации (23.01.2026):**
+
+**Выполнено:**
+
+1. **§7 — Тесты для ReferralService:**
+   - ✅ Создан `backend/src/modules/users/referral.service.spec.ts`.
+   - ✅ `generateReferralCode`: генерация и сохранение кода, NotFoundException, перегенерация при коллизии.
+   - ✅ `getOrGenerateReferralCode`: возврат существующего, генерация при отсутствии, NotFoundException.
+   - ✅ `getUserByReferralCode`: найден по коду (toUpperCase), null если не найден.
+   - ✅ `processReferralRegistration`: бонусы отключены; только регистрация; с реферером (referral+referrer, referredBy); self-referral без реферальных бонусов; несуществующий код; NotFoundException.
+   - ✅ `getReferralStats`: статистика с рефералами, NotFoundException, генерация кода через getOrGenerate при отсутствии.
+
+2. **Исправление после пагинации appointments (§3):**
+   - ✅ В `telegram-bot.service.ts` все вызовы `appointmentsService.findAll(user.id)` переведены на деструктуризацию `{ data: appointments }`, т.к. `findAll` возвращает `{ data, total, page, limit, totalPages }`.
+   - ✅ Обновлено 5 мест: inline-запрос «appointments», проверка isFirstVisit, `showAppointments`, `showAppointmentsForReschedule`, блок профиля (totalAppointments по completed).
+
+**Файлы изменены/созданы:**
+- `backend/src/modules/users/referral.service.spec.ts` (создан)
+- `backend/src/modules/telegram/telegram-bot.service.ts` — деструктуризация `{ data }` для `findAll`
+
+---
+
+✅ **§8 (§5) Замена any в mtproto-error.handler (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking для выбора задачи, user-context7):**
+
+- ✅ `handleMtprotoError(e: any)` → `handleMtprotoError(e: unknown)`.
+- ✅ Вынесено `getErrorMessage(e: unknown): string` — безопасное извлечение `errorMessage`/`message` из `Error` или объекта; вызовы `mapTelegramErrorToResponse`, `isFatalTelegramError`, `isRetryableTelegramError`, `isRequire2faActionError` по-прежнему получают `e` (mapper принимает `any`).
+
+**Файлы изменены:** `backend/src/modules/telegram/utils/mtproto-error.handler.ts`
+
+---
+
+✅ **§17 Retry для Telegram MTProto (23.01.2026):**
+
+**Выполнено (MCP: user-context7, user-sequential-thinking для приоритизации):**
+
+1. **Утилита `invokeWithRetry`:**
+   - ✅ Создан `backend/src/modules/telegram/utils/mtproto-retry.utils.ts`.
+   - ✅ При `MtprotoErrorAction.RETRY` и `retryAfter` — ожидание и повтор вызова (до `maxRetries`, по умолчанию 2).
+   - ✅ Опция `onRetry(retryAfterSeconds, attempt)` для `emitFloodWait` и логирования.
+   - ✅ Интеграция с `handleMtprotoError` (FLOOD_WAIT, DC_MIGRATE и др.).
+
+2. **Вставка в вызовы `users.getFullUser` (getMe):**
+   - ✅ `telegram-user-client.service.ts`: 3 места (getClientBySession, createClientForAuth, getClientBySessionId) — с `onRetry` → `emitFloodWait`.
+   - ✅ `telegram-heartbeat.service.ts`: heartbeat-проверка через `invokeWithRetry` (в `Promise.race` с таймаутом).
+   - ✅ `telegram-session.guard.ts`: валидация сессии через `invokeWithRetry` (dynamic import).
+
+**Дополнительно:**
+- ✅ В `referral.service.spec.ts` убрана лишняя проверка `toHaveBeenCalledTimes(2)` в тесте «только бонус за регистрацию».
+
+**Файлы изменены/созданы:**
+- `backend/src/modules/telegram/utils/mtproto-retry.utils.ts` (создан)
+- `backend/src/modules/telegram/services/telegram-user-client.service.ts`
+- `backend/src/modules/telegram/services/telegram-heartbeat.service.ts`
+- `backend/src/modules/telegram/guards/telegram-session.guard.ts`
+- `backend/src/modules/users/referral.service.spec.ts`
+
+---
+
+✅ **§5 Замена any в auth.controller (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+1. **error: any → unknown:**
+   - ✅ Создан `backend/src/common/utils/error-message.ts`: `getErrorMessage(e: unknown)`, `getErrorStack(e: unknown)`.
+   - ✅ Во всех `catch (error: any)` в auth.controller заменено на `catch (error: unknown)` с использованием `getErrorMessage(error)` и `getErrorStack(error)` (в refresh, generateQrCode).
+   - ✅ `mtproto-error.handler.ts` переведён на импорт `getErrorMessage` из common, локальная функция удалена.
+
+2. **req as any → типизированный Request:**
+   - ✅ `verifyPhoneCode`: `@Request() req: ExpressRequest`, в `verifyPhoneCode(..., req)` — убран `req as any`.
+   - ✅ `checkQrTokenStatus`: `@Request() req: ExpressRequest & { user?: { sub?: string } }`, в `checkQrTokenStatus(..., req)` — убран `req as any`.
+   - ✅ `verify2FA`: `@Request() req: ExpressRequest`, в `verify2FAPassword(..., req)` — убран `req as any`.
+
+**Файлы изменены/созданы:**
+- `backend/src/common/utils/error-message.ts` (создан)
+- `backend/src/modules/auth/controllers/auth.controller.ts`
+- `backend/src/modules/telegram/utils/mtproto-error.handler.ts`
+
+---
+
+✅ **Исправление сборки: services.findAll (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking для приоритета — разблокировать сборку):**
+
+- ✅ В `services.service.ts` в `findAll`: параметры `page`, `limit` приведены к `page?: string | number`, `limit?: string | number` (контроллер передаёт строки из `@Query`).
+- ✅ Добавлен вызов `const { page: p, limit: l } = normalizePagination(page, limit);` в начале метода — устранены ошибки «Cannot find name 'p'», «Cannot find name 'l'».
+- ✅ Сборка backend проходит (`npm run build`).
+
+**Файлы изменены:** `backend/src/modules/services/services.service.ts`
+
+---
+
+✅ **§5 Замена any в telegram-bot.service (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+- ✅ Импорт `getErrorMessage`, `getErrorStack` из `common/utils/error-message`.
+- ✅ Все `catch (error: any)` и `.catch((error: any)` заменены на `catch (error: unknown)` и `.catch((error: unknown)`.
+- ✅ Все обращения к `error.message` заменены на `getErrorMessage(error)`, к `error.stack` — на `getErrorStack(error)`.
+- ✅ Обработка 409 (конфликт экземпляров бота): `(error as { response?: { error_code?: number } }).response?.error_code`, проверка по `getErrorMessage(error).includes('409'|'Conflict')`.
+- ✅ Три блока с `error.code`/`error.description` (403, «bot was blocked», «chat not found»): приведение `(error as { code?: number; description?: string })`.
+
+**Файлы изменены:** `backend/src/modules/telegram/telegram-bot.service.ts`
+
+---
+
+✅ **§12 MediaPreview: endpoint для получения файлов (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+1. **Backend GET /api/v1/telegram/user/file:**
+   - Query: `volumeId`, `localId`, `secret`, опционально `fileReference` (base64). Используются `TelegramSessionGuard`, JWT.
+   - Вызов `upload.getFile` (MTProto) с `inputFileLocation` (`volume_id`, `local_id`, `secret`, `file_reference`). `file_reference` из `photo` или пустой `Uint8Array`.
+   - Ответ: `StreamableFile` (image/jpeg). В `processMedia` для `messageMediaPhoto` добавлено поле `fileReference` (base64 от `photo.file_reference`).
+
+2. **Frontend MediaPreview:**
+   - Удалён TODO, реализована загрузка фото через `fetch( getApiUrl() + '/telegram/user/file?' + params, { credentials: 'include' } )` с последующим `URL.createObjectURL(blob)`.
+   - Параметры: `volumeId`, `localId`, `secret`, при наличии — `fileReference` из `media.fileReference`.
+   - Состояния: skeleton при загрузке, placeholder при отсутствии location, сообщение об ошибке при неудачной загрузке. Отзыв object URL при размонтировании и при смене медиа.
+
+3. **api.ts:** экспорт `getApiUrl` для использования в MediaPreview.
+
+**Файлы изменены:**
+- `backend/src/modules/telegram/controllers/telegram-user.controller.ts` — `getFile`, `processMedia` (fileReference)
+- `admin/app/telegram/components/MediaPreview.tsx`
+- `admin/lib/api.ts` — `export function getApiUrl`
+
+---
+
+✅ **§12 TelegramUserMessagesTab: диалог выбора чата для пересылки (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking):**
+
+1. **Состояние и onForward:** `forwardDialogOpen`, `forwardMessageId`, `forwardSourceChatId`, `forwardToChatId`. При клике «Переслать» в `MessageActions` — `onForward(messageId, chatId)` открывает диалог и сохраняет messageId, chatId.
+
+2. **Диалог выбора получателя:** `Dialog` с `Select`: чаты (`chatsData.chats`) и контакты (`contactsData.contacts`) с исключением `forwardSourceChatId`. Секции «Чаты» и «Контакты». Skeleton при загрузке; «Нет других чатов или контактов» если список пуст.
+
+3. **Пересылка:** `forwardMutation` — `POST /telegram/user/messages/:chatId/:messageId/forward` с телом `{ toChatId }`. `onSuccess`: закрытие диалога, сброс состояния, `toast.success`, `invalidateQueries` для `['telegram-user-messages', sourceChatId]`, `['telegram-user-messages', toChatId]`, `['telegram-user-chats']`. Удалена заглушка `toast.info('Функция пересылки будет реализована…')`.
+
+**Файлы изменены:** `admin/app/telegram/TelegramUserMessagesTab.tsx`
+
+---
+
+✅ **§1 2FA (PASSWORD_HASH_INVALID): замена самописного SRP на checkPassword из @mtkruto/node (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, проверка MTKruto 0_password):**
+
+1. **Импорт:** `import { Client, checkPassword } from '@mtkruto/node';`
+
+2. **verify2FAPasswordWithStored:** вместо самописного SRP (~250 строк): `ap = await client.invoke({ _: 'account.getPassword' }); if (ap._ !== 'account.password') throw; input = await checkPassword(password, ap); checkPasswordResult = await client.invoke({ _: 'auth.checkPassword', password: input }); if (checkPasswordResult._ !== 'auth.authorization') throw;` Дальше без изменений: `authUser = checkPasswordResult.user`, поиск/создание User, saveSession, twoFactorStore.delete.
+
+3. **Удалено:** самописный SRP (PH1/PH2, pad, modExp, mod, k, gA, u, M1, check, `auth.checkPassword` со своим inputCheckPasswordSRP), отладочные логи по passwordResult/srp. Удалена зависимость `tssrp6a` из `backend/package.json`.
+
+**Файлы изменены:** `backend/src/modules/auth/auth.service.ts`, `backend/package.json`
+
+---
+
+✅ **§14 @ts-ignore: замена на @ts-expect-error или снятие (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking):**
+
+1. **6 @ts-ignore в backend:** 5 — Unused @ts-expect-error (ошибок не было), директивы удалены: `auth.service.ts` (acceptLoginToken), `telegram-user-client.service.ts` (DatabaseStorage, new Client), `telegram.service.ts` (2× restrictChatMember). Краткие комментарии/ JSDoc оставлены где нужно.
+2. **1 @ts-expect-error оставлен:** `telegram-user.controller.ts` — `messages.sendMessage`/`client.invoke`, типы @mtkruto не совпадают с декларациями.
+3. Сборка backend проходит.
+
+**Файлы изменены:** `auth.service.ts`, `telegram-user.controller.ts`, `telegram-user-client.service.ts`, `telegram.service.ts`
+
+---
+
+✅ **§5 any в telegram-bot: ctx→Context, chat→ChatLike, ctx.message.text (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+1. **ctx: any → Context** в handleAdminCommand, handleStatsCommand, handleBroadcastCommand, handleBroadcastMessage, executeBroadcast, handleAdminUsers, handleAdminAppointments, sendPrivateReply, sendPrivateCallbackReply.
+2. **chat: any → ChatLike** в saveChatInfo, sendWelcomeMessageToNewMember, isGroupChat, replaceMessageVariables; введены типы ChatLike, ReplaceVarsUser.
+3. **callbackQuery.data:** `(ctx.callbackQuery as any).data` → `(ctx.callbackQuery as { data?: string } | undefined)?.data ?? ''`.
+4. **handleBroadcastMessage:** `ctx.message.text` → `(ctx.message as { text?: string })?.text ?? ''` (Context не сужает message до TextMessage; сборка падала на Property 'text' does not exist).
+5. **options/keyboard** в sendPrivateReply, sendPrivateCallbackReply — оставлены `any` (parse_mode, reply_to_message_id, reply_markup давали ошибки при типизации).
+6. Сборка backend проходит.
+
+**Остаются по §5 (на момент первой очереди):** entity, chatInfo, apt.service, appointment.client, options/keyboard (часть снята во второй очереди).
+
+**Файлы изменены:** `telegram-bot.service.ts`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§5, сводка), `REPORT.md`.
+
+---
+
+✅ **§5 any в telegram-bot — вторая очередь: entity, chatInfo, WithName, MasterLike, ClientLike, role, availableMasters, user, promo, faq (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+1. **Типы:** `MentionEntity` (entity.type/offset/length), `ChatInfoFromApi` (getChat: photo, title, username, description, members_count, first_name, last_name), `WithName` (service/master .name), `MasterLike` (id, userId, name для appointmentWithRelations.master), `ClientLike` (firstName, lastName, phone, telegramId).
+2. **Замены:** `(entity: any)` → `MentionEntity`; `(chatInfo as any)` → `ChatInfoFromApi`; `(apt|appointment).(service|master as any)` → `WithName`; `(appointmentWithRelations.master as any)` → `MasterLike`; `(apt|appointment|appointmentWithRelations).(client as any)` → `ClientLike`; `role: 'client' as any` → `UserRole.CLIENT`.
+3. **Переменные:** `availableMasters: any[]` → `Master[]`; `user: any` → `User | null`; `promo: any` / `item: any` в forEach → типизированы (promotions: `Array<{title?,description?}>`, faq: `Array<{question?,answer?}>`). `m.rating || m.averageRating` → приведение `(m as { averageRating?: unknown }).averageRating` (Master без averageRating).
+4. **Оставлены `any`:** `options`/`keyboard` в sendMessage, sendPrivateReply, sendPrivateCallbackReply; `keyboard: any[]`, `currentRow`, `keyboardButtons` (п.5 снял selectedServices, servicesToBook).
+5. Сборка backend проходит.
+
+**Файлы изменены:** `telegram-bot.service.ts`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§5, сводка), `REPORT.md`.
+
+---
+
+✅ **§5 any в telegram-bot — третья очередь: selectedServices, servicesToBook → Service[] (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+1. **`selectedServices: any[]` → `Service[]`** (handleTimeSelect, услуги из servicesService.findById).
+2. **`servicesToBook: any[]` → `Service[]`** (handleConfirmAppointment, подкатегории/основная услуга).
+3. **keyboard-массивы:** пробовали `Parameters<typeof Markup.inlineKeyboard>[0]` и `unknown[][]` — типы Telegraf `HideableIKBtn`/tuple несовместимы с поэлементным `push([...])` и `Markup.inlineKeyboard(keyboard)`. Оставлены `keyboard: any[]`, `currentRow`, `keyboardButtons`.
+4. Сборка backend проходит.
+
+**Файлы изменены:** `telegram-bot.service.ts`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§5), `REPORT.md`.
+
+---
+
+✅ **§4 TypeScript strict — первый шаг: noFallthroughCasesInSwitch, noImplicitReturns (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+1. **`noFallthroughCasesInSwitch: true`** — ошибки при неявном fallthrough в switch (без break/return).
+2. **`noImplicitReturns: true`** — ошибки, если не все ветки функции с возвращаемым типом делают return.
+3. Сборка backend проходит без новых ошибок.
+4. Дальше по плану: strictNullChecks, noImplicitAny, затем strict: true.
+
+**Файлы изменены:** `backend/tsconfig.json`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§4, п.7, метрики), `REPORT.md`.
+
+---
+
+✅ **§4 TypeScript strict — noUnusedLocals (23.01.2026):**
+
+**Выполнено (MCP: user-context7, user-sequential-thinking):**
+
+1. В `backend/tsconfig.json` включён `noUnusedLocals: true`.
+2. Удалены неиспользуемые импорты и параметры конструкторов: `auth.service` — JwtService, TelegramSessionService; `jwt.service` — ConfigService; `jwt.strategy` — AuthService; `telegram-connection-monitor.service` — TelegramUserClientService; `referral.service` — `@InjectRepository(Transaction)`.
+3. Сборка backend проходит. Дальше: strictNullChecks, noImplicitAny, strict: true.
+
+**Файлы изменены:** `auth.service.ts`, `jwt.service.ts`, `jwt.strategy.ts`, `telegram-connection-monitor.service.ts`, `referral.service.ts`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§4, п.7, метрики), `REPORT.md`.
+
+---
+
+🔄 **§4 strictNullChecks — подготовка и оценка (23.01.2026):**
+
+**Подготовительные правки (при включённом strictNullChecks ошибки в этих файлах убраны):**
+- `referral.service.ts` — инициализация `let referralCode = ''` в `generateReferralCode` (TS2454).
+- `mtproto-retry.utils.ts` — в блоке retry `typeof result.retryAfter === 'number'` и `const sec = result.retryAfter` (TS18048, TS2345).
+- `websocket.gateway.ts` — `{ ...data, sessionId, status, timestamp }` в `emitTelegramConnectionStatus` (TS2783).
+- `database.config.ts` — `password`: isProduction ? `get('DB_PASSWORD')!` : `get('DB_PASSWORD','postgres')`; в prod выше есть throw при отсутствии.
+- `main.ts` — `secret: sessionSecret || 'development-insecure-do-not-use-in-production'` в `session()`.
+- `appointments.service.ts` — `cancellationReason: reason ?? ''` (359, 740); `if (!service) throw new BadRequestException('Service not found')` перед `service.duration` (407).
+- `financial.service.ts` — в `awardBonusPoints` `appointmentId: appointmentId ?? undefined` в `create` (DeepPartial не допускает null).
+- `scheduled-messages.service.ts` — `message.recurringConfig ?? undefined` в `calculateNextScheduledDate` и в `create` следующего сообщения.
+- `auth.controller.ts` — `tokens: undefined` (518, 656) для DTO; `tokens: result.tokens ?? undefined` (607). `auth.service.ts` — `stored.tokens = undefined` (1137; тип stored — `| undefined`).
+
+**Выполнено (strictNullChecks: до 0 ошибок, сборка OK):**
+- `settings.controller.ts` — `user: User | null`, проверка `!user` в `setTelegramAdminUser`.
+- `telegram-user-client.service.ts` — `sessionData!.encryptedSessionData`, `(enc as string).trim()` / `enc != null && (enc as string).trim() === ''`.
+- `telegram-user.controller.ts` — тип `chats: ChatItem[]` вместо `never[]`.
+- `auth` — `registerDto.firstName ?? ''` (оба auth.controller); `verifyTelegramAuth`: проверка `!botToken`; `user.lastName = data.last_name ?? user.lastName` и `username`; `let user: User | null` и `phone: normalizedPhone ?? undefined` / `...(normalizedPhone != null ? { phone: normalizedPhone } : {})` в create; 2FA create: `as DeepPartial<User>`.
+- `telegram.service.ts` — `promoteChatMember(..., options ?? {})`.
+- `telegram-bot.service.ts` — guard'ы `if (!ctx.chat || !ctx.from) return` в middleware и хендлерах; `isGroupChat(chat: ChatLike | undefined)`; `session.broadcastMessage` guard; `photo`/`chatPhoto` для `small_file_id`; `(chatRecord as { photoUrl: string | null }).photoUrl = null`; `saveChatInfo`: `if (chat.id == null) return`, create `as DeepPartial<TelegramChat>`, `photoUrl: undefined`; `handleContact`: `if (!user)` в else, `user?.bonusPoints ?? 0` в setTimeout; `appointments: Appointment[]`, `firstAppointment` guard; `replaceMessageVariables(..., user ?? undefined, ...)`; `clientTgId` для sendMessage; `Not(IsNull())` вместо `Not(null)`; `handleBroadcastMessage`, `executeBroadcast`: `if (!ctx.from) return`; и др. админ-хендлеры: `if (!ctx.from) return`.
+- `auth.service.ts` — импорт `DeepPartial` для 2FA create.
+
+При `strictNullChecks: true` сборка backend проходит. Дальше: noImplicitAny, strict: true. Тесты — в последнюю очередь.
+
+---
+
+🔄 **§4 noImplicitAny — оценка объёма (23.01.2026):**
+
+При `noImplicitAny: true` — ~75 ошибок: в основном `@Request() req` без типа (контроллеры), индексная сигнатура (auth.service userData[key], settings oldSettings[key]), `.catch(() => null)` без типа возврата, e2e-spec и т.п. Отложено; тесты — в последнюю очередь.
+
+---
+
+✅ **Комплексный анализ кода и составление плана исправлений (23.01.2026):**
+
+**Выполнено:**
+- ✅ Проведен глубокий анализ всего кодовой базы
+- ✅ Использован Context7 для проверки лучших практик
+- ✅ Найдены новые критические проблемы
+- ✅ Составлен детальный план исправлений в `COMPREHENSIVE_ANALYSIS_PLAN.md`
+
+**Обнаруженные новые проблемы:**
+1. **Нарушение архитектурных принципов** - использование `message.includes()` вне mapper в `mtproto-error.handler.ts`
+2. **Отсутствие пагинации** - `appointments.service.ts`, `reviews.service.ts` возвращают все записи
+3. **TypeScript strict mode отключен** - все strict проверки отключены
+4. **Множественные использования any** - 30+ использований в backend
+5. **Отсутствие валидации limit** - нет проверки максимального значения
+6. **Rate limiting закомментирован** - в `main.ts:171-172`
+7. **Использование @ts-ignore** - 7 использований
+8. **Отсутствие транзакций** - в некоторых критичных операциях
+
+**Файлы созданы:**
+- `COMPREHENSIVE_ANALYSIS_PLAN.md` - детальный план исправлений
+
+---
+
+✅ **Исправление критических проблем безопасности и качества кода (23.01.2026):**
+
+**Выполнено:**
+
+1. **Удаление console.log из production кода:**
+- ✅ Заменены все console.log на this.logger в auth.service.ts (9 использований)
+- ✅ Заменены все console.log на this.logger в auth.controller.ts (2 использования)
+- ✅ Удалены все console.log из миграции 022-add-referral-system-fields.ts
+- ✅ Проверен весь backend/src на наличие console.* методов
+
+2. **Исправление небезопасных значений по умолчанию для секретов:**
+- ✅ Удален fallback 'your-session-secret-key-change-me' в main.ts
+- ✅ Добавлена проверка обязательных секретов для production в main.ts
+- ✅ Удалены дефолтные пароли для БД в data-source.ts (для production)
+- ✅ Удалены дефолтные пароли для БД в database.config.ts (для production)
+
+3. **Улучшение валидации переменных окружения:**
+- ✅ Добавлены обязательные поля для production (JWT_SECRET, DB_PASSWORD, DB_HOST, DB_USER, DB_NAME)
+- ✅ Добавлена валидация формата URL для FRONTEND_URL и ADMIN_URL
+- ✅ Добавлена проверка минимальной длины для секретов (32 символа для JWT_SECRET)
+- ✅ Добавлена условная валидация для dev/prod окружений через ValidateIf
+
+4. **Убраны жестко закодированные URL:**
+- ✅ Заменен 'https://your-domain.com' в telegram-bot.service.ts на переменную окружения FRONTEND_URL
+- ✅ Добавлена проверка наличия FRONTEND_URL перед использованием
+
+5. **Создан RegisterDto для регистрации:**
+- ✅ Создан RegisterDto с валидацией email, password, firstName, lastName
+- ✅ Заменен any на RegisterDto в auth.controller.ts:301
+- ✅ Добавлена валидация пароля (минимум 8 символов, заглавные, строчные, цифры)
+
+**Файлы изменены:**
+- `backend/src/modules/auth/auth.service.ts` - заменены console.log на this.logger
+- `backend/src/modules/auth/controllers/auth.controller.ts` - заменены console.log, добавлен RegisterDto
+- `backend/src/migrations/022-add-referral-system-fields.ts` - удалены console.log
+- `backend/src/main.ts` - удален fallback для sessionSecret, добавлена проверка для production
+- `backend/src/config/data-source.ts` - удалены дефолтные значения для production
+- `backend/src/config/database.config.ts` - удалены дефолтные значения для production
+- `backend/src/config/env.validation.ts` - улучшена валидация с обязательными полями
+- `backend/src/modules/telegram/telegram-bot.service.ts` - убран жестко закодированный URL
+- `backend/src/modules/auth/dto/register.dto.ts` - создан новый DTO
+
+**Результат:**
+- ✅ Production код больше не использует console.log
+- ✅ Все секреты требуются в production, нет небезопасных fallback значений
+- ✅ Улучшена валидация переменных окружения с разделением dev/prod
+- ✅ Нет жестко закодированных URL
+- ✅ Улучшена типобезопасность с RegisterDto
+
+---
+
+✅ **Удаление console.log из production кода (23.01.2026):**
+
+**Выполнено:**
+- ✅ Заменены все console.log на this.logger в auth.service.ts (9 использований)
+- ✅ Заменены все console.log на this.logger в auth.controller.ts (2 использования)
+- ✅ Удалены все console.log из миграции 022-add-referral-system-fields.ts
+- ✅ Проверен весь backend/src на наличие console.* методов
+- ✅ Оставлены console.log только в seed.ts (утилитарный скрипт) и в session-encryption.service.ts (часть shell команды)
+
+**Файлы изменены:**
+- `backend/src/modules/auth/auth.service.ts` - заменены 9 console.log на this.logger
+- `backend/src/modules/auth/controllers/auth.controller.ts` - заменены 2 console.log на this.logger
+- `backend/src/migrations/022-add-referral-system-fields.ts` - удалены все console.log
+
+**Результат:**
+- ✅ Production код больше не использует console.log
+- ✅ Все логирование теперь идет через структурированный logger
+- ✅ Улучшена консистентность логирования в приложении
+
+---
 
 🔄 **Исправление циклических зависимостей в модулях (20.01.2026):**
 

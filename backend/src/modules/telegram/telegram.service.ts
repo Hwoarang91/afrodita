@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { TelegramBotService } from './telegram-bot.service';
 import { Markup } from 'telegraf';
 
@@ -360,15 +359,13 @@ export class TelegramService {
     options?: { until_date?: number },
   ): Promise<boolean> {
     const untilDate = options?.until_date;
-    // Telegraf API: restrictChatMember(chatId, userId, permissions, extra?)
-    // @ts-ignore - временно игнорируем ошибку типов Telegraf API
+    // Telegraf: restrictChatMember(chatId, userId, permissions, extra?); as any — типы @types/telegraf для permissions/until_date
     if (untilDate !== undefined) {
       return await this.getBot().telegram.restrictChatMember(chatId, userId, {
         permissions,
         until_date: untilDate,
       } as any);
     }
-    // @ts-ignore - временно игнорируем ошибку типов Telegraf API
     return await this.getBot().telegram.restrictChatMember(chatId, userId, { permissions } as any);
   }
 
@@ -390,7 +387,7 @@ export class TelegramService {
       can_manage_topics?: boolean;
     },
   ): Promise<boolean> {
-    return await this.getBot().telegram.promoteChatMember(chatId, userId, options);
+    return await this.getBot().telegram.promoteChatMember(chatId, userId, options ?? {});
   }
 
   async setChatAdministratorCustomTitle(

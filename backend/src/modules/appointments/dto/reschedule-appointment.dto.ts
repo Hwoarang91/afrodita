@@ -1,4 +1,4 @@
-import { IsString, IsDateString } from 'class-validator';
+import { IsString, IsDateString, IsOptional, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RescheduleAppointmentDto {
@@ -14,7 +14,9 @@ export class RescheduleAppointmentDto {
     example: 'Изменение планов',
     required: false,
   })
+  @IsOptional()
   @IsString()
+  @MaxLength(2000, { message: 'Причина переноса не более 2000 символов' })
   reason?: string;
 }
 

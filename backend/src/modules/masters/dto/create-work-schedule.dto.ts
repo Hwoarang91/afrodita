@@ -1,4 +1,4 @@
-import { IsEnum, IsString, IsBoolean, IsOptional, IsUUID } from 'class-validator';
+import { IsEnum, IsString, IsBoolean, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { DayOfWeek } from '../../../entities/work-schedule.entity';
 

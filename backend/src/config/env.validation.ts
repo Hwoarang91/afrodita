@@ -3,12 +3,13 @@ import {
   IsString,
   IsInt,
   IsOptional,
-  IsBoolean,
   IsEnum,
   validateSync,
   Min,
   Max,
   ValidateIf,
+  MinLength,
+  IsUrl,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -39,6 +40,7 @@ class EnvironmentVariables {
 
   // Database
   @IsString()
+  @ValidateIf((o) => o.NODE_ENV === 'production')
   @IsOptional()
   DB_HOST?: string;
 
@@ -50,10 +52,13 @@ class EnvironmentVariables {
   DB_PORT?: number;
 
   @IsString()
+  @ValidateIf((o) => o.NODE_ENV === 'production')
   @IsOptional()
   DB_USER?: string;
 
   @IsString()
+  @ValidateIf((o) => o.NODE_ENV === 'production')
+  @MinLength(8, { message: 'DB_PASSWORD must be at least 8 characters long in production' })
   @IsOptional()
   DB_PASSWORD?: string;
 
@@ -79,8 +84,17 @@ class EnvironmentVariables {
 
   // JWT
   @IsString()
+  @ValidateIf((o) => o.NODE_ENV === 'production')
+  @MinLength(32, { message: 'JWT_SECRET must be at least 32 characters long in production' })
   @IsOptional()
   JWT_SECRET?: string;
+
+  // Session Secret (может использовать JWT_SECRET как fallback)
+  @IsString()
+  @ValidateIf((o) => o.NODE_ENV === 'production' && !o.JWT_SECRET)
+  @MinLength(32, { message: 'SESSION_SECRET must be at least 32 characters long in production if JWT_SECRET is not set' })
+  @IsOptional()
+  SESSION_SECRET?: string;
 
   @IsString()
   @IsOptional()
@@ -128,10 +142,12 @@ class EnvironmentVariables {
   CORS_ORIGIN?: string;
 
   @IsString()
+  @IsUrl({}, { message: 'FRONTEND_URL must be a valid URL' })
   @IsOptional()
   FRONTEND_URL?: string;
 
   @IsString()
+  @IsUrl({}, { message: 'ADMIN_URL must be a valid URL' })
   @IsOptional()
   ADMIN_URL?: string;
 
@@ -146,8 +162,11 @@ export function validate(config: Record<string, unknown>) {
     enableImplicitConversion: true,
   });
 
+  const isProduction = validatedConfig.NODE_ENV === 'production';
+
+  // В production проверяем обязательные поля
   const errors = validateSync(validatedConfig, {
-    skipMissingProperties: true, // Пропускаем отсутствующие свойства
+    skipMissingProperties: !isProduction, // В production не пропускаем отсутствующие обязательные свойства
     whitelist: true, // Удаляем невалидные свойства
     forbidNonWhitelisted: false, // Не выбрасываем ошибку для неизвестных свойств
   });
@@ -162,6 +181,28 @@ export function validate(config: Record<string, unknown>) {
       })
       .join('; ');
     throw new Error(`Environment validation failed: ${errorMessages}`);
+  }
+
+  // Дополнительная проверка для production
+  if (isProduction) {
+    const requiredFields = [
+      // JWT_SECRET или SESSION_SECRET должны быть установлены (хотя бы один)
+      { name: 'JWT_SECRET or SESSION_SECRET', value: validatedConfig.JWT_SECRET || validatedConfig.SESSION_SECRET },
+      { name: 'DB_HOST', value: validatedConfig.DB_HOST },
+      { name: 'DB_USER', value: validatedConfig.DB_USER },
+      { name: 'DB_PASSWORD', value: validatedConfig.DB_PASSWORD },
+      { name: 'DB_NAME', value: validatedConfig.DB_NAME },
+    ];
+
+    const missingFields = requiredFields
+      .filter((field) => !field.value)
+      .map((field) => field.name);
+
+    if (missingFields.length > 0) {
+      throw new Error(
+        `Missing required environment variables in production: ${missingFields.join(', ')}`,
+      );
+    }
   }
 
   return validatedConfig;

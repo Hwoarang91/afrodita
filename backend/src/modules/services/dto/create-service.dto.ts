@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsBoolean, Min, IsArray, IsUUID, ValidateIf } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, Min, IsArray, IsUUID, ValidateIf, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateServiceDto {
@@ -8,6 +8,7 @@ export class CreateServiceDto {
 
   @ApiProperty()
   @IsString()
+  @MaxLength(10000, { message: 'Описание услуги не более 10000 символов' })
   description: string;
 
   @ApiProperty({ required: false })

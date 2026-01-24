@@ -1,15 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { MastersService } from './masters.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateMasterDto } from './dto/create-master.dto';
 import { UpdateMasterDto } from './dto/update-master.dto';
 import { CreateWorkScheduleDto } from './dto/create-work-schedule.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
 import { AuditAction } from '../../entities/audit-log.entity';
-import { UserRole } from '../../entities/user.entity';
 
 @ApiTags('masters')
 @Controller('masters')
@@ -32,8 +28,8 @@ export class MastersController {
     @Query('isActive') isActive?: string,
   ) {
     return await this.mastersService.findAll(
-      page ? parseInt(page, 10) : 1,
-      limit ? parseInt(limit, 10) : 20,
+      page,
+      limit,
       search,
       isActive !== undefined ? isActive === 'true' : undefined,
     );

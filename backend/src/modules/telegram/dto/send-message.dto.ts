@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsArray, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsBoolean, IsArray, IsEnum, MaxLength } from 'class-validator';
 
 export enum ParseMode {
   HTML = 'HTML',
@@ -15,6 +15,7 @@ export class SendMessageDto {
   @ApiProperty({ description: 'Текст сообщения' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(4096, { message: 'Текст сообщения не более 4096 символов (лимит Telegram)' })
   message: string;
 
   @ApiProperty({ description: 'Режим парсинга', enum: ParseMode, required: false })
@@ -51,6 +52,7 @@ export class SendPhotoDto {
   @ApiProperty({ description: 'Подпись к фото', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(1024, { message: 'Подпись не более 1024 символов' })
   caption?: string;
 
   @ApiProperty({ description: 'Режим парсинга', enum: ParseMode, required: false })
@@ -77,6 +79,7 @@ export class SendMediaDto {
   @ApiProperty({ description: 'Подпись', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(1024, { message: 'Подпись не более 1024 символов' })
   caption?: string;
 
   @ApiProperty({ description: 'Режим парсинга', enum: ParseMode, required: false })
@@ -147,6 +150,7 @@ export class SendPollDto {
   @ApiProperty({ description: 'Вопрос опроса' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(300, { message: 'Вопрос опроса не более 300 символов' })
   question: string;
 
   @ApiProperty({ description: 'Варианты ответов', type: [String] })
@@ -205,6 +209,7 @@ export class SetChatTitleDto {
   @ApiProperty({ description: 'Новое название чата' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255, { message: 'Название чата не более 255 символов' })
   title: string;
 }
 
@@ -216,6 +221,7 @@ export class SetChatDescriptionDto {
   @ApiProperty({ description: 'Новое описание чата' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500, { message: 'Описание чата не более 500 символов' })
   description: string;
 }
 

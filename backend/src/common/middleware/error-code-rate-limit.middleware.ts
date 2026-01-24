@@ -132,7 +132,6 @@ export class ErrorCodeRateLimitInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
-    const response = context.switchToHttp().getResponse();
     
     // Получаем идентификатор (IP или userId)
     const identifier = request.user?.id || request.ip || 'unknown';

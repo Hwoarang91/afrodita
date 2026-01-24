@@ -20,6 +20,7 @@ import { SettingsService } from '../settings/settings.service';
 import { TelegramBotService } from '../telegram/telegram-bot.service';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
+import { normalizePagination } from '../../common/dto/pagination.dto';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 
@@ -173,7 +174,11 @@ export class AppointmentsService {
     startDate?: string,
     endDate?: string,
     masterId?: string,
-  ): Promise<Appointment[]> {
+    page?: number | string,
+    limit?: number | string,
+  ): Promise<{ data: Appointment[]; total: number; page: number; limit: number; totalPages: number }> {
+    const { page: p, limit: l } = normalizePagination(page, limit);
+
     const query = this.appointmentRepository.createQueryBuilder('appointment')
       .leftJoinAndSelect('appointment.master', 'master')
       .leftJoinAndSelect('appointment.service', 'service')
@@ -181,7 +186,7 @@ export class AppointmentsService {
 
     // Строим условия WHERE динамически
     const conditions: string[] = [];
-    const params: any = {};
+    const params: Record<string, unknown> = {};
 
     if (userId) {
       conditions.push('appointment.clientId = :userId');
@@ -199,36 +204,38 @@ export class AppointmentsService {
     }
     // Обработка фильтрации по дате
     if (startDate && endDate) {
-      // Диапазон дат (приоритет над одиночной датой)
-      // Создаем даты в локальном времени и конвертируем в ISO для PostgreSQL
       const start = new Date(startDate + 'T00:00:00');
       const end = new Date(endDate + 'T23:59:59.999');
-      
       conditions.push('appointment.startTime >= :startDate AND appointment.startTime <= :endDate');
       params.startDate = start.toISOString();
       params.endDate = end.toISOString();
     } else if (date) {
-      // Одиночная дата
-      // Создаем дату в локальном времени и конвертируем в ISO для PostgreSQL
       const dateObj = new Date(date + 'T00:00:00');
       const startOfDay = new Date(dateObj);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(dateObj);
       endOfDay.setHours(23, 59, 59, 999);
-      
       conditions.push('appointment.startTime >= :startOfDay AND appointment.startTime <= :endOfDay');
       params.startOfDay = startOfDay.toISOString();
       params.endOfDay = endOfDay.toISOString();
     }
 
-    // Применяем все условия
     if (conditions.length > 0) {
       query.where(conditions.join(' AND '), params);
     }
 
     query.orderBy('appointment.startTime', 'ASC');
 
-    return await query.getMany();
+    const total = await query.getCount();
+    const data = await query.skip((p - 1) * l).take(l).getMany();
+
+    return {
+      data,
+      total,
+      page: p,
+      limit: l,
+      totalPages: Math.ceil(total / l),
+    };
   }
 
   async findById(id: string, userId?: string): Promise<Appointment> {
@@ -349,7 +356,7 @@ export class AppointmentsService {
     }
 
     appointment.status = AppointmentStatus.CANCELLED;
-    appointment.cancellationReason = reason || undefined;
+    appointment.cancellationReason = reason ?? '';
 
     const cancelled = await this.appointmentRepository.save(appointment);
 
@@ -396,7 +403,9 @@ export class AppointmentsService {
     const service = await this.serviceRepository.findOne({
       where: { id: appointment.serviceId },
     });
-
+    if (!service) {
+      throw new BadRequestException('Service not found');
+    }
     const endTime = new Date(newStartTime.getTime() + service.duration * 60000);
 
     // Проверка доступности нового времени
@@ -730,7 +739,7 @@ export class AppointmentsService {
     }
 
     appointment.status = AppointmentStatus.CANCELLED;
-    appointment.cancellationReason = reason || null;
+    appointment.cancellationReason = reason ?? '';
 
     const cancelled = await this.appointmentRepository.save(appointment);
 

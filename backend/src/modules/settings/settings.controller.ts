@@ -6,7 +6,7 @@ import { UsersService } from '../users/users.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../../entities/user.entity';
+import { User, UserRole } from '../../entities/user.entity';
 import { AuditAction } from '../../entities/audit-log.entity';
 
 @ApiTags('settings')
@@ -151,7 +151,7 @@ export class SettingsController {
   async setReminderIntervals(@Request() req, @Body() body: { value: number[] }) {
     this.logger.debug('Получен запрос на обновление интервалов напоминаний');
     
-    const result = await this.settingsService.set('reminderIntervals', body.value);
+    await this.settingsService.set('reminderIntervals', body.value);
     this.logger.log('Интервалы напоминаний успешно сохранены');
     
     await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
@@ -296,8 +296,8 @@ export class SettingsController {
   @ApiOperation({ summary: 'Установить администратора Telegram бота и веб-приложения' })
   async setTelegramAdminUser(@Request() req, @Body() body: { userId: string | null }) {
     try {
-      let user = null;
-      
+      let user: User | null = null;
+
       if (body.userId) {
         // Проверяем, что пользователь существует и имеет telegramId
         try {
@@ -306,7 +306,10 @@ export class SettingsController {
           this.logger.error(`Пользователь не найден: ${body.userId}`, error.stack);
           throw new BadRequestException('Пользователь не найден');
         }
-        
+
+        if (!user) {
+          throw new BadRequestException('Пользователь не найден');
+        }
         if (!user.telegramId) {
           throw new BadRequestException('Пользователь не прошел верификацию через Telegram бота');
         }

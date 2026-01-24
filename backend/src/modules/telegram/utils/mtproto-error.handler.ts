@@ -5,11 +5,12 @@
  */
 
 import { ErrorResponse } from '../../../common/interfaces/error-response.interface';
-import { 
-  mapTelegramError, 
+import { getErrorMessage } from '../../../common/utils/error-message';
+import {
   mapTelegramErrorToResponse,
   isFatalTelegramError,
   isRetryableTelegramError,
+  isRequire2faActionError,
 } from './telegram-error-mapper';
 
 export enum MtprotoErrorAction {
@@ -30,15 +31,11 @@ export interface MtprotoErrorResult {
  * Обрабатывает MTProto ошибку и возвращает действие для обработки
  * Теперь также возвращает стандартизированный ErrorResponse для использования в контроллерах
  */
-export function handleMtprotoError(e: any): MtprotoErrorResult {
-  const message = e?.errorMessage || e?.message || String(e || '');
-  
-  // Используем маппинг для получения стандартизированного ErrorResponse
-  const errorMapping = mapTelegramError(e);
+export function handleMtprotoError(e: unknown): MtprotoErrorResult {
+  const message = getErrorMessage(e);
   const errorResponse = mapTelegramErrorToResponse(e);
 
   // 🔴 FATAL - инвалидировать сессию немедленно
-  // Используем эталонный маппинг для определения фатальных ошибок
   if (isFatalTelegramError(e)) {
     return {
       action: MtprotoErrorAction.INVALIDATE_SESSION,
@@ -47,41 +44,16 @@ export function handleMtprotoError(e: any): MtprotoErrorResult {
     };
   }
 
-  // 🟠 AUTH FLOW - требуется действие пользователя
-  if (message.includes('SESSION_PASSWORD_NEEDED')) {
+  // 🟠 AUTH FLOW - требуется действие пользователя (проверки только в mapper)
+  if (isRequire2faActionError(e)) {
     return {
       action: MtprotoErrorAction.REQUIRE_2FA,
-      reason: '2FA password required',
+      reason: errorResponse?.message || message,
       errorResponse,
     };
   }
 
-  if (
-    message.includes('PHONE_CODE_INVALID') ||
-    message.includes('PHONE_CODE_EXPIRED') ||
-    message.includes('PASSWORD_HASH_INVALID') ||
-    message.includes('PHONE_NUMBER_INVALID')
-  ) {
-    return {
-      action: MtprotoErrorAction.REQUIRE_2FA,
-      reason: message,
-      errorResponse,
-    };
-  }
-
-  // 🟡 FLOOD WAIT - повторить после задержки
-  const floodMatch = message.match(/FLOOD_WAIT_(\d+)/);
-  if (floodMatch) {
-    return {
-      action: MtprotoErrorAction.RETRY,
-      reason: message,
-      retryAfter: parseInt(floodMatch[1], 10),
-      errorResponse,
-    };
-  }
-
-  // 🟡 RETRYABLE - временные ошибки
-  // Используем эталонный маппинг для определения retryable ошибок
+  // 🟡 RETRYABLE - FLOOD_WAIT, DC_MIGRATE и др. (retryAfter из mapper)
   if (isRetryableTelegramError(e)) {
     return {
       action: MtprotoErrorAction.RETRY,

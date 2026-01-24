@@ -16,6 +16,7 @@ import express from 'express';
 import * as cookieParser from 'cookie-parser';
 import * as session from 'express-session';
 import { DataSource } from 'typeorm';
+import { authLimiter } from './common/middleware/rate-limit.middleware';
 
 async function bootstrap() {
   // Настройка кодировки для правильного отображения русского языка
@@ -93,17 +94,19 @@ async function bootstrap() {
         }
       }
     }
-    // Увеличиваем лимит размера тела запроса для загрузки изображений (base64)
-    // Лимит настроен в nginx (client_max_body_size 50M), что достаточно для большинства случаев
-    // Встроенный body parser NestJS имеет лимит по умолчанию, но nginx будет фильтровать большие запросы
+    // Body parser: явный limit для защиты от DoS (дефолт Nest ~100kb). BODY_PARSER_LIMIT через env.
+    // Для base64-изображений и nginx client_max_body_size 50M — 10mb разумный компромисс.
     logger.log('Создание NestFactory...');
     const app = await NestFactory.create(AppModule, {
-      bodyParser: true,
+      bodyParser: false, // добавляем express.json/urlencoded с limit ниже
       rawBody: false,
       logger: ['error', 'warn', 'log', 'debug', 'verbose'],
-      forceCloseConnections: true, // Принудительно закрывать соединения при завершении
+      forceCloseConnections: true,
     });
-    logger.log('NestFactory создан');
+    const bodyLimit = process.env.BODY_PARSER_LIMIT || '10mb';
+    app.use(express.json({ limit: bodyLimit }));
+    app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
+    logger.log('NestFactory создан, body parser limit: ' + bodyLimit);
     
     // Проверяем подключение TypeORM перед запуском сервера
     try {
@@ -136,10 +139,19 @@ async function bootstrap() {
 
     // КРИТИЧНО: Express session middleware ПЕРЕД cookieParser
     // Это нужно для работы request.session в TelegramSessionService
-    const sessionSecret = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'your-session-secret-key-change-me';
+    // В production секрет должен быть обязательно установлен
+    const sessionSecret = process.env.SESSION_SECRET || process.env.JWT_SECRET;
+    if (!sessionSecret && process.env.NODE_ENV === 'production') {
+      throw new Error('SESSION_SECRET or JWT_SECRET must be set in production environment');
+    }
+    if (!sessionSecret) {
+      logger.warn('SESSION_SECRET and JWT_SECRET are not set. Session will not be secure in development.');
+      // В development можно продолжить, но сессия не будет защищена
+      // В production это недопустимо и приложение не запустится
+    }
     app.use(
       session({
-        secret: sessionSecret,
+        secret: sessionSecret || 'development-insecure-do-not-use-in-production',
         resave: false,
         saveUninitialized: false,
         cookie: {
@@ -157,10 +169,9 @@ async function bootstrap() {
 
     logger.log('Middleware настроены (session, cookie-parser)');
 
-  // Rate limiting
-  // Применяется глобально, но можно настроить для конкретных роутов
-  // app.use('/api/v1/auth', authLimiter);
-  // app.use('/api/v1/appointments', appointmentLimiter);
+  // Rate limiting на auth (защита от brute-force)
+  app.use('/api/v1/auth/login', authLimiter);
+  app.use('/api/v1/auth/register', authLimiter);
 
   // CORS
   const allowedOrigins: (string | RegExp)[] = process.env.CORS_ORIGIN

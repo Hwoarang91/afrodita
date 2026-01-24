@@ -9,6 +9,7 @@ import { Appointment } from '../../entities/appointment.entity';
 import { CacheService } from '../../common/cache/cache.service';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
+import { normalizePagination } from '../../common/dto/pagination.dto';
 
 @Injectable()
 export class MastersService {
@@ -28,12 +29,17 @@ export class MastersService {
     private cacheService: CacheService,
   ) {}
 
-  async findAll(page: number = 1, limit: number = 20, search?: string, isActive?: boolean): Promise<{ data: Master[]; total: number; page: number; limit: number; totalPages: number }> {
-    // Кэшируем только для часто используемых запросов без поиска и пагинации
-    const cacheKey = `masters:all:${isActive ?? 'all'}:${page}:${limit}:${search || 'no-search'}`;
-    
-    // Для простых запросов (первая страница, без поиска) используем кэш
-    if (page === 1 && !search) {
+  async findAll(
+    page?: number | string,
+    limit?: number | string,
+    search?: string,
+    isActive?: boolean,
+  ): Promise<{ data: Master[]; total: number; page: number; limit: number; totalPages: number }> {
+    const { page: p, limit: l } = normalizePagination(page, limit);
+
+    const cacheKey = `masters:all:${isActive ?? 'all'}:${p}:${l}:${search || 'no-search'}`;
+
+    if (p === 1 && !search) {
       const cached = this.cacheService.get<{ data: Master[]; total: number; page: number; limit: number; totalPages: number }>(cacheKey);
       if (cached) {
         return cached;
@@ -58,21 +64,19 @@ export class MastersService {
     query.orderBy('master.name', 'ASC');
 
     const total = await query.getCount();
-    const skip = (page - 1) * limit;
-    query.skip(skip).take(limit);
+    query.skip((p - 1) * l).take(l);
 
     const data = await query.getMany();
 
     const result = {
       data,
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      page: p,
+      limit: l,
+      totalPages: Math.ceil(total / l),
     };
 
-    // Кэшируем только простые запросы
-    if (page === 1 && !search) {
+    if (p === 1 && !search) {
       this.cacheService.set(cacheKey, result, 300); // 5 минут
     }
 

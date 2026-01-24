@@ -1,10 +1,11 @@
-import { IsString, IsEnum, IsOptional, IsBoolean, IsArray, IsObject } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsBoolean, IsArray, IsObject, MaxLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { NotificationType, NotificationChannel } from '../../../entities/notification.entity';
 
 export class CreateTemplateDto {
   @ApiProperty({ description: 'Название шаблона' })
   @IsString()
+  @MaxLength(200, { message: 'Название шаблона не более 200 символов' })
   name: string;
 
   @ApiProperty({ enum: NotificationType, description: 'Тип уведомления' })
@@ -17,10 +18,12 @@ export class CreateTemplateDto {
 
   @ApiProperty({ description: 'Тема/заголовок (для Handlebars)' })
   @IsString()
+  @MaxLength(500, { message: 'Тема не более 500 символов' })
   subject: string;
 
   @ApiProperty({ description: 'Тело сообщения (для Handlebars)' })
   @IsString()
+  @MaxLength(20000, { message: 'Тело шаблона не более 20000 символов' })
   body: string;
 
   @ApiPropertyOptional({ description: 'Список доступных переменных', type: [String] })
@@ -39,16 +42,19 @@ export class UpdateTemplateDto {
   @ApiPropertyOptional({ description: 'Название шаблона' })
   @IsOptional()
   @IsString()
+  @MaxLength(200, { message: 'Название шаблона не более 200 символов' })
   name?: string;
 
   @ApiPropertyOptional({ description: 'Тема/заголовок (для Handlebars)' })
   @IsOptional()
   @IsString()
+  @MaxLength(500, { message: 'Тема не более 500 символов' })
   subject?: string;
 
   @ApiPropertyOptional({ description: 'Тело сообщения (для Handlebars)' })
   @IsOptional()
   @IsString()
+  @MaxLength(20000, { message: 'Тело шаблона не более 20000 символов' })
   body?: string;
 
   @ApiPropertyOptional({ description: 'Список доступных переменных', type: [String] })

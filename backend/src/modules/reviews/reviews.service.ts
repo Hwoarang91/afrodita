@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Review, ReviewStatus } from '../../entities/review.entity';
 import { Appointment, AppointmentStatus } from '../../entities/appointment.entity';
 import { Master } from '../../entities/master.entity';
+import { normalizePagination } from '../../common/dto/pagination.dto';
 
 @Injectable()
 export class ReviewsService {
@@ -63,7 +64,15 @@ export class ReviewsService {
     return saved;
   }
 
-  async findAll(masterId?: string, serviceId?: string, status?: ReviewStatus) {
+  async findAll(
+    masterId?: string,
+    serviceId?: string,
+    status?: ReviewStatus,
+    page?: number | string,
+    limit?: number | string,
+  ): Promise<{ data: Review[]; total: number; page: number; limit: number; totalPages: number }> {
+    const { page: p, limit: l } = normalizePagination(page, limit);
+
     const query = this.reviewRepository.createQueryBuilder('review')
       .leftJoinAndSelect('review.user', 'user')
       .leftJoinAndSelect('review.master', 'master')
@@ -78,25 +87,24 @@ export class ReviewsService {
     }
 
     if (status) {
-      // Преобразуем enum в его строковое значение
-      // ReviewStatus.APPROVED = 'approved', ReviewStatus.PENDING = 'pending', ReviewStatus.REJECTED = 'rejected'
       let statusValue: string;
       if (typeof status === 'string') {
-        // Если пришла строка, нормализуем её в lowercase
         statusValue = status.toLowerCase();
       } else {
-        // Если пришел enum, используем его значение напрямую
-        statusValue = status === ReviewStatus.APPROVED ? 'approved' : 
-                     status === ReviewStatus.PENDING ? 'pending' : 
-                     status === ReviewStatus.REJECTED ? 'rejected' : 
-                     String(status).toLowerCase();
+        statusValue = status === ReviewStatus.APPROVED ? 'approved' :
+          status === ReviewStatus.PENDING ? 'pending' :
+            status === ReviewStatus.REJECTED ? 'rejected' :
+              String(status).toLowerCase();
       }
       query.andWhere('review.status = :status', { status: statusValue });
     }
 
     query.orderBy('review.createdAt', 'DESC');
 
-    return await query.getMany();
+    const total = await query.getCount();
+    const data = await query.skip((p - 1) * l).take(l).getMany();
+
+    return { data, total, page: p, limit: l, totalPages: Math.ceil(total / l) };
   }
 
   async moderate(id: string, status: ReviewStatus, moderationComment?: string) {

@@ -8,7 +8,6 @@ import {
   Delete,
   Query,
   UseGuards,
-  Request,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ContactRequestsService } from './contact-requests.service';

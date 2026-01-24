@@ -66,7 +66,6 @@
     "socket.io": "^4.7.2",
     "swagger-ui-express": "^5.0.0",
     "telegraf": "^4.15.4",
-    "tssrp6a": "^3.0.0",
     "typeorm": "^0.3.17",
     "winston": "^3.11.0"
   },

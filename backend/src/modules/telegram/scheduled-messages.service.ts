@@ -101,7 +101,7 @@ export class ScheduledMessagesService {
       const nextScheduledAt = this.calculateNextScheduledDate(
         message.scheduledAt,
         message.recurringPattern,
-        message.recurringConfig,
+        message.recurringConfig ?? undefined,
       );
 
       // Проверяем, не истекла ли дата окончания повторений
@@ -118,7 +118,7 @@ export class ScheduledMessagesService {
           status: ScheduledMessageStatus.PENDING,
           isRecurring: true,
           recurringPattern: message.recurringPattern,
-          recurringConfig: message.recurringConfig,
+          recurringConfig: message.recurringConfig ?? undefined,
           recurringEndDate: message.recurringEndDate,
           sentCount: 0,
         });
@@ -193,13 +193,13 @@ export class ScheduledMessagesService {
       for (const message of pendingMessages) {
         try {
           await this.sendScheduledMessage(message);
-          const updatedMessage = await this.markAsSent(message.id);
+          await this.markAsSent(message.id);
           this.logger.log(`Сообщение ${message.id} успешно отправлено`);
           // Отправляем событие через WebSocket для синхронизации
           this.webSocketGateway.emitScheduledMessageStatusChange(message.id, 'sent');
         } catch (error: any) {
           this.logger.error(`Ошибка при отправке сообщения ${message.id}: ${error.message}`);
-          const failedMessage = await this.markAsFailed(message.id, error.message);
+          await this.markAsFailed(message.id, error.message);
           // Отправляем событие через WebSocket для синхронизации
           this.webSocketGateway.emitScheduledMessageStatusChange(message.id, 'failed');
         }

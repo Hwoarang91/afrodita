@@ -1,8 +1,23 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Telegraf, Markup, Context } from 'telegraf';
+
+/** Минимальная форма чата (ctx.chat / getChat / TelegramChat): id, type, title, first_name, name, username, chatId. */
+type ChatLike = { id?: number; type?: string; title?: string; first_name?: string; name?: string; username?: string; chatId?: string };
+/** Для replaceMessageVariables: ctx.from / User (snake_case или camelCase). */
+type ReplaceVarsUser = { first_name?: string; firstName?: string; last_name?: string; lastName?: string; username?: string; id?: unknown; telegramId?: string; user_id?: string };
+/** Минимальные поля MessageEntity для проверки mention. */
+type MentionEntity = { type?: string; offset?: number; length?: number };
+/** Результат getChat: поля, используемые в saveChatInfo и new_chat_photo. */
+type ChatInfoFromApi = { photo?: { small_file_id: string; big_file_id: string }; title?: string; username?: string; description?: string; members_count?: number; first_name?: string; last_name?: string };
+/** Service в связях: только .name. */
+type WithName = { name?: string };
+/** Master в связях: id, userId, name (для участка с master.userId / master.id). */
+type MasterLike = { id?: string; userId?: string; name?: string };
+/** User (client) в связях: firstName, lastName, phone, telegramId. */
+type ClientLike = { firstName?: string; lastName?: string; phone?: string; telegramId?: string };
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, In, MoreThanOrEqual } from 'typeorm';
+import { Repository, Not, In, MoreThanOrEqual, IsNull, DeepPartial } from 'typeorm';
 import { User, UserRole } from '../../entities/user.entity';
 import { Service } from '../../entities/service.entity';
 import { Master } from '../../entities/master.entity';
@@ -19,8 +34,9 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationChannel } from '../../entities/notification.entity';
 import { ReviewsService } from '../reviews/reviews.service';
 import { FinancialService } from '../financial/financial.service';
-import { Transaction, TransactionType } from '../../entities/transaction.entity';
+import { TransactionType } from '../../entities/transaction.entity';
 import { AutoRepliesService } from './auto-replies.service';
+import { getErrorMessage, getErrorStack } from '../../common/utils/error-message';
 
 interface BotSession {
   step?: string;
@@ -114,26 +130,25 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           { command: 'stats', description: 'Статистика бота (только для админов)' },
         ]);
         this.logger.log('✅ Команды бота установлены');
-      } catch (error: any) {
-        this.logger.warn(`Не удалось установить команды бота: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.warn(`Не удалось установить команды бота: ${getErrorMessage(error)}`);
       }
       
       // Запускаем бота асинхронно, чтобы не блокировать запуск приложения
       this.bot.launch().then(() => {
         this.logger.log('🤖 Telegram bot успешно запущен');
-      }).catch((error: any) => {
-        this.logger.error(`Ошибка при запуске бота: ${error.message}`, error.stack);
+      }).catch((error: unknown) => {
+        this.logger.error(`Ошибка при запуске бота: ${getErrorMessage(error)}`, getErrorStack(error));
       });
-    } catch (error: any) {
-      // Обработка ошибки 409 - конфликт с другим экземпляром бота
-      if (error.response?.error_code === 409 || error.message?.includes('409') || error.message?.includes('Conflict')) {
+    } catch (error: unknown) {
+      const err = error as { response?: { error_code?: number } };
+      const msg = getErrorMessage(error);
+      if (err.response?.error_code === 409 || msg.includes('409') || msg.includes('Conflict')) {
         this.logger.warn('⚠️ Другой экземпляр бота уже запущен. Этот экземпляр не будет обрабатывать обновления.');
         this.logger.warn('💡 Убедитесь, что запущен только один экземпляр бота (Docker или локально, но не оба одновременно).');
-        // Не выбрасываем ошибку, чтобы приложение могло продолжить работу
-        // Бот просто не будет обрабатывать обновления, но API будет работать
         return;
       }
-      this.logger.error(`Ошибка при запуске бота: ${error.message}`, error.stack);
+      this.logger.error(`Ошибка при запуске бота: ${msg}`, getErrorStack(error));
     }
   }
 
@@ -143,8 +158,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         this.logger.log('🛑 Остановка Telegram бота...');
         await this.bot.stop('SIGTERM');
         this.logger.log('✅ Telegram бот корректно остановлен');
-      } catch (error: any) {
-        this.logger.warn(`⚠️ Ошибка при остановке бота: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.warn(`⚠️ Ошибка при остановке бота: ${getErrorMessage(error)}`);
         // Пытаемся принудительно остановить
         try {
           if (this.bot.telegram) {
@@ -175,12 +190,13 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
       
       const messageText = ctx.message.text;
-        
+      if (!ctx.chat || !ctx.from) return next();
+
       // Пропускаем команды
       if (messageText.startsWith('/')) {
         return next();
       }
-        
+
       const isGroup = this.isGroupChat(ctx.chat);
       if (isGroup && messageText) {
         try {
@@ -190,9 +206,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           
           // Проверяем, упоминается ли бот в сообщении
           const hasMention = messageText.includes(botMention) || 
-            ctx.message.entities?.some((entity: any) => {
+            ctx.message.entities?.some((entity: MentionEntity) => {
               if (entity.type === 'mention') {
-                const mentionText = messageText.substring(entity.offset, entity.offset + entity.length);
+                const mentionText = messageText.substring(entity.offset ?? 0, (entity.offset ?? 0) + (entity.length ?? 0));
                 return mentionText === botMention;
               }
               return false;
@@ -222,8 +238,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
             });
             return; // Не передаем управление дальше
           }
-        } catch (error: any) {
-          this.logger.error(`Ошибка при обработке упоминания бота: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`Ошибка при обработке упоминания бота: ${getErrorMessage(error)}`);
         }
       }
       
@@ -235,12 +251,13 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     // Обработка ошибок бота
     this.bot.catch((err, ctx) => {
       const error = err instanceof Error ? err : new Error(String(err));
-      this.logger.error(`Ошибка в боте: ${error.message}`, error.stack);
+      this.logger.error(`Ошибка в боте: ${getErrorMessage(error)}`, getErrorStack(error));
       ctx.reply('Произошла ошибка. Попробуйте позже или используйте /start для перезапуска.');
     });
 
     // Обработка неизвестных команд и текстовых сообщений
     this.bot.on('text', async (ctx) => {
+      if (!ctx.chat || !ctx.from) return;
       // Проверяем, не является ли это командой
       if (ctx.message.text.startsWith('/')) {
         return; // Команды обрабатываются отдельно
@@ -263,8 +280,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
               return; // Не обрабатываем дальше
             }
           }
-        } catch (error: any) {
-          this.logger.error(`Ошибка при проверке автоматических ответов: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`Ошибка при проверке автоматических ответов: ${getErrorMessage(error)}`);
         }
       }
 
@@ -279,7 +296,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       // Обработка подтверждения рассылки
       if (session.step === 'broadcast:confirm') {
         if (ctx.message.text.toLowerCase() === 'да' || ctx.message.text.toLowerCase() === 'yes') {
-          await this.executeBroadcast(ctx, session.broadcastMessage);
+          if (session.broadcastMessage) await this.executeBroadcast(ctx, session.broadcastMessage);
         } else {
           session.step = undefined;
           session.broadcastMessage = undefined;
@@ -346,8 +363,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         // Сохраняем информацию о чате в базу данных
         try {
           await this.saveChatInfo(chat);
-        } catch (error: any) {
-          this.logger.error(`Ошибка при сохранении информации о чате: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`Ошибка при сохранении информации о чате: ${getErrorMessage(error)}`);
         }
       }
       
@@ -359,8 +376,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           // Отправляем приветственное сообщение индивидуально через личные сообщения
           try {
             await this.sendWelcomeMessageToNewMember(member.id, chat);
-          } catch (error: any) {
-            this.logger.error(`Ошибка при отправке приветственного сообщения пользователю ${member.id}: ${error.message}`);
+          } catch (error: unknown) {
+            this.logger.error(`Ошибка при отправке приветственного сообщения пользователю ${member.id}: ${getErrorMessage(error)}`);
           }
         }
       }
@@ -386,8 +403,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
             chatRecord.isActive = false;
             await this.telegramChatRepository.save(chatRecord);
           }
-        } catch (error: any) {
-          this.logger.error(`Ошибка при обновлении статуса чата: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`Ошибка при обновлении статуса чата: ${getErrorMessage(error)}`);
         }
       }
     });
@@ -406,8 +423,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           chatRecord.title = ctx.message.new_chat_title;
           await this.telegramChatRepository.save(chatRecord);
         }
-      } catch (error: any) {
-        this.logger.error(`Ошибка при обновлении названия чата: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при обновлении названия чата: ${getErrorMessage(error)}`);
       }
     });
     
@@ -421,14 +438,15 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           where: { chatId: ctx.chat.id.toString() },
         });
         
-        if (chatRecord && (chatInfo as any).photo) {
-          const fileId = (chatInfo as any).photo.small_file_id;
+        const photo = (chatInfo as ChatInfoFromApi).photo;
+        if (chatRecord && photo) {
+          const fileId = photo.small_file_id;
           const file = await this.bot.telegram.getFile(fileId);
           chatRecord.photoUrl = `https://api.telegram.org/file/bot${this.configService.get('TELEGRAM_BOT_TOKEN')}/${file.file_path}`;
           await this.telegramChatRepository.save(chatRecord);
         }
-      } catch (error: any) {
-        this.logger.error(`Ошибка при обновлении фото чата: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при обновлении фото чата: ${getErrorMessage(error)}`);
       }
     });
     
@@ -442,11 +460,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         });
         
         if (chatRecord) {
-          chatRecord.photoUrl = null;
+          (chatRecord as { photoUrl: string | null }).photoUrl = null;
           await this.telegramChatRepository.save(chatRecord);
         }
-      } catch (error: any) {
-        this.logger.error(`Ошибка при обновлении фото чата: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при обновлении фото чата: ${getErrorMessage(error)}`);
       }
     });
     
@@ -456,7 +474,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private async saveChatInfo(chat: any) {
+  private async saveChatInfo(chat: ChatLike) {
+    if (chat.id == null) {
+      this.logger.warn('saveChatInfo: chat.id is null, skip');
+      return;
+    }
     try {
       // Получаем полную информацию о чате
       const chatInfo = await this.bot.telegram.getChat(chat.id);
@@ -487,12 +509,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         chatRecord = this.telegramChatRepository.create({
           chatId: chat.id.toString(),
           type: chatType,
-          title: (chatInfo as any).title || chat.title || null,
-          username: (chatInfo as any).username || chat.username || null,
-          description: (chatInfo as any).description || null,
-          photoUrl: null,
+          title: (chatInfo as ChatInfoFromApi).title || chat.title || null,
+          username: (chatInfo as ChatInfoFromApi).username || chat.username || null,
+          description: (chatInfo as ChatInfoFromApi).description || null,
+          photoUrl: undefined,
           membersCount: (() => {
-            const totalMembers = (chatInfo as any).members_count || null;
+            const totalMembers = (chatInfo as ChatInfoFromApi).members_count || null;
             // Вычитаем бота из общего количества участников для групп и супергрупп
             if (chatType === ChatType.GROUP || chatType === ChatType.SUPERGROUP) {
               return totalMembers ? Math.max(0, totalMembers - 1) : null;
@@ -501,17 +523,17 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           })(),
           isActive: true,
           metadata: {
-            first_name: (chatInfo as any).first_name || null,
-            last_name: (chatInfo as any).last_name || null,
+            first_name: (chatInfo as ChatInfoFromApi).first_name || null,
+            last_name: (chatInfo as ChatInfoFromApi).last_name || null,
           },
-        });
+        } as DeepPartial<TelegramChat>);
       } else {
         // Обновляем существующую запись
         chatRecord.type = chatType;
-        chatRecord.title = (chatInfo as any).title || chat.title || chatRecord.title;
-        chatRecord.username = (chatInfo as any).username || chat.username || chatRecord.username;
-        chatRecord.description = (chatInfo as any).description || chatRecord.description;
-          const totalMembers = (chatInfo as any).members_count || chatRecord.membersCount || 0;
+        chatRecord.title = (chatInfo as ChatInfoFromApi).title || chat.title || chatRecord.title;
+        chatRecord.username = (chatInfo as ChatInfoFromApi).username || chat.username || chatRecord.username;
+        chatRecord.description = (chatInfo as ChatInfoFromApi).description || chatRecord.description;
+          const totalMembers = (chatInfo as ChatInfoFromApi).members_count || chatRecord.membersCount || 0;
           // Вычитаем бота из общего количества участников для групп и супергрупп
           if (chatType === ChatType.GROUP || chatType === ChatType.SUPERGROUP) {
             chatRecord.membersCount = Math.max(0, totalMembers - 1);
@@ -522,20 +544,21 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
       
       // Получаем фото чата, если есть
-      if ((chatInfo as any).photo) {
+      const chatPhoto = (chatInfo as ChatInfoFromApi).photo;
+      if (chatPhoto) {
         try {
-          const fileId = (chatInfo as any).photo.small_file_id;
+          const fileId = chatPhoto.small_file_id;
           const file = await this.bot.telegram.getFile(fileId);
           chatRecord.photoUrl = `https://api.telegram.org/file/bot${this.configService.get('TELEGRAM_BOT_TOKEN')}/${file.file_path}`;
-        } catch (error: any) {
-          this.logger.warn(`Не удалось получить фото чата: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.warn(`Не удалось получить фото чата: ${getErrorMessage(error)}`);
         }
       }
       
       await this.telegramChatRepository.save(chatRecord);
       this.logger.log(`Информация о чате ${chat.id} сохранена в базу данных`);
-    } catch (error: any) {
-      this.logger.error(`Ошибка при сохранении информации о чате: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при сохранении информации о чате: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -573,7 +596,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           lastName: ctx.from.last_name,
           username: ctx.from.username,
           phone: normalizedPhone,
-          role: 'client' as any,
+          role: UserRole.CLIENT,
         });
       } else if (user && userByPhone && user.id !== userByPhone.id) {
         // Объединяем данные: пользователь с Telegram ID существует, но есть другой пользователь с таким же телефоном
@@ -603,12 +626,17 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         user = userByPhone;
       } else {
         // Оба пользователя существуют и это один и тот же пользователь
+        if (!user) { this.logger.error('Contact: unreachable else'); return; }
         user.phone = normalizedPhone;
         user.firstName = ctx.from.first_name || user.firstName;
         user.lastName = ctx.from.last_name || user.lastName;
         user.username = ctx.from.username || user.username;
       }
 
+      if (!user) {
+        this.logger.error('Contact: user not found after branches');
+        return;
+      }
       await this.userRepository.save(user);
 
       // Обрабатываем реферальную регистрацию для нового пользователя
@@ -624,14 +652,14 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           if (bonusInfo.registrationBonus > 0) {
             setTimeout(async () => {
               try {
-                await ctx.reply(`🎉 Добро пожаловать!\n\n✅ Вам начислено ${bonusInfo.registrationBonus} бонусов за регистрацию!\n\nВаш баланс бонусов: ${user.bonusPoints} баллов.`);
+                await ctx.reply(`🎉 Добро пожаловать!\n\n✅ Вам начислено ${bonusInfo.registrationBonus} бонусов за регистрацию!\n\nВаш баланс бонусов: ${user?.bonusPoints ?? 0} баллов.`);
               } catch (err) {
                 this.logger.error(`Ошибка отправки сообщения о бонусах: ${err}`);
               }
             }, 2000);
           }
-        } catch (error: any) {
-          this.logger.error(`Ошибка обработки регистрации через контакт: ${error.message}`);
+        } catch (error: unknown) {
+          this.logger.error(`Ошибка обработки регистрации через контакт: ${getErrorMessage(error)}`);
         }
       }
 
@@ -682,7 +710,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           firstName: ctx.from.first_name,
           lastName: ctx.from.last_name,
           username: ctx.from.username,
-          role: 'client' as any,
+          role: UserRole.CLIENT,
         });
         await this.userRepository.save(user);
 
@@ -711,8 +739,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
                 }
               }, 2000);
             }
-          } catch (error: any) {
-            this.logger.error(`Ошибка обработки реферальной регистрации: ${error.message}`);
+          } catch (error: unknown) {
+            this.logger.error(`Ошибка обработки реферальной регистрации: ${getErrorMessage(error)}`);
           }
         }
       }
@@ -798,8 +826,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           parse_mode: parseMode,
         });
         this.logger.log(`✅ Команда /start обработана, клавиатура отправлена пользователю ${ctx.from.id}`);
-      } catch (error: any) {
-        this.logger.error(`❌ Ошибка при отправке клавиатуры: ${error.message}`, error.stack);
+      } catch (error: unknown) {
+        this.logger.error(`❌ Ошибка при отправке клавиатуры: ${getErrorMessage(error)}`, getErrorStack(error));
         // Fallback - отправка без клавиатуры
         await ctx.reply(
           welcomeMessage + `\n\nИспользуйте команды: /book, /appointments, /services, /profile`,
@@ -1024,7 +1052,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Обработка админской команды
-  private async handleAdminCommand(ctx: any) {
+  private async handleAdminCommand(ctx: Context) {
+    if (!ctx.from) return;
     const telegramId = ctx.from.id.toString();
     
     if (!(await this.isAdmin(telegramId))) {
@@ -1050,7 +1079,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Обработка команды статистики
-  private async handleStatsCommand(ctx: any) {
+  private async handleStatsCommand(ctx: Context) {
+    if (!ctx.from) return;
     const telegramId = ctx.from.id.toString();
     
     if (!(await this.isAdmin(telegramId))) {
@@ -1092,14 +1122,15 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         parse_mode: 'Markdown',
         reply_markup: keyboard.reply_markup,
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при получении статистики: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при получении статистики: ${getErrorMessage(error)}`);
       await ctx.reply('❌ Ошибка при получении статистики.');
     }
   }
 
   // Обработка команды рассылки
-  private async handleBroadcastCommand(ctx: any) {
+  private async handleBroadcastCommand(ctx: Context) {
+    if (!ctx.from) return;
     const telegramId = ctx.from.id.toString();
     
     if (!(await this.isAdmin(telegramId))) {
@@ -1128,8 +1159,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Обработка сообщения для рассылки
-  private async handleBroadcastMessage(ctx: any) {
-    const message = ctx.message.text;
+  private async handleBroadcastMessage(ctx: Context) {
+    if (!ctx.from) return;
+    const message = (ctx.message as { text?: string })?.text ?? '';
     const session = this.getSession(ctx.from.id);
     
     // Сохраняем сообщение и запрашиваем подтверждение
@@ -1138,7 +1170,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     
     // Получаем количество пользователей для рассылки
     const totalUsers = await this.userRepository.count({
-      where: { isActive: true, telegramId: Not(null) },
+      where: { isActive: true, telegramId: Not(IsNull()) },
     });
 
     await ctx.reply(
@@ -1151,7 +1183,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Выполнение рассылки
-  private async executeBroadcast(ctx: any, message: string) {
+  private async executeBroadcast(ctx: Context, message: string) {
+    if (!ctx.from) return;
     try {
       await ctx.reply('⏳ Начинаю рассылку...');
       
@@ -1191,14 +1224,15 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           reply_markup: keyboard.reply_markup,
         },
       );
-    } catch (error: any) {
-      this.logger.error(`Ошибка при выполнении рассылки: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при выполнении рассылки: ${getErrorMessage(error)}`, getErrorStack(error));
       await ctx.reply('❌ Ошибка при выполнении рассылки.');
     }
   }
 
   // Обработка админских функций - пользователи
-  private async handleAdminUsers(ctx: any) {
+  private async handleAdminUsers(ctx: Context) {
+    if (!ctx.from) return;
     const telegramId = ctx.from.id.toString();
     
     if (!(await this.isAdmin(telegramId))) {
@@ -1230,14 +1264,15 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         parse_mode: 'Markdown',
         reply_markup: keyboard.reply_markup,
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при получении информации о пользователях: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при получении информации о пользователях: ${getErrorMessage(error)}`);
       await ctx.answerCbQuery('Ошибка');
     }
   }
 
   // Обработка админских функций - записи
-  private async handleAdminAppointments(ctx: any) {
+  private async handleAdminAppointments(ctx: Context) {
+    if (!ctx.from) return;
     const telegramId = ctx.from.id.toString();
     
     if (!(await this.isAdmin(telegramId))) {
@@ -1278,8 +1313,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         parse_mode: 'Markdown',
         reply_markup: keyboard.reply_markup,
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при получении информации о записях: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при получении информации о записях: ${getErrorMessage(error)}`);
       await ctx.answerCbQuery('Ошибка');
     }
   }
@@ -1327,7 +1362,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           const user = await this.usersService.findByTelegramId(telegramId);
 
           if (user) {
-            const appointments = await this.appointmentsService.findAll(user.id);
+            const { data: appointments } = await this.appointmentsService.findAll(user.id);
             const upcoming = appointments
               .filter(apt => 
                 apt.status === AppointmentStatus.CONFIRMED || 
@@ -1345,12 +1380,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
                   type: 'article' as const,
                   id: `appointment_${apt.id}_${index}`,
                   title: `${date.toLocaleDateString('ru-RU', { timeZone: timezone })} ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: timezone })}`,
-                  description: `${(apt.service as any)?.name || 'Услуга'} • ${(apt.master as any)?.name || 'Мастер'}`,
+                  description: `${(apt.service as WithName)?.name || 'Услуга'} • ${(apt.master as WithName)?.name || 'Мастер'}`,
                   input_message_content: {
                     message_text: `📋 Ваша запись:\n\n` +
                       `📅 ${date.toLocaleString('ru-RU', { timeZone: timezone })}\n` +
-                      `💆 ${(apt.service as any)?.name || 'Услуга'}\n` +
-                      `👤 ${(apt.master as any)?.name || 'Мастер'}\n\n` +
+                      `💆 ${(apt.service as WithName)?.name || 'Услуга'}\n` +
+                      `👤 ${(apt.master as WithName)?.name || 'Мастер'}\n\n` +
                       `Используйте /appointments для управления записями.`,
                   },
                   reply_markup: {
@@ -1424,8 +1459,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         }], {
           cache_time: 300,
         });
-      } catch (error: any) {
-        this.logger.error(`Ошибка при обработке inline-запроса: ${error.message}`, error.stack);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при обработке inline-запроса: ${getErrorMessage(error)}`, getErrorStack(error));
         await ctx.answerInlineQuery([], {
           cache_time: 0,
         });
@@ -1436,7 +1471,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   private setupCallbacks() {
     // Обработка callback query для inline кнопок
     this.bot.on('callback_query', async (ctx) => {
-      const data = (ctx.callbackQuery as any).data;
+      const data = (ctx.callbackQuery as { data?: string } | undefined)?.data ?? '';
       const [action, ...params] = data.split(':');
 
       try {
@@ -1588,9 +1623,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           default:
             await ctx.answerCbQuery('Неизвестное действие');
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         await ctx.answerCbQuery('Произошла ошибка. Попробуйте еще раз.');
-        this.logger.error(`Ошибка в callback обработчике: ${error.message}`, error.stack);
+        this.logger.error(`Ошибка в callback обработчике: ${getErrorMessage(error)}`, getErrorStack(error));
       }
     });
   }
@@ -1639,7 +1674,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       await this.sendPrivateCallbackReply(ctx, message, keyboard);
     } catch (error) {
-      this.logger.error(`Ошибка при показе услуг: ${error.message}`, error.stack);
+      this.logger.error(`Ошибка при показе услуг: ${getErrorMessage(error)}`, getErrorStack(error));
       await this.sendPrivateCallbackReply(ctx, 'Произошла ошибка при загрузке услуг. Попробуйте позже.');
     }
   }
@@ -1722,7 +1757,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
     } catch (error) {
-      this.logger.error(`Ошибка при показе подкатегорий: ${error.message}`, error.stack);
+      this.logger.error(`Ошибка при показе подкатегорий: ${getErrorMessage(error)}`, getErrorStack(error));
       await this.sendPrivateCallbackReply(ctx, 'Произошла ошибка при загрузке подкатегорий. Попробуйте позже.');
     }
   }
@@ -1794,12 +1829,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     session.step = 'select_master';
     
     // Получаем мастеров для подкатегории
-    let availableMasters: any[] = [];
+    let availableMasters: Master[] = [];
     if (subcategory.masters && subcategory.masters.length > 0) {
-      availableMasters = subcategory.masters.filter((master) => master.isActive);
+      availableMasters = subcategory.masters.filter((m) => m.isActive);
     } else {
       const allMastersResult = await this.mastersService.findAll();
-      availableMasters = allMastersResult.data || [];
+      availableMasters = (allMastersResult.data as Master[]) || [];
     }
 
     if (availableMasters.length === 0) {
@@ -1811,13 +1846,13 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     session.availableMasters = availableMasters.map((m) => ({ 
       id: m.id, 
       name: m.name,
-      rating: m.rating || m.averageRating || '5.0'
+      rating: String(m.rating ?? (m as { averageRating?: unknown }).averageRating ?? '5.0')
     }));
 
       const keyboard = Markup.inlineKeyboard([
         ...availableMasters.map((master, index) => {
           const masterInfo = session.availableMasters?.[index];
-          const rating = masterInfo?.rating || master.rating || master.averageRating || '5.0';
+          const rating = masterInfo?.rating || String(master.rating ?? (master as { averageRating?: unknown }).averageRating ?? '5.0');
           return [
             Markup.button.callback(
               `${master.name} ⭐${rating}`,
@@ -1872,16 +1907,16 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       // Получаем мастеров, которые предоставляют эту услугу
       // Сначала пытаемся получить мастеров через связь с услугой
-      let availableMasters: any[] = [];
+      let availableMasters: Master[] = [];
       
       if (service.masters && service.masters.length > 0) {
         // Используем мастеров, связанных с услугой
-        availableMasters = service.masters.filter((master) => master.isActive);
+        availableMasters = service.masters.filter((m) => m.isActive);
       } else {
         // Если для услуги нет связанных мастеров, показываем всех активных мастеров
         // Это временное решение, пока не настроена связь мастер-услуга в админке
         const allMastersResult = await this.mastersService.findAll();
-        availableMasters = allMastersResult.data || [];
+        availableMasters = (allMastersResult.data as Master[]) || [];
       }
 
       if (availableMasters.length === 0) {
@@ -1893,7 +1928,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       session.availableMasters = availableMasters.map((m) => ({ 
         id: m.id, 
         name: m.name,
-        rating: m.rating || m.averageRating || '5.0'
+        rating: String(m.rating ?? (m as { averageRating?: unknown }).averageRating ?? '5.0')
       }));
 
       // Используем короткие индексы вместо UUID для callback_data (лимит Telegram: 64 байта)
@@ -1915,7 +1950,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
     } catch (error) {
-      this.logger.error(`Ошибка при выборе услуги: ${error.message}`, error.stack);
+      this.logger.error(`Ошибка при выборе услуги: ${getErrorMessage(error)}`, getErrorStack(error));
       await ctx.answerCbQuery('Ошибка при загрузке услуги');
     }
   }
@@ -1936,7 +1971,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
 
     const masterId = session.availableMasters[index].id;
-    const master = await this.mastersService.findById(masterId);
+    await this.mastersService.findById(masterId); // проверка существования
     session.selectedMasterId = masterId;
     session.step = 'select_date';
 
@@ -1960,7 +1995,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
     const keyboard: any[] = [];
     // Сохраняем год и месяц в сессии для навигации
-    const session = this.getSession(ctx.from!.id);
+    this.getSession(ctx.from!.id);
     
     const header = Markup.button.callback(
       `${this.getMonthName(month)} ${year}`,
@@ -2179,7 +2214,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     
     // Получаем информацию об услугах (основная + подкатегории)
     const mainService = await this.servicesService.findById(session.selectedServiceId);
-    let selectedServices: any[] = [];
+    let selectedServices: Service[] = [];
     let totalPrice = 0;
     let totalDuration = 0;
 
@@ -2206,7 +2241,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     let finalPrice = totalPrice;
 
     if (user) {
-      const existingAppointments = await this.appointmentsService.findAll(user.id);
+      const { data: existingAppointments } = await this.appointmentsService.findAll(user.id);
       isFirstVisit = existingAppointments.length === 0;
 
       if (isFirstVisit) {
@@ -2325,7 +2360,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       // Определяем, какие услуги нужно записать
       const mainService = await this.servicesService.findById(session.selectedServiceId);
-      let servicesToBook: any[] = [];
+      let servicesToBook: Service[] = [];
 
       if (session.selectedSubcategoryIds && session.selectedSubcategoryIds.length > 0) {
         // Есть выбранные подкатегории - создаем запись для каждой
@@ -2372,7 +2407,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
       
       // Создаем записи для каждой услуги
-      const appointments = [];
+      const appointments: Appointment[] = [];
       let currentTime = new Date(session.selectedTime);
 
       for (let i = 0; i < servicesToBook.length; i++) {
@@ -2424,6 +2459,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
 
       const firstAppointment = finalAppointments[0];
+      if (!firstAppointment) {
+        this.logger.error('[handleConfirmAppointment] Нет созданных записей');
+        return;
+      }
 
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('📋 Мои записи', 'appointments:list')],
@@ -2468,9 +2507,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       // Очищаем сессию
       this.sessions.delete(ctx.from!.id);
       await ctx.answerCbQuery('✅ Запись создана!');
-    } catch (error: any) {
-      this.logger.error(`Ошибка при создании записи: ${error.message}`, error.stack);
-      await ctx.answerCbQuery(`Ошибка: ${error.message || 'Не удалось создать запись'}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при создании записи: ${getErrorMessage(error)}`, getErrorStack(error));
+      await ctx.answerCbQuery(`Ошибка: ${getErrorMessage(error) || 'Не удалось создать запись'}`);
     }
   }
 
@@ -2523,38 +2562,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       // Очищаем сессию
       this.sessions.delete(ctx.from!.id);
       await ctx.answerCbQuery('✅ Запись перенесена!');
-    } catch (error: any) {
-      this.logger.error(`Ошибка при переносе записи: ${error.message}`, error.stack);
-      await ctx.answerCbQuery(`Ошибка: ${error.message || 'Не удалось перенести запись'}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при переносе записи: ${getErrorMessage(error)}`, getErrorStack(error));
+      await ctx.answerCbQuery(`Ошибка: ${getErrorMessage(error) || 'Не удалось перенести запись'}`);
     }
-  }
-
-  // Показ выбора причины переноса
-  private async showRescheduleReasonSelection(ctx: Context, appointmentId: string) {
-    const session = this.getSession(ctx.from!.id);
-    session.step = 'reschedule_reason';
-    session.selectedAppointmentId = appointmentId;
-
-    const reasons = [
-      { text: 'Изменение планов', callback: 'reason:change_plans' },
-      { text: 'Болезнь', callback: 'reason:illness' },
-      { text: 'Срочные дела', callback: 'reason:urgent' },
-      { text: 'Другая причина', callback: 'reason:other' },
-    ];
-
-    const keyboard = Markup.inlineKeyboard([
-      ...reasons.map(r => [Markup.button.callback(r.text, r.callback)]),
-      [Markup.button.callback('❌ Отмена', 'cancel')],
-    ]);
-
-    await ctx.editMessageText(
-      '📝 *Выберите причину переноса записи:*',
-      {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard.reply_markup,
-      },
-    );
-    await ctx.answerCbQuery();
   }
 
   // Обработка выбора причины переноса
@@ -2629,8 +2640,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       await ctx.editMessageText(
         `💬 *Оставьте отзыв о записи*\n\n` +
-        `Услуга: ${(appointment.service as any)?.name || 'Услуга'}\n` +
-        `Мастер: ${(appointment.master as any)?.name || 'Мастер'}\n\n` +
+        `Услуга: ${(appointment.service as WithName)?.name || 'Услуга'}\n` +
+        `Мастер: ${(appointment.master as WithName)?.name || 'Мастер'}\n\n` +
         `Выберите оценку:`,
         {
           parse_mode: 'Markdown',
@@ -2638,9 +2649,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         },
       );
       await ctx.answerCbQuery();
-    } catch (error: any) {
-      this.logger.error(`Ошибка при запросе отзыва: ${error.message}`, error.stack);
-      await ctx.answerCbQuery(`Ошибка: ${error.message || 'Не удалось загрузить запись'}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при запросе отзыва: ${getErrorMessage(error)}`, getErrorStack(error));
+      await ctx.answerCbQuery(`Ошибка: ${getErrorMessage(error) || 'Не удалось загрузить запись'}`);
     }
   }
 
@@ -2702,9 +2713,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       session.step = undefined;
       session.selectedAppointmentForReview = undefined;
       session.reviewRating = undefined;
-    } catch (error: any) {
-      this.logger.error(`Ошибка при создании отзыва: ${error.message}`, error.stack);
-      await ctx.reply(`❌ Ошибка: ${error.message || 'Не удалось создать отзыв'}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при создании отзыва: ${getErrorMessage(error)}`, getErrorStack(error));
+      await ctx.reply(`❌ Ошибка: ${getErrorMessage(error) || 'Не удалось создать отзыв'}`);
     }
   }
 
@@ -2718,7 +2729,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const appointments = await this.appointmentsService.findAll(user.id);
+    const { data: appointments } = await this.appointmentsService.findAll(user.id);
 
     if (appointments.length === 0) {
       await this.sendPrivateCallbackReply(ctx, 'У вас пока нет записей. Используйте /book для записи.');
@@ -2749,8 +2760,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     for (const apt of upcoming.slice(0, 10)) {
       const date = new Date(apt.startTime);
       message += `📅 ${date.toLocaleString('ru-RU')}\n`;
-      message += `💆 ${(apt.service as any)?.name || 'Услуга'}\n`;
-      message += `👤 ${(apt.master as any)?.name || 'Мастер'}\n`;
+      message += `💆 ${(apt.service as WithName)?.name || 'Услуга'}\n`;
+      message += `👤 ${(apt.master as WithName)?.name || 'Мастер'}\n`;
       message += `💰 ${apt.price}₽\n\n`;
 
       keyboard.push([
@@ -2781,7 +2792,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const appointments = await this.appointmentsService.findAll(user.id);
+    const { data: appointments } = await this.appointmentsService.findAll(user.id);
 
     // Фильтруем только актуальные записи (исключая прошедшие)
     const now = new Date();
@@ -2807,8 +2818,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     for (const apt of upcoming.slice(0, 10)) {
       const date = new Date(apt.startTime);
       message += `📅 ${date.toLocaleString('ru-RU')}\n`;
-      message += `💆 ${(apt.service as any)?.name || 'Услуга'}\n`;
-      message += `👤 ${(apt.master as any)?.name || 'Мастер'}\n\n`;
+      message += `💆 ${(apt.service as WithName)?.name || 'Услуга'}\n`;
+      message += `👤 ${(apt.master as WithName)?.name || 'Мастер'}\n\n`;
 
       keyboard.push([
         Markup.button.callback(
@@ -2838,8 +2849,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const appointment = await this.appointmentsService.findById(appointmentId, user.id);
-      const service = await this.servicesService.findById(appointment.serviceId);
-      const master = await this.mastersService.findById(appointment.masterId);
+      await this.servicesService.findById(appointment.serviceId); // проверка существования
+      await this.mastersService.findById(appointment.masterId); // проверка существования
 
       const session = this.getSession(ctx.from!.id);
       session.selectedServiceId = appointment.serviceId;
@@ -2851,9 +2862,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       const today = new Date();
       await this.showCalendar(ctx, appointment.serviceId, appointment.masterId, today.getFullYear(), today.getMonth());
       await ctx.answerCbQuery();
-    } catch (error: any) {
-      this.logger.error(`Ошибка при начале переноса: ${error.message}`, error.stack);
-      await ctx.answerCbQuery(`Ошибка: ${error.message || 'Не удалось начать перенос'}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при начале переноса: ${getErrorMessage(error)}`, getErrorStack(error));
+      await ctx.answerCbQuery(`Ошибка: ${getErrorMessage(error) || 'Не удалось начать перенос'}`);
     }
   }
 
@@ -2879,9 +2890,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       
       // Показываем обновленный список записей
       setTimeout(() => this.showAppointments(ctx), 500);
-    } catch (error: any) {
-      this.logger.error(`Ошибка при отмене записи: ${error.message}`, error.stack);
-      await ctx.answerCbQuery(`Ошибка: ${error.message || 'Не удалось отменить запись'}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отмене записи: ${getErrorMessage(error)}`, getErrorStack(error));
+      await ctx.answerCbQuery(`Ошибка: ${getErrorMessage(error) || 'Не удалось отменить запись'}`);
     }
   }
 
@@ -2895,7 +2906,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const appointments = await this.appointmentsService.findAll(user.id);
+    const { data: appointments } = await this.appointmentsService.findAll(user.id);
     const totalAppointments = appointments.filter(
       (apt) => apt.status === AppointmentStatus.COMPLETED,
     ).length;
@@ -3150,8 +3161,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       ]);
 
       await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при показе реферальной информации: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при показе реферальной информации: ${getErrorMessage(error)}`);
       await ctx.reply('Произошла ошибка при загрузке реферальной информации. Попробуйте позже.');
     }
   }
@@ -3199,8 +3210,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       ]);
 
       await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при показе статистики рефералов: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при показе статистики рефералов: ${getErrorMessage(error)}`);
       await ctx.reply('Произошла ошибка при загрузке статистики. Попробуйте позже.');
     }
   }
@@ -3235,8 +3246,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     if (this.bot) {
       try {
         await this.bot.telegram.sendMessage(chatId, message, options);
-      } catch (error: any) {
-        this.logger.error(`Ошибка при отправке сообщения: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при отправке сообщения: ${getErrorMessage(error)}`);
       }
     }
   }
@@ -3277,9 +3288,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const client = appointmentWithRelations.client as any;
-      const master = appointmentWithRelations.master as any;
-      const service = appointmentWithRelations.service as any;
+      const client = appointmentWithRelations.client as ClientLike;
+      const master = appointmentWithRelations.master as MasterLike;
+      const service = appointmentWithRelations.service as WithName;
       const date = new Date(appointmentWithRelations.startTime);
 
       // Получаем таймзону из настроек для правильного отображения времени
@@ -3309,11 +3320,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           reply_markup: keyboard.reply_markup,
         });
         this.logger.log(`Уведомление о новой записи отправлено администратору ${admin.id}`);
-      } catch (error: any) {
-        this.logger.error(`Ошибка при отправке уведомления администратору: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при отправке уведомления администратору: ${getErrorMessage(error)}`);
       }
-    } catch (error: any) {
-      this.logger.error(`Ошибка при отправке уведомлений админам о новой записи: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомлений админам о новой записи: ${getErrorMessage(error)}`);
     }
   }
 
@@ -3337,7 +3348,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const master = appointmentWithRelations.master as any;
+      const master = appointmentWithRelations.master as MasterLike;
       
       // Загружаем пользователя мастера для получения telegramId
       const masterUser = await this.userRepository.findOne({
@@ -3350,8 +3361,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const client = appointmentWithRelations.client as any;
-      const service = appointmentWithRelations.service as any;
+      const client = appointmentWithRelations.client as ClientLike;
+      const service = appointmentWithRelations.service as WithName;
       const date = new Date(appointmentWithRelations.startTime);
 
       // Получаем таймзону из настроек для правильного отображения времени
@@ -3374,11 +3385,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           parse_mode: 'Markdown',
         });
         this.logger.log(`Уведомление о новой записи отправлено мастеру ${master.id}`);
-      } catch (error: any) {
-        this.logger.error(`Ошибка при отправке уведомления мастеру: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при отправке уведомления мастеру: ${getErrorMessage(error)}`);
       }
-    } catch (error: any) {
-      this.logger.error(`Ошибка при отправке уведомления мастеру о новой записи: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомления мастеру о новой записи: ${getErrorMessage(error)}`);
     }
   }
 
@@ -3418,9 +3429,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const client = appointmentWithRelations.client as any;
-      const master = appointmentWithRelations.master as any;
-      const service = appointmentWithRelations.service as any;
+      const client = appointmentWithRelations.client as ClientLike;
+      const master = appointmentWithRelations.master as MasterLike;
+      const service = appointmentWithRelations.service as WithName;
       const date = new Date(appointmentWithRelations.startTime);
 
       // Получаем таймзону из настроек для правильного отображения времени
@@ -3446,11 +3457,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           parse_mode: 'Markdown',
         });
         this.logger.log(`Уведомление об отмене записи отправлено администратору ${admin.id}`);
-      } catch (error: any) {
-        this.logger.error(`Ошибка при отправке уведомления администратору: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при отправке уведомления администратору: ${getErrorMessage(error)}`);
       }
-    } catch (error: any) {
-      this.logger.error(`Ошибка при отправке уведомлений админам об отмене записи: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомлений админам об отмене записи: ${getErrorMessage(error)}`);
     }
   }
 
@@ -3479,8 +3490,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
    */
   public replaceMessageVariables(
     text: string,
-    user?: any,
-    chat?: any,
+    user?: ReplaceVarsUser,
+    chat?: ChatLike,
   ): string {
     if (!text) return text;
 
@@ -3588,7 +3599,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   /**
    * Отправляет приветственное сообщение новому участнику группы индивидуально
    */
-  private async sendWelcomeMessageToNewMember(userId: number, chat: any): Promise<void> {
+  private async sendWelcomeMessageToNewMember(userId: number, chat: ChatLike): Promise<void> {
     if (!this.bot) {
       this.logger.warn('Бот не инициализирован, невозможно отправить приветственное сообщение');
       return;
@@ -3596,7 +3607,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
     try {
       // Получаем информацию о пользователе
-      let user: any = null;
+      let user: User | null = null;
       try {
         user = await this.userRepository.findOne({ where: { telegramId: userId.toString() } });
       } catch (error) {
@@ -3609,7 +3620,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       // Формируем приветственное сообщение
       let welcomeText: string;
       if (customWelcomeMessage && customWelcomeMessage.trim()) {
-        welcomeText = this.replaceMessageVariables(customWelcomeMessage, user, chat);
+        welcomeText = this.replaceMessageVariables(customWelcomeMessage, user ?? undefined, chat);
       } else {
         // Дефолтное приветственное сообщение
         welcomeText = 
@@ -3637,12 +3648,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       });
 
       this.logger.log(`Приветственное сообщение отправлено пользователю ${userId}`);
-    } catch (error: any) {
-      // Если не удалось отправить личное сообщение (пользователь заблокировал бота или не начал диалог)
-      if (error.code === 403 || error.description?.includes('bot was blocked') || error.description?.includes('chat not found')) {
+    } catch (error: unknown) {
+      const e = error as { code?: number; description?: string };
+      if (e.code === 403 || e.description?.includes('bot was blocked') || e.description?.includes('chat not found')) {
         this.logger.debug(`Пользователь ${userId} заблокировал бота или не начал диалог`);
       } else {
-        this.logger.error(`Ошибка при отправке приветственного сообщения пользователю ${userId}: ${error.message}`);
+        this.logger.error(`Ошибка при отправке приветственного сообщения пользователю ${userId}: ${getErrorMessage(error)}`);
         throw error;
       }
     }
@@ -3651,8 +3662,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   /**
    * Определяет, является ли чат группой
    */
-  private isGroupChat(chat: any): boolean {
-    return chat.type === 'group' || chat.type === 'supergroup';
+  private isGroupChat(chat: ChatLike | undefined): boolean {
+    return !!chat && (chat.type === 'group' || chat.type === 'supergroup');
   }
 
   /**
@@ -3700,8 +3711,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
    * Обработка команды /schedule - показать свободные слоты
    */
   private async handleScheduleCommand(ctx: Context) {
+    if (!ctx.chat || !ctx.from) return;
     const isGroup = this.isGroupChat(ctx.chat);
-    
+
     if (isGroup) {
       // Проверяем, включена ли команда для группы
       const enabled = await this.isCommandEnabled(ctx.chat.id.toString(), 'schedule');
@@ -3774,8 +3786,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           parse_mode: 'Markdown',
         });
       }
-    } catch (error: any) {
-      this.logger.error(`Ошибка при обработке /schedule: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при обработке /schedule: ${getErrorMessage(error)}`, getErrorStack(error));
       await ctx.reply('❌ Произошла ошибка при получении расписания. Попробуйте позже.');
     }
   }
@@ -3817,8 +3829,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       const availableSlots = Math.max(0, estimatedSlots - filteredCount);
 
       return availableSlots;
-    } catch (error: any) {
-      this.logger.error(`Ошибка при расчете доступных слотов: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при расчете доступных слотов: ${getErrorMessage(error)}`);
       return 0;
     }
   }
@@ -3827,8 +3839,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
    * Обработка команды /masters - показать информацию о мастерах
    */
   private async handleMastersCommand(ctx: Context) {
+    if (!ctx.chat || !ctx.from) return;
     const isGroup = this.isGroupChat(ctx.chat);
-    
+
     if (isGroup) {
       const enabled = await this.isCommandEnabled(ctx.chat.id.toString(), 'masters');
       if (!enabled) {
@@ -3875,8 +3888,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         reply_markup: keyboard.reply_markup,
         parse_mode: 'Markdown',
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при обработке /masters: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при обработке /masters: ${getErrorMessage(error)}`, getErrorStack(error));
       await ctx.reply('❌ Произошла ошибка при получении информации о мастерах. Попробуйте позже.');
     }
   }
@@ -3885,8 +3898,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
    * Обработка команды /promotions - показать акции и скидки
    */
   private async handlePromotionsCommand(ctx: Context) {
+    if (!ctx.chat || !ctx.from) return;
     const isGroup = this.isGroupChat(ctx.chat);
-    
+
     if (isGroup) {
       const enabled = await this.isCommandEnabled(ctx.chat.id.toString(), 'promotions');
       if (!enabled) {
@@ -3911,9 +3925,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Можно добавить другие акции из настроек
-      const promotions = await this.settingsService.get('promotions', []);
+      const promotions = await this.settingsService.get('promotions', []) as Array<{ title?: string; description?: string }>;
       if (Array.isArray(promotions) && promotions.length > 0) {
-        promotions.forEach((promo: any) => {
+        promotions.forEach((promo) => {
           message += `🎯 ${promo.title || 'Акция'}\n`;
           if (promo.description) {
             message += `   ${promo.description}\n`;
@@ -3940,8 +3954,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         reply_markup: keyboard.reply_markup,
         parse_mode: 'Markdown',
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при обработке /promotions: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при обработке /promotions: ${getErrorMessage(error)}`, getErrorStack(error));
       await ctx.reply('❌ Произошла ошибка при получении акций. Попробуйте позже.');
     }
   }
@@ -3950,8 +3964,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
    * Обработка команды /faq - ответы на частые вопросы
    */
   private async handleFaqCommand(ctx: Context) {
+    if (!ctx.chat || !ctx.from) return;
     const isGroup = this.isGroupChat(ctx.chat);
-    
+
     if (isGroup) {
       const enabled = await this.isCommandEnabled(ctx.chat.id.toString(), 'faq');
       if (!enabled) {
@@ -3988,7 +4003,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       let message = `❓ *Часто задаваемые вопросы*\n\n`;
 
       if (Array.isArray(faq)) {
-        faq.forEach((item: any, index: number) => {
+        (faq as Array<{ question?: string; answer?: string }>).forEach((item, index) => {
           message += `${index + 1}. *${item.question || 'Вопрос'}*\n`;
           message += `   ${item.answer || 'Ответ'}\n\n`;
         });
@@ -4007,8 +4022,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         reply_markup: keyboard.reply_markup,
         parse_mode: 'Markdown',
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при обработке /faq: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при обработке /faq: ${getErrorMessage(error)}`, getErrorStack(error));
       await ctx.reply('❌ Произошла ошибка при получении FAQ. Попробуйте позже.');
     }
   }
@@ -4018,9 +4033,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
    * Если команда вызвана в группе, ответ отправляется через личные сообщения
    * Если в личном чате - обычным способом
    */
-  private async sendPrivateReply(ctx: any, message: string, options?: any): Promise<void> {
+  private async sendPrivateReply(ctx: Context, message: string, options?: any): Promise<void> {
+    if (!ctx.chat || !ctx.from) return;
     const isGroup = this.isGroupChat(ctx.chat);
-    
+
     // Определяем parse_mode автоматически, если не указан явно в options
     const parseMode = options?.parse_mode || this.detectParseMode(message);
     
@@ -4033,10 +4049,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       // В групповом чате отправляем ответ через личные сообщения
       try {
         await this.bot.telegram.sendMessage(ctx.from.id, message, finalOptions);
-      } catch (error: any) {
-        // Если не удалось отправить личное сообщение (пользователь заблокировал бота)
-        if (error.code === 403 || error.description?.includes('bot was blocked') || error.description?.includes('chat not found')) {
-          // Отправляем ответ в группу с reply_to_message_id (видно только отправителю и в контексте его сообщения)
+      } catch (error: unknown) {
+        const e = error as { code?: number; description?: string };
+        if (e.code === 403 || e.description?.includes('bot was blocked') || e.description?.includes('chat not found')) {
           await ctx.reply(message, {
             ...finalOptions,
             reply_to_message_id: ctx.message?.message_id,
@@ -4046,7 +4061,6 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         }
       }
     } else {
-      // В личном чате отправляем обычным способом
       await ctx.reply(message, finalOptions);
     }
   }
@@ -4056,9 +4070,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
    * Если callback вызван из группы, ответ отправляется через личные сообщения
    * Если из личного чата - редактирует сообщение или отправляет новое
    */
-  private async sendPrivateCallbackReply(ctx: any, message: string, keyboard?: any, options?: any): Promise<void> {
+  private async sendPrivateCallbackReply(ctx: Context, message: string, keyboard?: any, options?: any): Promise<void> {
+    if (!ctx.chat || !ctx.from) return;
     const isGroup = this.isGroupChat(ctx.chat);
-    
+
     if (isGroup) {
       // В групповом чате отправляем ответ через личные сообщения
       const isCallbackQuery = !!ctx.callbackQuery || 'callback_query' in ctx.update;
@@ -4071,9 +4086,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           ...options,
           reply_markup: keyboard?.reply_markup,
         });
-      } catch (error: any) {
-        // Если не удалось отправить личное сообщение
-        if (error.code === 403 || error.description?.includes('bot was blocked') || error.description?.includes('chat not found')) {
+      } catch (error: unknown) {
+        const e = error as { code?: number; description?: string };
+        if (e.code === 403 || e.description?.includes('bot was blocked') || e.description?.includes('chat not found')) {
           if (isCallbackQuery) {
             await ctx.answerCbQuery('Пожалуйста, начните диалог с ботом в личных сообщениях');
           }
@@ -4085,7 +4100,6 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         }
       }
     } else {
-      // В личном чате пытаемся отредактировать сообщение или отправить новое
       const isCallbackQuery = !!ctx.callbackQuery || 'callback_query' in ctx.update;
       if (isCallbackQuery) {
         try {
@@ -4110,14 +4124,6 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         });
       }
     }
-  }
-
-  /**
-   * Получает меню для группового чата (упрощенное)
-   */
-  private getGroupMenuKeyboard() {
-    // В групповом чате не показываем reply-клавиатуру, только inline-кнопки
-    return null;
   }
 
   /**
@@ -4191,9 +4197,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           : 'Перенесена';
 
         message += `${index + 1}. ${statusEmoji} ${date.toLocaleDateString('ru-RU')} ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}\n`;
-        message += `   👤 ${(apt.client as any)?.firstName || 'Неизвестно'} ${(apt.client as any)?.lastName || ''}\n`;
-        message += `   💆 ${(apt.service as any)?.name || 'Услуга'}\n`;
-        message += `   👨‍💼 ${(apt.master as any)?.name || 'Мастер'}\n`;
+        message += `   👤 ${(apt.client as ClientLike)?.firstName || 'Неизвестно'} ${(apt.client as ClientLike)?.lastName || ''}\n`;
+        message += `   💆 ${(apt.service as WithName)?.name || 'Услуга'}\n`;
+        message += `   👨‍💼 ${(apt.master as WithName)?.name || 'Мастер'}\n`;
         message += `   📊 ${statusText}\n\n`;
       });
 
@@ -4212,8 +4218,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         reply_markup: keyboard.reply_markup,
         link_preview_options: { is_disabled: true },
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при получении актуальных записей: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при получении актуальных записей: ${getErrorMessage(error)}`);
       await ctx.answerCbQuery('Ошибка');
     }
   }
@@ -4252,7 +4258,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       const buttons = pendingAppointments.slice(0, 10).map((apt) => [
         Markup.button.callback(
-          `${new Date(apt.startTime).toLocaleDateString('ru-RU')} ${new Date(apt.startTime).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} - ${(apt.client as any)?.firstName || 'Клиент'}`,
+          `${new Date(apt.startTime).toLocaleDateString('ru-RU')} ${new Date(apt.startTime).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} - ${(apt.client as ClientLike)?.firstName || 'Клиент'}`,
           `admin:appointment:detail:${apt.id}`,
         ),
       ]);
@@ -4268,8 +4274,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         parse_mode: 'Markdown',
         reply_markup: keyboard.reply_markup,
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при получении записей на подтверждение: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при получении записей на подтверждение: ${getErrorMessage(error)}`);
       await ctx.answerCbQuery('Ошибка');
     }
   }
@@ -4300,18 +4306,19 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         await this.appointmentRepository.save(appointment);
         await ctx.answerCbQuery('✅ Запись подтверждена');
         // Отправляем уведомление клиенту
-        if (appointment.client && (appointment.client as any).telegramId) {
+        const clientTgId = (appointment.client as ClientLike).telegramId;
+        if (appointment.client && clientTgId) {
           try {
             await this.bot.telegram.sendMessage(
-              (appointment.client as any).telegramId,
+              clientTgId,
               `✅ Ваша запись подтверждена!\n\n` +
               `📅 Дата: ${new Date(appointment.startTime).toLocaleDateString('ru-RU')}\n` +
               `⏰ Время: ${new Date(appointment.startTime).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}\n` +
-              `💆 Услуга: ${(appointment.service as any)?.name || 'Услуга'}\n` +
-              `👨‍💼 Мастер: ${(appointment.master as any)?.name || 'Мастер'}`,
+              `💆 Услуга: ${(appointment.service as WithName)?.name || 'Услуга'}\n` +
+              `👨‍💼 Мастер: ${(appointment.master as WithName)?.name || 'Мастер'}`,
             );
           } catch (error) {
-            this.logger.warn(`Не удалось отправить уведомление клиенту: ${error.message}`);
+            this.logger.warn(`Не удалось отправить уведомление клиенту: ${getErrorMessage(error)}`);
           }
         }
       } else if (action === 'cancel') {
@@ -4344,11 +4351,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         `⏰ Время: ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}\n` +
         `📊 Статус: ${statusText}\n\n` +
         `👤 *Клиент:*\n` +
-        `   ${(appointment.client as any)?.firstName || ''} ${(appointment.client as any)?.lastName || ''}\n` +
-        `   Телефон: ${(appointment.client as any)?.phone || 'Не указан'}\n\n` +
-        `💆 *Услуга:* ${(appointment.service as any)?.name || 'Услуга'}\n` +
+        `   ${(appointment.client as ClientLike)?.firstName || ''} ${(appointment.client as ClientLike)?.lastName || ''}\n` +
+        `   Телефон: ${(appointment.client as ClientLike)?.phone || 'Не указан'}\n\n` +
+        `💆 *Услуга:* ${(appointment.service as WithName)?.name || 'Услуга'}\n` +
         `💰 Цена: ${appointment.price}₽\n` +
-        `👨‍💼 *Мастер:* ${(appointment.master as any)?.name || 'Мастер'}\n`;
+        `👨‍💼 *Мастер:* ${(appointment.master as WithName)?.name || 'Мастер'}\n`;
 
       const keyboardButtons: any[] = [];
       
@@ -4368,8 +4375,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         parse_mode: 'Markdown',
         reply_markup: keyboard.reply_markup,
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при обработке записи: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при обработке записи: ${getErrorMessage(error)}`);
       await ctx.answerCbQuery('Ошибка');
     }
   }
@@ -4455,8 +4462,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           reply_markup: keyboard.reply_markup,
         });
       }
-    } catch (error: any) {
-      this.logger.error(`Ошибка при работе с клиентами: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при работе с клиентами: ${getErrorMessage(error)}`);
       await ctx.answerCbQuery('Ошибка');
     }
   }
@@ -4471,7 +4478,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      const webAppUrl = process.env.FRONTEND_URL || 'https://your-domain.com';
+      const webAppUrl = this.configService.get<string>('FRONTEND_URL');
+      if (!webAppUrl) {
+        this.logger.error('FRONTEND_URL is not set. Cannot create Web App button.');
+        await ctx.reply('Web App недоступен. Пожалуйста, обратитесь к администратору.');
+        return;
+      }
       const webAppButton = Markup.button.webApp('🌐 Открыть Web App', `${webAppUrl}/app/admin`);
 
       const keyboard = Markup.inlineKeyboard([
@@ -4492,8 +4504,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         parse_mode: 'Markdown',
         reply_markup: keyboard.reply_markup,
       });
-    } catch (error: any) {
-      this.logger.error(`Ошибка при открытии Web App: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при открытии Web App: ${getErrorMessage(error)}`);
       await ctx.answerCbQuery('Ошибка');
     }
   }
@@ -4534,9 +4546,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const client = appointmentWithRelations.client as any;
-      const master = appointmentWithRelations.master as any;
-      const service = appointmentWithRelations.service as any;
+      const client = appointmentWithRelations.client as ClientLike;
+      const master = appointmentWithRelations.master as MasterLike;
+      const service = appointmentWithRelations.service as WithName;
       const date = new Date(appointmentWithRelations.startTime);
 
       // Получаем таймзону из настроек
@@ -4564,11 +4576,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           reply_markup: keyboard.reply_markup,
         });
         this.logger.log(`Уведомление о подтверждении записи отправлено администратору ${admin.id}`);
-      } catch (error: any) {
-        this.logger.error(`Ошибка при отправке уведомления администратору: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при отправке уведомления администратору: ${getErrorMessage(error)}`);
       }
-    } catch (error: any) {
-      this.logger.error(`Ошибка при отправке уведомления администратору о подтверждении записи: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомления администратору о подтверждении записи: ${getErrorMessage(error)}`);
     }
   }
 
@@ -4612,9 +4624,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const client = appointmentWithRelations.client as any;
-      const master = appointmentWithRelations.master as any;
-      const service = appointmentWithRelations.service as any;
+      const client = appointmentWithRelations.client as ClientLike;
+      const master = appointmentWithRelations.master as MasterLike;
+      const service = appointmentWithRelations.service as WithName;
       const date = new Date(appointmentWithRelations.startTime);
 
       // Получаем таймзону из настроек
@@ -4670,11 +4682,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           reply_markup: keyboard.reply_markup,
         });
         this.logger.log(`Уведомление об изменении записи отправлено администратору ${admin.id}`);
-      } catch (error: any) {
-        this.logger.error(`Ошибка при отправке уведомления администратору: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при отправке уведомления администратору: ${getErrorMessage(error)}`);
       }
-    } catch (error: any) {
-      this.logger.error(`Ошибка при отправке уведомления администратору об изменении записи: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомления администратору об изменении записи: ${getErrorMessage(error)}`);
     }
   }
 }

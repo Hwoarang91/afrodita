@@ -6,6 +6,7 @@ import { Master } from '../../entities/master.entity';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { CacheService } from '../../common/cache/cache.service';
+import { normalizePagination } from '../../common/dto/pagination.dto';
 
 @Injectable()
 export class ServicesService {
@@ -79,7 +80,8 @@ export class ServicesService {
     return await this.findById(savedService.id);
   }
 
-  async findAll(category?: string, page: number = 1, limit: number = 20, search?: string, isActive?: boolean, includeSubcategories: boolean = false): Promise<{ data: Service[]; total: number; page: number; limit: number; totalPages: number }> {
+  async findAll(category?: string, page?: string | number, limit?: string | number, search?: string, isActive?: boolean, includeSubcategories: boolean = false): Promise<{ data: Service[]; total: number; page: number; limit: number; totalPages: number }> {
+    const { page: p, limit: l } = normalizePagination(page, limit);
     const query = this.serviceRepository.createQueryBuilder('service')
       .leftJoinAndSelect('service.masters', 'masters')
       .leftJoinAndSelect('service.subcategories', 'subcategories')
@@ -110,17 +112,16 @@ export class ServicesService {
     query.orderBy('service.name', 'ASC');
 
     const total = await query.getCount();
-    const skip = (page - 1) * limit;
-    query.skip(skip).take(limit);
+    query.skip((p - 1) * l).take(l);
 
     const data = await query.getMany();
 
     return {
       data,
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      page: p,
+      limit: l,
+      totalPages: Math.ceil(total / l),
     };
   }
 

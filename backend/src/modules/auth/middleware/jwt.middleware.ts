@@ -1,4 +1,4 @@
-import { Injectable, NestMiddleware, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { JwtAuthService } from '../services/jwt.service';
 

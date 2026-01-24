@@ -24,22 +24,22 @@ export class ReviewsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Получение списка отзывов' })
+  @ApiOperation({ summary: 'Получение списка отзывов (с пагинацией)' })
   async findAll(
     @Query('masterId') masterId?: string,
     @Query('serviceId') serviceId?: string,
     @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    // Нормализуем статус из query параметра (может быть строка или enum)
     let normalizedStatus: ReviewStatus | string | undefined = status;
     if (status) {
-      // Преобразуем строку в lowercase для соответствия enum значениям
       const lowerStatus = status.toLowerCase();
       if (lowerStatus === 'approved' || lowerStatus === 'pending' || lowerStatus === 'rejected') {
         normalizedStatus = lowerStatus;
       }
     }
-    return await this.reviewsService.findAll(masterId, serviceId, normalizedStatus as any);
+    return await this.reviewsService.findAll(masterId, serviceId, normalizedStatus as ReviewStatus | undefined, page, limit);
   }
 
   @Post(':id/moderate')

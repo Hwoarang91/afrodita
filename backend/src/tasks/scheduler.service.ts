@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual, Between, LessThan, In } from 'typeorm';
+import { Repository, Between, LessThan, In } from 'typeorm';
 import { Appointment, AppointmentStatus } from '../entities/appointment.entity';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { FinancialService } from '../modules/financial/financial.service';

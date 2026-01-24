@@ -1,8 +1,7 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../entities/user.entity';
-import { Transaction, TransactionType } from '../../entities/transaction.entity';
 import { SettingsService } from '../settings/settings.service';
 import { FinancialService } from '../financial/financial.service';
 import { randomBytes } from 'crypto';
@@ -14,8 +13,6 @@ export class ReferralService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    @InjectRepository(Transaction)
-    private transactionRepository: Repository<Transaction>,
     private settingsService: SettingsService,
     private financialService: FinancialService,
   ) {}
@@ -24,7 +21,7 @@ export class ReferralService {
    * Генерирует уникальный реферальный код для пользователя
    */
   async generateReferralCode(userId: string): Promise<string> {
-    let referralCode: string;
+    let referralCode = '';
     let exists = true;
 
     // Генерируем код до тех пор, пока он не будет уникальным

@@ -7,7 +7,6 @@ import {
   TelegramClientInvokeEvent,
   TelegramClientErrorEvent,
 } from './telegram-client-event-emitter.service';
-import { TelegramUserClientService } from './telegram-user-client.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TelegramUserSession } from '../../../entities/telegram-user-session.entity';
@@ -43,8 +42,6 @@ export class TelegramConnectionMonitorService implements OnModuleInit, OnModuleD
   constructor(
     @InjectRepository(TelegramUserSession)
     private readonly sessionRepository: Repository<TelegramUserSession>,
-    @Inject(forwardRef(() => TelegramUserClientService))
-    private readonly telegramUserClientService: TelegramUserClientService,
     @Optional() @Inject(forwardRef(() => TelegramHeartbeatService))
     private readonly heartbeatService?: TelegramHeartbeatService,
     @Optional() @Inject(forwardRef(() => TelegramClientEventEmitter))

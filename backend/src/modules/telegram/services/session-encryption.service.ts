@@ -10,7 +10,6 @@ export class SessionEncryptionService {
   private readonly algorithm = 'aes-256-gcm';
   private readonly keyLength = 32; // 256 bits
   private readonly ivLength = 16; // 128 bits
-  private readonly tagLength = 16; // 128 bits
   private readonly encryptionKey: Buffer;
 
   constructor(private configService: ConfigService) {

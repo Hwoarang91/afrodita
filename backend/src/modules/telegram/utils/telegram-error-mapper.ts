@@ -365,3 +365,21 @@ export function isRetryableTelegramError(error: any): boolean {
     ErrorCode.INTERNAL_SERVER_ERROR,
   ].includes(mapping.errorCode as ErrorCode);
 }
+
+/**
+ * Проверяет, требует ли ошибка действия 2FA (REQUIRE_2FA).
+ * Единственная точка проверки строк MTProto для AUTH FLOW.
+ * Использовать вместо message.includes('SESSION_PASSWORD_NEEDED') и аналогичных.
+ *
+ * @param error - Telegram ошибка
+ * @returns true если нужен REQUIRE_2FA
+ */
+export function isRequire2faActionError(error: any): boolean {
+  const mapping = mapTelegramError(error);
+  return [
+    ErrorCode.INVALID_2FA_PASSWORD,
+    ErrorCode.PHONE_CODE_INVALID,
+    ErrorCode.PHONE_CODE_EXPIRED,
+    ErrorCode.PHONE_NUMBER_INVALID,
+  ].includes(mapping.errorCode as ErrorCode);
+}

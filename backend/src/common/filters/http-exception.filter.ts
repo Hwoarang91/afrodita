@@ -9,7 +9,6 @@ import {
 import { Response } from 'express';
 import { ErrorResponse, ErrorCode } from '../interfaces/error-response.interface';
 import { buildErrorResponse, buildValidationErrorResponse } from '../utils/error-response.builder';
-import { getHttpStatusForErrorCode } from '../utils/error-code-http-map';
 import { maskSensitiveData } from '../utils/sensitive-data-masker';
 import { ErrorMetricsService } from '../utils/error-metrics.service';
 

@@ -190,7 +190,7 @@ export class AuthController {
       const result = await this.authService.registerFirstAdmin(
         registerDto.email,
         registerDto.password,
-        registerDto.firstName,
+        registerDto.firstName ?? '',
         registerDto.lastName,
         req.ip,
         req.get('user-agent'),

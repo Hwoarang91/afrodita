@@ -123,9 +123,10 @@ export class TelegramSessionGuard implements CanActivate {
               this.logger.debug(`TelegramSessionGuard: ✅ Client already connected for session ${activeSession.id}`);
             }
             
-            // КРИТИЧНО: Валидируем сессию через getMe()
+            // КРИТИЧНО: Валидируем сессию через getMe() (с retry при FLOOD_WAIT)
             try {
-              await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+              const { invokeWithRetry } = await import('../utils/mtproto-retry.utils');
+              await invokeWithRetry(client, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
               this.logger.log(`TelegramSessionGuard: ✅ Session ${activeSession.id} validated successfully via getMe()`);
             } catch (validationError: any) {
               this.logger.error(`TelegramSessionGuard: ❌ Session ${activeSession.id} validation failed: ${validationError.message}`);

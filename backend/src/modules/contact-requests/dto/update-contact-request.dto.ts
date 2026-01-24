@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateContactRequestDto {
@@ -15,6 +15,7 @@ export class UpdateContactRequestDto {
   @ApiProperty({ description: 'Комментарий администратора', required: false })
   @IsString()
   @IsOptional()
+  @MaxLength(5000, { message: 'Комментарий не более 5000 символов' })
   comment?: string;
 }
 

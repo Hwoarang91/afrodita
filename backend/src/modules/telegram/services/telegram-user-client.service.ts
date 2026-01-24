@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, HttpException, Inject, forwardRef, Optional } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, Inject, forwardRef, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,12 +11,13 @@ import { TelegramClientEventEmitter } from './telegram-client-event-emitter.serv
 import { TelegramConnectionMonitorService } from './telegram-connection-monitor.service';
 import { User, UserRole } from '../../../entities/user.entity';
 import { handleMtprotoError, MtprotoErrorAction } from '../utils/mtproto-error.handler';
+import { invokeWithRetry } from '../utils/mtproto-retry.utils';
 import { assertSessionTransition } from '../utils/session-state-machine';
 
 /**
  * Кастомный Storage адаптер для MTKruto, который сохраняет сессии в БД с шифрованием
  */
-// @ts-ignore - временно игнорируем ошибку типов Storage
+/** Storage-адаптер для MTKruto: реализуем Partial<Storage>, ряд сигнатур (get/set/branch и др.) отличается от @mtkruto. */
 class DatabaseStorage implements Partial<Storage> {
   constructor(
     private sessionRepository: Repository<TelegramUserSession>,
@@ -435,7 +436,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
         throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in environment variables');
       }
 
-      const apiId = parseInt(apiIdStr, 10);
+      const apiId = parseInt(apiIdStr as string, 10);
       if (isNaN(apiId)) {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
@@ -455,15 +456,16 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.error(`Session ${session.id} not found in database!`);
         return null;
       }
-      
-      // NULL допустим (данные еще не сохранены), но '{}' - запрещено
-      if (sessionData.encryptedSessionData === '{}' || (sessionData.encryptedSessionData && sessionData.encryptedSessionData.trim() === '')) {
-        this.logger.error(`Session ${session.id} has empty or invalid encryptedSessionData (${sessionData.encryptedSessionData})!`);
+
+      // NULL допустим (данные еще не сохранены), но '{}' — запрещено (sessionData здесь не null после проверки выше)
+      const enc = sessionData!.encryptedSessionData;
+      if (enc === '{}' || (enc != null && (enc as string).trim() === '')) {
+        this.logger.error(`Session ${session.id} has empty or invalid encryptedSessionData (${String(enc)})!`);
         return null;
       }
-      
-      // Если encryptedSessionData === null, это нормально - данные будут загружены через storage
-      if (sessionData.encryptedSessionData === null) {
+
+      // Если encryptedSessionData === null, это нормально — данные будут загружены через storage
+      if (enc === null) {
         this.logger.debug(`Session ${session.id} has null encryptedSessionData - will load from storage`);
       }
       
@@ -481,7 +483,6 @@ export class TelegramUserClientService implements OnModuleDestroy {
       await storage.initialize();
 
       // Создаем клиент (storage уже знает, где искать данные)
-      // @ts-ignore - временно игнорируем ошибку типов Storage
       const client = new Client({
         apiId,
         apiHash,
@@ -504,7 +505,9 @@ export class TelegramUserClientService implements OnModuleDestroy {
       try {
         this.logger.debug(`Validating session ${session.id} with getMe()...`);
         const startTime = Date.now();
-        await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        await invokeWithRetry(client, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
+          onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser'),
+        });
         const duration = Date.now() - startTime;
         this.logger.log(`✅ Session ${session.id} validated successfully`);
         // Эмитим событие успешного invoke (Task 2.1)
@@ -514,16 +517,6 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.error(`❌ Session ${session.id} validation failed: ${errorResult.reason}`);
         // Эмитим событие ошибки (Task 2.1)
         this.eventEmitter?.emitError(sessionId, e, session.userId, 'Session validation');
-        
-        // Проверяем на FloodWait (Task 2.1)
-        if (errorResult.action === MtprotoErrorAction.RETRY && errorResult.retryAfter) {
-          const floodMatch = errorResult.reason.match(/FLOOD_WAIT_(\d+)/);
-          if (floodMatch) {
-            const waitTime = parseInt(floodMatch[1], 10);
-            this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser');
-          }
-        }
-        
         if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
           // Инвалидируем эту конкретную сессию
           session.status = 'invalid';
@@ -700,7 +693,9 @@ export class TelegramUserClientService implements OnModuleDestroy {
       this.logger.debug(`Performing getMe() check for session ${sessionId} to ensure auth_key is final`);
       try {
         const startTime = Date.now();
-        await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        await invokeWithRetry(client, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
+          onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, userId, 'users.getFullUser'),
+        });
         const duration = Date.now() - startTime;
         this.logger.log(`✅ getMe() successful - auth_key is valid and registered for session ${sessionId}`);
         // Эмитим событие успешного invoke (Task 2.1)
@@ -709,17 +704,6 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.error(`❌ getMe() failed for session ${sessionId}: ${getMeError.message}`);
         // Эмитим событие ошибки (Task 2.1)
         this.eventEmitter?.emitError(sessionId, getMeError, userId, 'Session save validation');
-        
-        // Проверяем на FloodWait (Task 2.1)
-        const errorResult = handleMtprotoError(getMeError);
-        if (errorResult.action === MtprotoErrorAction.RETRY && errorResult.retryAfter) {
-          const floodMatch = errorResult.reason.match(/FLOOD_WAIT_(\d+)/);
-          if (floodMatch) {
-            const waitTime = parseInt(floodMatch[1], 10);
-            this.eventEmitter?.emitFloodWait(sessionId, waitTime, userId, 'users.getFullUser');
-          }
-        }
-        
         // Если getMe() не прошел, сессия невалидна
         session.status = 'invalid';
         session.isActive = false;
@@ -1139,7 +1123,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
         throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in environment variables');
       }
 
-      const apiId = parseInt(apiIdStr, 10);
+      const apiId = parseInt(apiIdStr as string, 10);
       if (isNaN(apiId)) {
         throw new Error('TELEGRAM_API_ID must be a valid number');
       }
@@ -1178,7 +1162,9 @@ export class TelegramUserClientService implements OnModuleDestroy {
       try {
         this.logger.debug(`Validating session ${sessionId} with getMe()...`);
         const startTime = Date.now();
-        await client.invoke({ _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+        await invokeWithRetry(client, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
+          onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser'),
+        });
         const duration = Date.now() - startTime;
         this.logger.log(`✅ Session ${sessionId} validated successfully`);
         // Эмитим событие успешного invoke (Task 2.1)
@@ -1188,23 +1174,12 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.error(`❌ Session ${sessionId} validation failed: ${errorResult.reason}`);
         // Эмитим событие ошибки (Task 2.1)
         this.eventEmitter?.emitError(sessionId, e, session.userId, 'Session validation');
-        
-        // Проверяем на FloodWait (Task 2.1)
-        if (errorResult.action === MtprotoErrorAction.RETRY && errorResult.retryAfter) {
-          const floodMatch = errorResult.reason.match(/FLOOD_WAIT_(\d+)/);
-          if (floodMatch) {
-            const waitTime = parseInt(floodMatch[1], 10);
-            this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser');
-          }
-        }
-        
         if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
           // Инвалидируем эту конкретную сессию
           session.status = 'invalid';
           session.isActive = false;
           session.invalidReason = errorResult.reason;
           await this.sessionRepository.save(session);
-          
           // Отключаем и удаляем клиент из кеша
           try {
             await client.disconnect();
@@ -1216,15 +1191,12 @@ export class TelegramUserClientService implements OnModuleDestroy {
           this.clients.delete(sessionId);
           // Очищаем статус heartbeat для этой сессии (Task 1.2)
           this.heartbeatService?.clearHeartbeatStatus(sessionId);
-          
           this.logger.warn(`Session ${sessionId} invalidated due to ${errorResult.reason}`);
           return null;
         }
-        
         // Для других ошибок пробрасываем исключение
         throw e;
       }
-
       return client;
     } catch (error: any) {
       this.logger.error(`Error getting client for session ${sessionId}: ${error.message}`, error.stack);
@@ -1343,7 +1315,6 @@ export class TelegramUserClientService implements OnModuleDestroy {
    */
   async onModuleDestroy() {
     this.logger.log('Disconnecting all Telegram user clients...');
-    const sessionIds = Array.from(this.clients.keys());
     for (const [sessionId, client] of this.clients.entries()) {
       try {
         // Получаем userId из сессии для эмита события

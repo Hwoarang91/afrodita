@@ -274,9 +274,9 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     const roomName = `telegram:${sessionId}`;
     
     const eventData = {
+      ...data,
       sessionId,
       status,
-      ...data,
       timestamp: data.timestamp instanceof Date ? data.timestamp.toISOString() : data.timestamp,
     };
 

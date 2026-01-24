@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -94,6 +95,10 @@ export default function TelegramUserMessagesTab() {
   const [floodWaitEvent, setFloodWaitEvent] = useState<FloodWaitEvent | null>(null);
   const [eventLogs, setEventLogs] = useState<TelegramEventLog[]>([]);
   const [showEventLog, setShowEventLog] = useState(false);
+  const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
+  const [forwardSourceChatId, setForwardSourceChatId] = useState<string>('');
+  const [forwardToChatId, setForwardToChatId] = useState<string>('');
   const queryClient = useQueryClient();
 
   // КРИТИЧНО: Проверяем статус Telegram сессии перед загрузкой данных
@@ -297,6 +302,40 @@ export default function TelegramUserMessagesTab() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Ошибка при отправке медиа');
+    },
+  });
+
+  // Пересылка сообщения
+  const forwardMutation = useMutation({
+    mutationFn: async ({
+      sourceChatId,
+      messageId,
+      toChatId,
+    }: {
+      sourceChatId: string;
+      messageId: number;
+      toChatId: string;
+    }) => {
+      return await apiClient.post(
+        `/telegram/user/messages/${sourceChatId}/${messageId}/forward`,
+        { toChatId },
+      );
+    },
+    onSuccess: (_, variables) => {
+      setForwardDialogOpen(false);
+      setForwardMessageId(null);
+      setForwardSourceChatId('');
+      setForwardToChatId('');
+      toast.success('Сообщение переслано');
+      queryClient.invalidateQueries({ queryKey: ['telegram-user-messages', variables.sourceChatId] });
+      queryClient.invalidateQueries({ queryKey: ['telegram-user-messages', variables.toChatId] });
+      queryClient.invalidateQueries({ queryKey: ['telegram-user-chats'] });
+    },
+    onError: (error: unknown) => {
+      const msg =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Ошибка при пересылке сообщения';
+      toast.error(msg);
     },
   });
 
@@ -898,9 +937,11 @@ export default function TelegramUserMessagesTab() {
                               <MessageActions
                                 messageId={msg.id}
                                 chatId={selectedChatId}
-                                onForward={async (messageId, chatId) => {
-                                  // TODO: Реализовать диалог выбора чата для пересылки
-                                  toast.info('Функция пересылки будет реализована в следующей версии');
+                                onForward={(messageId, chatId) => {
+                                  setForwardMessageId(messageId);
+                                  setForwardSourceChatId(chatId);
+                                  setForwardToChatId('');
+                                  setForwardDialogOpen(true);
                                 }}
                                 onDelete={async (messageId, chatId) => {
                                   try {
@@ -1176,6 +1217,88 @@ export default function TelegramUserMessagesTab() {
           />
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={forwardDialogOpen}
+        onOpenChange={(open) => {
+          setForwardDialogOpen(open);
+          if (!open) {
+            setForwardMessageId(null);
+            setForwardSourceChatId('');
+            setForwardToChatId('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Переслать сообщение</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {isLoadingChats || isLoadingContacts ? (
+              <Skeleton className="h-10 w-full" />
+            ) : (() => {
+              const chats = (chatsData?.chats || []).filter((c: { id: string }) => c.id !== forwardSourceChatId);
+              const contacts = (contactsData?.contacts || []).filter((c: { id: string }) => c.id !== forwardSourceChatId);
+              const hasItems = chats.length > 0 || contacts.length > 0;
+              return hasItems ? (
+                <Select value={forwardToChatId} onValueChange={setForwardToChatId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите чат или контакт" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {chats.length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Чаты</div>
+                        {chats.map((chat: { id: string; title?: string; type?: string }) => (
+                          <SelectItem key={chat.id} value={chat.id}>
+                            {chat.title || chat.id} ({chat.type || 'чат'})
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {contacts.length > 0 && (
+                      <>
+                        {chats.length > 0 && <div className="my-1 border-t" />}
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Контакты</div>
+                        {contacts.map((contact: { id: string; title?: string }) => (
+                          <SelectItem key={contact.id} value={contact.id}>
+                            {contact.title || contact.id} (контакт)
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground">Нет других чатов или контактов.</p>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForwardDialogOpen(false)}>
+              Отмена
+            </Button>
+            <Button
+              disabled={
+                !forwardToChatId ||
+                forwardMutation.isPending ||
+                forwardMessageId == null ||
+                !forwardSourceChatId
+              }
+              onClick={() =>
+                forwardMutation.mutate({
+                  sourceChatId: forwardSourceChatId,
+                  messageId: forwardMessageId!,
+                  toChatId: forwardToChatId,
+                })
+              }
+            >
+              {forwardMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Переслать
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -2,8 +2,8 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Transaction, TransactionType } from '../../entities/transaction.entity';
-import { Appointment } from '../../entities/appointment.entity';
 import { Service } from '../../entities/service.entity';
+import { User } from '../../entities/user.entity';
 import { UsersService } from '../users/users.service';
 
 @Injectable()
@@ -20,24 +20,31 @@ export class FinancialService {
     amount: number,
     bonusPointsUsed: number = 0,
   ): Promise<Transaction> {
-    if (bonusPointsUsed > 0) {
-      const user = await this.usersService.findById(userId);
-      if (user.bonusPoints < bonusPointsUsed) {
-        throw new BadRequestException('Insufficient bonus points');
+    return await this.transactionRepository.manager.transaction(async (manager) => {
+      if (bonusPointsUsed > 0) {
+        const userRepo = manager.getRepository(User);
+        const user = await userRepo.findOne({ where: { id: userId } });
+        if (!user) {
+          throw new BadRequestException('User not found');
+        }
+        if (user.bonusPoints < bonusPointsUsed) {
+          throw new BadRequestException('Insufficient bonus points');
+        }
+        user.bonusPoints = Math.max(0, user.bonusPoints - bonusPointsUsed);
+        await userRepo.save(user);
       }
-      await this.usersService.updateBonusPoints(userId, -bonusPointsUsed);
-    }
 
-    const transaction = this.transactionRepository.create({
-      userId,
-      appointmentId,
-      type: TransactionType.PAYMENT,
-      amount: -amount,
-      description: `Payment for appointment ${appointmentId}`,
-      metadata: { bonusPointsUsed },
+      const transaction = this.transactionRepository.create({
+        userId,
+        appointmentId,
+        type: TransactionType.PAYMENT,
+        amount: -amount,
+        description: `Payment for appointment ${appointmentId}`,
+        metadata: { bonusPointsUsed },
+      });
+
+      return await manager.getRepository(Transaction).save(transaction);
     });
-
-    return await this.transactionRepository.save(transaction);
   }
 
   async calculateBonusPoints(service: Service, finalPrice: number): Promise<number> {
@@ -60,7 +67,7 @@ export class FinancialService {
 
     const transaction = this.transactionRepository.create({
       userId,
-      appointmentId,
+      appointmentId: appointmentId ?? undefined,
       type: TransactionType.BONUS_EARNED,
       amount: points,
       description: transactionDescription,

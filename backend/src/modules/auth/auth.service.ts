@@ -1,10 +1,9 @@
-import { Injectable, UnauthorizedException, Logger, BadRequestException, HttpException, HttpStatus, OnModuleDestroy } from '@nestjs/common';
-import { ErrorResponse, ErrorCode } from '../../common/interfaces/error-response.interface';
+import { Injectable, UnauthorizedException, Logger, HttpException, HttpStatus, OnModuleDestroy } from '@nestjs/common';
+import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
 import { mapTelegramErrorToResponse } from '../telegram/utils/telegram-error-mapper';
-import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DeepPartial } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { User, UserRole } from '../../entities/user.entity';
 import { AuthLog, AuthAction } from '../../entities/auth-log.entity';
@@ -13,9 +12,8 @@ import { UsersService } from '../users/users.service';
 import { ReferralService } from '../users/referral.service';
 import { JwtAuthService } from './services/jwt.service';
 import { TelegramUserClientService } from '../telegram/services/telegram-user-client.service';
-import { TelegramSessionService } from '../telegram/services/telegram-session.service';
-import { Client } from '@mtkruto/node';
-import { validate, parse } from '@tma.js/init-data-node';
+import { Client, checkPassword } from '@mtkruto/node';
+import { validate } from '@tma.js/init-data-node';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface TelegramAuthData {
@@ -84,13 +82,11 @@ export class AuthService implements OnModuleDestroy {
     private userRepository: Repository<User>,
     @InjectRepository(AuthLog)
     private authLogRepository: Repository<AuthLog>,
-    private jwtService: JwtService,
     private configService: ConfigService,
     private usersService: UsersService,
     private referralService: ReferralService,
     private jwtAuthService: JwtAuthService,
     private telegramUserClientService: TelegramUserClientService,
-    private telegramSessionService: TelegramSessionService,
   ) {
     // Запускаем периодическую очистку истекших сессий каждые 5 минут
     this.cleanupInterval = setInterval(() => {
@@ -233,14 +229,14 @@ export class AuthService implements OnModuleDestroy {
   }
 
   async validateTelegramAuth(data: TelegramAuthData): Promise<User> {
-    console.log(`[TELEGRAM AUTH] validateTelegramAuth called with data:`, JSON.stringify(data, null, 2));
     this.logger.log(`[TELEGRAM AUTH] validateTelegramAuth called with data: ${JSON.stringify(data)}`);
     // Валидация Telegram auth data
     const botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
-    console.log(`[TELEGRAM AUTH] Bot token exists: ${!!botToken}, length: ${botToken?.length || 0}`);
     this.logger.log(`[TELEGRAM AUTH] Bot token exists: ${!!botToken}, length: ${botToken?.length || 0}`);
+    if (!botToken) {
+      throw new UnauthorizedException('Telegram bot not configured');
+    }
     const isValid = this.verifyTelegramAuth(data, botToken);
-    console.log(`[TELEGRAM AUTH] verifyTelegramAuth result: ${isValid}`);
     this.logger.log(`[TELEGRAM AUTH] verifyTelegramAuth result: ${isValid}`);
     if (!isValid) {
       this.logger.error(`Telegram auth validation failed for user id: ${data.id}`);
@@ -295,8 +291,8 @@ export class AuthService implements OnModuleDestroy {
       // Обновление данных существующего пользователя
       // Роль сохраняется (если пользователь был назначен админом/мастером через админ-панель)
       user.firstName = data.first_name;
-      user.lastName = data.last_name;
-      user.username = data.username;
+      user.lastName = data.last_name ?? user.lastName;
+      user.username = data.username ?? user.username;
       // Роль НЕ меняется - она управляется через админ-панель
       await this.userRepository.save(user);
     }
@@ -344,24 +340,20 @@ export class AuthService implements OnModuleDestroy {
       // Используем официальную библиотеку @tma.js/init-data-node для валидации
       // Она правильно обрабатывает все нюансы Bot API 8.0+ включая signature
       if (data.initData) {
-        console.log(`[TELEGRAM AUTH] Using @tma.js/init-data-node for validation`);
         this.logger.log(`[TELEGRAM AUTH] Using @tma.js/init-data-node for validation`);
 
         try {
           // Валидируем initData с помощью официальной библиотеки
           validate(data.initData, botToken);
-          console.log(`[TELEGRAM AUTH] Validation successful`);
           this.logger.log(`[TELEGRAM AUTH] Validation successful`);
           return true;
         } catch (error) {
-          console.log(`[TELEGRAM AUTH] Validation failed: ${error.message}`);
           this.logger.log(`[TELEGRAM AUTH] Validation failed: ${error.message}`);
           return false;
         }
       }
 
       // Fallback: если нет initData, используем старую логику (для обратной совместимости)
-      console.log(`[TELEGRAM AUTH] No initData provided, using fallback validation`);
       this.logger.log(`[TELEGRAM AUTH] No initData provided, using fallback validation`);
 
       const crypto = require('crypto');
@@ -395,7 +387,6 @@ export class AuthService implements OnModuleDestroy {
         })
         .join('\n');
 
-      console.log(`[TELEGRAM AUTH] Fallback dataCheckString:`, dataCheckString);
       this.logger.log(`[TELEGRAM AUTH] Fallback dataCheckString: ${dataCheckString}`);
 
       // Вычисляем секретный ключ из bot token
@@ -410,7 +401,6 @@ export class AuthService implements OnModuleDestroy {
         .update(dataCheckString)
         .digest('hex');
 
-      console.log(`[TELEGRAM AUTH] Fallback calculated hash:`, calculatedHash);
       this.logger.log(`[TELEGRAM AUTH] Fallback calculated hash: ${calculatedHash}`);
 
       // Проверяем hash
@@ -730,9 +720,8 @@ export class AuthService implements OnModuleDestroy {
           this.phoneCodeHashStore.delete(normalizedPhone);
         }
         
-        // Проверяем, требуется ли 2FA
-        if (errorResponse.errorCode === ErrorCode.INVALID_2FA_PASSWORD || 
-            (error.message && typeof error.message === 'string' && error.message.includes('SESSION_PASSWORD_NEEDED'))) {
+        // Проверяем, требуется ли 2FA (только через mapper, без message.includes)
+        if (errorResponse.errorCode === ErrorCode.INVALID_2FA_PASSWORD) {
           // Требуется 2FA - получаем подсказку пароля и сохраняем клиент
           this.logger.debug(`2FA required for phone: ${phoneNumber}, saving phoneCodeHash: ${phoneCodeHash}`);
           
@@ -772,7 +761,7 @@ export class AuthService implements OnModuleDestroy {
           this.logger.debug(`2FA session saved for normalized phone: ${normalizedPhone}. Store size: ${this.twoFactorStore.size}, expiresAt: ${new Date(Date.now() + 10 * 60 * 1000).toISOString()}, hint: ${passwordHint || 'none'}`);
           return {
             user: null as any,
-            tokens: null as any,
+            tokens: null,
             requires2FA: true,
             passwordHint,
           };
@@ -794,14 +783,14 @@ export class AuthService implements OnModuleDestroy {
       // normalizedPhone уже определен выше в начале метода
 
       // Ищем или создаем пользователя по телефону
-      let user: User = await this.userRepository.findOne({
+      let user: User | null = await this.userRepository.findOne({
         where: { phone: normalizedPhone },
       });
 
       if (!user) {
         // Создаем нового пользователя
         user = this.userRepository.create({
-          phone: normalizedPhone,
+          phone: normalizedPhone ?? undefined,
           firstName: authUser.first_name || null,
           lastName: authUser.last_name || null,
           username: authUser.username || null,
@@ -867,7 +856,7 @@ export class AuthService implements OnModuleDestroy {
 
       return {
         user,
-        tokens: null as any, // Не возвращаем токены для дашборда
+        tokens: null, // Не возвращаем токены для дашборда
         requires2FA: false,
       };
     } catch (error: any) {
@@ -1033,10 +1022,8 @@ export class AuthService implements OnModuleDestroy {
 
       // Проверяем, принят ли токен (polling)
       try {
-          // @ts-ignore - временно игнорируем ошибку типов MTProto
           const acceptResult = await stored.client.invoke({
             _: 'auth.acceptLoginToken',
-            // @ts-ignore - временно игнорируем ошибку типов MTProto
             token: stored.token as any,
           }) as any;
 
@@ -1052,7 +1039,7 @@ export class AuthService implements OnModuleDestroy {
 
             // Если передан userId (админ создает сессию), используем его
             // Иначе ищем или создаем пользователя по телефону
-            let user: User;
+            let user: User | null;
             if (userId) {
               // Используем переданный userId (для админа)
               user = await this.userRepository.findOne({
@@ -1094,7 +1081,7 @@ export class AuthService implements OnModuleDestroy {
               if (!user) {
                 // Создаем нового пользователя
                 user = this.userRepository.create({
-                  phone: normalizedPhone,
+                  phone: normalizedPhone ?? undefined,
                   firstName: authUser.first_name || null,
                   lastName: authUser.last_name || null,
                   username: authUser.username || null,
@@ -1150,7 +1137,7 @@ export class AuthService implements OnModuleDestroy {
             // Обновляем статус токена
             stored.status = 'accepted';
             stored.user = user;
-            stored.tokens = null; // Не возвращаем токены для дашборда
+            stored.tokens = undefined; // Не возвращаем токены для дашборда
 
             this.logger.log(`QR code accepted for user: ${user.id}, sessionId: ${stored.sessionId}`);
 
@@ -1330,12 +1317,8 @@ export class AuthService implements OnModuleDestroy {
 
       const client = stored.client;
 
-      // Получаем параметры SRP через account.getPassword
-      const passwordResult = await client.invoke({
-        _: 'account.getPassword',
-      });
-
-      if (passwordResult._ !== 'account.password') {
+      const ap = await client.invoke({ _: 'account.getPassword' });
+      if (ap._ !== 'account.password') {
         const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
           ErrorCode.INTERNAL_SERVER_ERROR,
@@ -1343,347 +1326,8 @@ export class AuthService implements OnModuleDestroy {
         );
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
-
-      // Логируем полную структуру passwordResult для отладки
-      const passwordResultKeys = Object.keys(passwordResult);
-      const passwordResultValues: any = {};
-      passwordResultKeys.forEach(key => {
-        const value = (passwordResult as any)[key];
-        if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
-          passwordResultValues[key] = `[Buffer: ${value.length} bytes]`;
-        } else if (typeof value === 'object' && value !== null) {
-          passwordResultValues[key] = `[Object: ${Object.keys(value).length} keys]`;
-        } else {
-          passwordResultValues[key] = value;
-        }
-      });
-      
-      this.logger.error('Full passwordResult structure', {
-        keys: passwordResultKeys,
-        values: passwordResultValues,
-        hasCurrentAlgo: !!(passwordResult as any).current_algo,
-        hasSrpId: !!(passwordResult as any).srp_id,
-        hasSrpB: !!(passwordResult as any).srp_B,
-        hasB: !!(passwordResult as any).B,
-        passwordResultType: passwordResult._,
-        fullPasswordResult: JSON.stringify(passwordResult, (key, value) => {
-          if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
-            return `[Buffer: ${value.length} bytes]`;
-          }
-          if (typeof value === 'bigint') {
-            return `[BigInt: ${value.toString()}]`;
-          }
-          return value;
-        }, 2),
-      });
-
-      // MTKruto имеет встроенную поддержку SRP через client.computeCheck
-      // Используем встроенную функцию для вычисления SRP проверки
-
-      // Вычисляем SRP проверку
-      const srpB = passwordResult.current_algo;
-      if (srpB._ !== 'passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow') {
-        const errorResponse = buildErrorResponse(
-          HttpStatus.UNAUTHORIZED,
-          ErrorCode.INTERNAL_SERVER_ERROR,
-          'Unsupported password algorithm',
-        );
-        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
-      }
-
-      const srpId = passwordResult.srp_id;
-      
-      // В MTProto структура account.password содержит srp_B (публичный ключ сервера)
-      // Согласно документации MTProto, srp_B находится на верхнем уровне passwordResult
-      // Но возможно, что в MTKruto это поле называется по-другому или находится в другом месте
-      // Проверяем все возможные варианты
-      const srpB_bytes = 
-        (passwordResult as any).srp_B || 
-        (passwordResult as any).B || 
-        (passwordResult as any).srpB ||
-        (passwordResult as any).b ||
-        (passwordResult as any).srp_b ||
-        (srpB as any).srp_B || 
-        (srpB as any).B ||
-        (srpB as any).srpB ||
-        (srpB as any).b;
-      
-      // Если srp_B не найден, возможно, нужно получить его из другого источника
-      // В некоторых версиях MTProto srp_B может быть получен через отдельный запрос
-      // или вычислен из других параметров
-      
-      // Параметры алгоритма находятся в current_algo
-      const g = (srpB as any).g;
-      const p = (srpB as any).p;
-      const salt1 = (srpB as any).salt1;
-      const salt2 = (srpB as any).salt2;
-      
-      // Логируем структуру для отладки
-      this.logger.debug('SRP parameters extraction', {
-        hasSrpB: !!srpB_bytes,
-        hasG: !!g,
-        hasP: !!p,
-        hasSalt1: !!salt1,
-        hasSalt2: !!salt2,
-        passwordResultKeys: Object.keys(passwordResult),
-        srpBKeys: Object.keys(srpB),
-        passwordResultType: passwordResult._,
-        srpBType: srpB._,
-      });
-      
-      // Проверяем, что все необходимые параметры присутствуют
-      if (!srpB_bytes) {
-        // Логируем полную структуру для отладки
-        const debugInfo = {
-          passwordResult: JSON.stringify(passwordResult, (key, value) => {
-            // Преобразуем Buffer в строку для логирования
-            if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
-              return `[Buffer: ${value.length} bytes]`;
-            }
-            if (typeof value === 'bigint') {
-              return `[BigInt: ${value.toString()}]`;
-            }
-            return value;
-          }, 2),
-          srpB: JSON.stringify(srpB, (key, value) => {
-            if (value instanceof Uint8Array || Buffer.isBuffer(value)) {
-              return `[Buffer: ${value.length} bytes]`;
-            }
-            if (typeof value === 'bigint') {
-              return `[BigInt: ${value.toString()}]`;
-            }
-            return value;
-          }, 2),
-        };
-        this.logger.error('Missing srp_B in password result', debugInfo);
-        const errorResponse = buildErrorResponse(
-          HttpStatus.UNAUTHORIZED,
-          ErrorCode.INTERNAL_SERVER_ERROR,
-          'Failed to get SRP parameters: missing srp_B',
-        );
-        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
-      }
-      if (!g || !p || !salt1 || !salt2) {
-        this.logger.error('Missing SRP parameters', { g, p, salt1: !!salt1, salt2: !!salt2 });
-        const errorResponse = buildErrorResponse(
-          HttpStatus.UNAUTHORIZED,
-          ErrorCode.INTERNAL_SERVER_ERROR,
-          'Failed to get SRP parameters: missing required fields',
-        );
-        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
-      }
-
-      // Вычисляем SRP параметры по алгоритму MTKruto (не используем tssrp6a)
-      const crypto = require('crypto');
-      
-      // Преобразуем параметры для SRP
-      // MTProto использует специфичный формат для SRP
-      const passwordBytes = Buffer.from(password, 'utf8');
-      
-      // Вычисляем x по формуле MTKruto (PH2):
-      // PH2(password, salt1, salt2) := SH(pbkdf2(PH1(password, salt1, salt2), salt1, 100000), salt2)
-      // PH1(password, salt1, salt2) := SH(SH(password, salt1), salt2)
-      // SH(data, salt) := H(salt | data | salt)
-      
-      // Шаг 1: SH(password, salt1) = H(salt1 | password | salt1)
-      const sh1 = crypto.createHash('sha256')
-        .update(Buffer.concat([salt1, passwordBytes, salt1]))
-        .digest();
-      
-      // Шаг 2: PH1 = SH(SH(password, salt1), salt2) = H(salt2 | sh1 | salt2)
-      const ph1 = crypto.createHash('sha256')
-        .update(Buffer.concat([salt2, sh1, salt2]))
-        .digest();
-      
-      // Шаг 3: pbkdf2(PH1, salt1, 100000) с SHA-512, 512 бит (64 байта)
-      const pbkdf2Result = crypto.pbkdf2Sync(
-        ph1,
-        salt1,
-        100000,
-        64,  // 64 байта (512 бит)
-        'sha512'
-      );
-      
-      // Шаг 4: PH2 = SH(pbkdf2(...), salt2) = H(salt2 | pbkdf2Result | salt2)
-      const xBytes = crypto.createHash('sha256')
-        .update(Buffer.concat([salt2, pbkdf2Result, salt2]))
-        .digest();
-      
-      // Преобразуем параметры в нужный формат
-      const gBigInt = BigInt(g);
-      const pBuffer = Buffer.from(p);
-      const pBigInt = BigInt('0x' + pBuffer.toString('hex'));
-      const BBytes = Buffer.from(srpB_bytes);
-      
-      // Преобразуем x из Buffer в BigInt
-      // xBytes теперь 32 байта (SHA256 hash), а не 256 байт
-      const xBigInt = BigInt('0x' + xBytes.toString('hex'));
-      
-      // Логируем промежуточные значения для отладки
-      this.logger.debug('[2FA SRP] Computed x', {
-        xBytesLength: xBytes.length,
-        xHex: xBytes.toString('hex').substring(0, 32) + '...',
-      });
-      
-      // Преобразуем B из Buffer в BigInt
-      const BBigInt = BigInt('0x' + BBytes.toString('hex'));
-      
-      // Вычисляем параметры SRP по алгоритму MTKruto (не используем tssrp6a)
-      // Функция pad для дополнения до 256 байт
-      const pad = (bigint: bigint | Buffer): Buffer => {
-        if (Buffer.isBuffer(bigint)) {
-          if (bigint.length >= 256) return bigint;
-          return Buffer.concat([Buffer.alloc(256 - bigint.length, 0), bigint]);
-        }
-        const hex = bigint.toString(16).padStart(512, '0');
-        return Buffer.from(hex, 'hex');
-      };
-      
-      // Функция modExp для вычисления g^a mod p
-      const modExp = (base: bigint, exp: bigint, mod: bigint): bigint => {
-        let result = 1n;
-        base = base % mod;
-        while (exp > 0n) {
-          if (exp % 2n === 1n) {
-            result = (result * base) % mod;
-          }
-          exp = exp >> 1n;
-          base = (base * base) % mod;
-        }
-        return result;
-      };
-      
-      // Функция mod для вычисления a mod p
-      const mod = (a: bigint, p: bigint): bigint => {
-        const result = a % p;
-        return result < 0n ? result + p : result;
-      };
-      
-      // k := H(p | g)
-      const kBytes = crypto.createHash('sha256')
-        .update(Buffer.concat([pad(pBigInt), pad(BigInt(g))]))
-        .digest();
-      const kBigInt = BigInt('0x' + kBytes.toString('hex'));
-      
-      // Генерируем a и вычисляем gA = g^a mod p
-      // Повторяем до тех пор, пока u > 0
-      let aBigInt = 0n;
-      let gA = 0n;
-      let uBigInt = 0n;
-      
-      for (let i = 0; i < 1000; i++) {
-        const aBytes = crypto.randomBytes(256);
-        aBigInt = BigInt('0x' + aBytes.toString('hex')) % pBigInt;
-        if (aBigInt === 0n) continue;
-        
-        gA = modExp(BigInt(g), aBigInt, pBigInt);
-        
-        // Проверяем, что gA валиден (isGoodModExpFirst)
-        const diff = pBigInt - gA;
-        if (diff < 0n) continue;
-        const diffBits = diff.toString(2).length;
-        const gABits = gA.toString(2).length;
-        if (diffBits < 2048 - 64 || gABits < 2048 - 64) continue;
-        if (Math.floor((gABits + 7) / 8) > 256) continue;
-        
-        // u := H(gA | gB)
-        const uBytes = crypto.createHash('sha256')
-          .update(Buffer.concat([pad(gA), pad(BBigInt)]))
-          .digest();
-        uBigInt = BigInt('0x' + uBytes.toString('hex'));
-        
-        if (uBigInt > 0n) {
-          break;
-        }
-      }
-      
-      if (!aBigInt || !uBigInt || !gA) {
-        const errorResponse = buildErrorResponse(
-          HttpStatus.UNAUTHORIZED,
-          ErrorCode.INTERNAL_SERVER_ERROR,
-          'Failed to generate valid SRP parameters',
-        );
-        throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
-      }
-      
-      // Преобразуем gA в Buffer (256 байт)
-      const ABuffer = pad(gA);
-      
-      // v := pow(g, x) mod p
-      const v = modExp(BigInt(g), xBigInt, pBigInt);
-      
-      // k_v := (k * v) mod p
-      const kV = mod(kBigInt * v, pBigInt);
-      
-      // t := (g_b - k_v) mod p
-      const t = mod(BBigInt - kV, pBigInt);
-      
-      // s_a := pow(t, a + u * x) mod p
-      const sA = modExp(t, aBigInt + uBigInt * xBigInt, pBigInt);
-      
-      // k_a := H(s_a)
-      const kA = crypto.createHash('sha256').update(pad(sA)).digest();
-      
-      // M1 := H(H(p) xor H(g) | H(salt1) | H(salt2) | g_a | g_b | k_a)
-      // Согласно MTKruto реализации
-      const pHash = crypto.createHash('sha256').update(pad(pBigInt)).digest();
-      const gPadded = pad(BigInt(g));
-      const gHash = crypto.createHash('sha256').update(gPadded).digest();
-      const salt1Hash = crypto.createHash('sha256').update(salt1).digest();
-      const salt2Hash = crypto.createHash('sha256').update(salt2).digest();
-      
-      // H(p) xor H(g)
-      const pXorG = Buffer.alloc(32);
-      for (let i = 0; i < 32; i++) {
-        pXorG[i] = pHash[i] ^ gHash[i];
-      }
-      
-      // M1 = H(H(p) xor H(g) | H(salt1) | H(salt2) | g_a | g_b | k_a)
-      const M1Buffer = crypto.createHash('sha256')
-        .update(Buffer.concat([
-          pXorG,
-          salt1Hash,
-          salt2Hash,
-          pad(gA),      // g_a (256 байт)
-          pad(BBigInt), // g_b (256 байт)
-          kA,           // k_a (32 байта)
-        ]))
-        .digest();
-      
-      // Логируем промежуточные значения для отладки
-      this.logger.debug('[2FA SRP] Computed SRP parameters', {
-        xLength: xBytes.length,
-        ALength: ABuffer.length,
-        BLength: BBytes.length,
-        sALength: pad(sA).length,
-        M1Length: M1Buffer.length,
-        pHashLength: pHash.length,
-        gHashLength: gHash.length,
-        pXorGLength: pXorG.length,
-        salt1HashLength: salt1Hash.length,
-        salt2HashLength: salt2Hash.length,
-        kALength: kA.length,
-      });
-      
-      const A = new Uint8Array(Array.from(ABuffer));
-      const M1 = new Uint8Array(Array.from(M1Buffer));
-      
-      const check = {
-        A: new Uint8Array(Array.from(A)),
-        M1: new Uint8Array(Array.from(M1)),
-      };
-
-      // Вызываем auth.checkPassword
-      const checkPasswordResult = await client.invoke({
-        _: 'auth.checkPassword',
-        password: {
-          _: 'inputCheckPasswordSRP',
-          srp_id: srpId,
-          A: check.A,
-          M1: check.M1,
-        },
-      }) as any;
-
+      const input = await checkPassword(password, ap);
+      const checkPasswordResult = await client.invoke({ _: 'auth.checkPassword', password: input });
       if (checkPasswordResult._ !== 'auth.authorization') {
         const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
@@ -1700,21 +1344,21 @@ export class AuthService implements OnModuleDestroy {
 
       // Ищем или создаем пользователя по телефону
       this.logger.log(`[2FA] Starting user lookup for phone: ${normalizedPhone}`);
-      let user: User = await this.userRepository.findOne({
+      let user: User | null = await this.userRepository.findOne({
         where: { phone: normalizedPhone },
       });
 
       if (!user) {
         // Создаем нового пользователя
         user = this.userRepository.create({
-          phone: normalizedPhone,
+          phone: normalizedPhone ?? undefined,
           firstName: authUser.first_name || null,
           lastName: authUser.last_name || null,
           username: authUser.username || null,
           telegramId: authUser.id.toString(),
           role: UserRole.CLIENT,
           isActive: true,
-        });
+        } as DeepPartial<User>);
         await this.userRepository.save(user);
         this.logger.log(`[2FA] Created new user: ${user.id}, phone: ${normalizedPhone}, telegramId: ${user.telegramId}`);
       } else {
@@ -1774,7 +1418,7 @@ export class AuthService implements OnModuleDestroy {
 
       return {
         user,
-        tokens: null as any, // Не возвращаем токены для дашборда
+        tokens: null, // Не возвращаем токены для дашборда
       };
     } catch (error: any) {
       this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
