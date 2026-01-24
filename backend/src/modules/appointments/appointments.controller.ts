@@ -11,6 +11,7 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
+import { AuthRequest } from '../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AppointmentsService } from './appointments.service';
 import { AuditService } from '../audit/audit.service';
@@ -33,8 +34,8 @@ export class AppointmentsController {
 
   @Post()
   @ApiOperation({ summary: 'Создание новой записи' })
-  async create(@Body() dto: CreateAppointmentDto, @Request() req) {
-    return await this.appointmentsService.create(dto, req.user.sub);
+  async create(@Body() dto: CreateAppointmentDto, @Request() req: AuthRequest) {
+    return await this.appointmentsService.create(dto, req.user!.sub!);
   }
 
   @Get()
@@ -54,7 +55,7 @@ export class AppointmentsController {
     @Query('masterId') masterId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Request() req?: { user?: { role?: string; sub?: string } },
+    @Request() req?: AuthRequest,
   ) {
     const userId = req?.user?.role === 'admin' ? undefined : req?.user?.sub;
     return await this.appointmentsService.findAll(userId, status, date, startDate, endDate, masterId, page, limit);
@@ -83,7 +84,7 @@ export class AppointmentsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Получение записи по ID' })
-  async findById(@Param('id') id: string, @Request() req) {
+  async findById(@Param('id') id: string, @Request() req: AuthRequest) {
     // Для админов не проверяем userId
     const userId = req?.user?.role === 'admin' ? undefined : req?.user?.sub;
     return await this.appointmentsService.findById(id, userId);
@@ -94,7 +95,7 @@ export class AppointmentsController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateAppointmentDto,
-    @Request() req,
+    @Request() req: AuthRequest,
   ) {
     // Для админов не проверяем userId
     const userId = req?.user?.role === 'admin' ? undefined : req?.user?.sub;
@@ -106,7 +107,7 @@ export class AppointmentsController {
   async patch(
     @Param('id') id: string,
     @Body() dto: UpdateAppointmentDto,
-    @Request() req,
+    @Request() req: AuthRequest,
   ) {
     // Для админов не проверяем userId
     const userId = req?.user?.role === 'admin' ? undefined : req?.user?.sub;
@@ -118,12 +119,12 @@ export class AppointmentsController {
   async reschedule(
     @Param('id') id: string,
     @Body() dto: RescheduleAppointmentDto,
-    @Request() req,
+    @Request() req: AuthRequest,
   ) {
     return await this.appointmentsService.reschedule(
       id,
       new Date(dto.startTime),
-      req.user.sub,
+      req.user!.sub!,
       dto.reason,
     );
   }
@@ -133,14 +134,14 @@ export class AppointmentsController {
   async cancel(
     @Param('id') id: string,
     @Body('reason') reason: string,
-    @Request() req,
+    @Request() req: AuthRequest,
   ) {
-    return await this.appointmentsService.cancel(id, req.user.sub, reason);
+    return await this.appointmentsService.cancel(id, req.user!.sub!, reason);
   }
 
   @Post(':id/confirm')
   @ApiOperation({ summary: 'Подтверждение записи (только для админов)' })
-  async confirm(@Param('id') id: string, @Request() req) {
+  async confirm(@Param('id') id: string, @Request() req: AuthRequest) {
     // Только админы могут подтверждать записи
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
@@ -148,7 +149,7 @@ export class AppointmentsController {
     const appointment = await this.appointmentsService.confirm(id);
     
     // Логируем действие
-    await this.auditService.log(req.user.sub, AuditAction.APPOINTMENT_CONFIRMED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.APPOINTMENT_CONFIRMED, {
       entityType: 'appointment',
       entityId: id,
       description: `Подтверждена запись #${id}`,
@@ -164,7 +165,7 @@ export class AppointmentsController {
   async cancelByAdmin(
     @Param('id') id: string,
     @Body() body: { reason?: string },
-    @Request() req,
+    @Request() req: AuthRequest,
   ) {
     // Только админы могут отменять записи
     if (req?.user?.role !== 'admin') {
@@ -173,7 +174,7 @@ export class AppointmentsController {
     const appointment = await this.appointmentsService.cancelByAdmin(id, body.reason);
     
     // Логируем действие
-    await this.auditService.log(req.user.sub, AuditAction.APPOINTMENT_CANCELLED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.APPOINTMENT_CANCELLED, {
       entityType: 'appointment',
       entityId: id,
       description: `Отменена запись #${id}${body.reason ? `. Причина: ${body.reason}` : ''}`,
@@ -187,7 +188,7 @@ export class AppointmentsController {
 
   @Delete(':id/delete')
   @ApiOperation({ summary: 'Удаление записи (только для админов)' })
-  async delete(@Param('id') id: string, @Request() req) {
+  async delete(@Param('id') id: string, @Request() req: AuthRequest) {
     // Только админы могут удалять записи
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');

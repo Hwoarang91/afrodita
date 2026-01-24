@@ -18,3 +18,11 @@ export function getErrorStack(e: unknown): string | undefined {
     return (e as { stack: string }).stack;
   return undefined;
 }
+
+/** Код ошибки (напр. PG 23503). */
+export function getErrorCode(e: unknown): string | undefined {
+  if (e == null) return undefined;
+  if (typeof e === 'object' && 'code' in e && typeof (e as { code: unknown }).code === 'string')
+    return (e as { code: string }).code;
+  return undefined;
+}

@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, Request } from '@nestjs/common';
+import { AuthRequest } from '../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { MastersService } from './masters.service';
 import { AuditService } from '../audit/audit.service';
@@ -41,7 +42,7 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Создание мастера (только для админов)' })
-  async create(@Request() req, @Body() dto: CreateMasterDto) {
+  async create(@Request() req: AuthRequest, @Body() dto: CreateMasterDto) {
     const master = await this.mastersService.create(dto);
     
     // Логируем действие (если есть пользователь в запросе)
@@ -154,15 +155,17 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Обновление мастера (только для админов)' })
-  async update(@Request() req, @Param('id') id: string, @Body() dto: UpdateMasterDto) {
+  async update(@Request() req: AuthRequest, @Param('id') id: string, @Body() dto: UpdateMasterDto) {
     const oldMaster = await this.mastersService.findById(id);
     const master = await this.mastersService.update(id, dto);
     
     // Определяем изменения
-    const changes: Record<string, any> = {};
-    Object.keys(dto).forEach((key) => {
-      if (oldMaster[key] !== dto[key]) {
-        changes[key] = { old: oldMaster[key], new: dto[key] };
+    const changes: Record<string, { old: unknown; new: unknown }> = {};
+    Object.keys(dto).forEach((key: string) => {
+      const o = (oldMaster as unknown as Record<string, unknown>)[key];
+      const n = (dto as Record<string, unknown>)[key];
+      if (o !== n) {
+        changes[key] = { old: o, new: n };
       }
     });
     
@@ -187,7 +190,7 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Удаление мастера (только для админов)' })
-  async delete(@Request() req, @Param('id') id: string) {
+  async delete(@Request() req: AuthRequest, @Param('id') id: string) {
     const master = await this.mastersService.findById(id);
     await this.mastersService.delete(id);
     

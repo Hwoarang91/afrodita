@@ -449,6 +449,59 @@ docker rm n8n
 
 При `strictNullChecks: true` сборка backend проходит. Дальше: noImplicitAny, strict: true. Тесты — в последнюю очередь.
 
+**Выполнено (noImplicitAny + req.user, AuthRequest/ExpressRequest):**
+- `auth.controller.ts` (auth/): импорт `AuthRequest` вместо неиспользуемого `ExpressRequest`; `req.user!.sub!` в logout, updatePhone.
+- `auth/controllers/auth.controller.ts`: импорт `Request as ExpressRequest`; `AuthRequest` для logout, logoutAll, getMe, requestPhoneCode, generateQrCode; в logout/logoutAll — проверка `!req.user?.sub` и `const sub = req.user.sub`; в getMe — `const u = req.user` и поля JwtUser.
+- `telegram-user.controller.ts`: импорт `AuthRequest` вместо неиспользуемого `ExpressRequest`.
+- `users.controller.ts`: `req?: ExpressRequest` заменён на `req?: AuthRequest` в findAll, неиспользуемый импорт ExpressRequest удалён.
+- `appointments.controller.ts`: `req.user!.sub!` в create, reschedule, cancel, auditService.log (confirm, cancelByAdmin).
+- `financial.controller.ts`: `req.user!.sub!` в getUserTransactions.
+- `settings.controller.ts`: `req.user!.sub!` в auditService.log; поправлена строка в warn (req.user.sub).
+- `notifications.controller.ts`: `req.user!.sub!` в where (userId), auditService.log (BROADCAST_SENT, NOTIFICATION_DELETED×2).
+- `reviews.controller.ts`: `req.user!.sub!` в create.
+- `masters.controller.ts`: `(oldMaster as unknown as Record<string, unknown>)[key]`.
+
+Сборка backend с `strictNullChecks: true` и `noImplicitAny: true` проходит. Тесты — в последнюю очередь.
+
+**Выполнено (strict: true, 23.01.2026):**
+- `backend/tsconfig.json`: `strict: true` включён.
+- `error` в catch: `error.message`/`error.stack` заменены на `getErrorMessage(error)` / `getErrorStack(error)` в auth.service, jwt.service, notifications.service (×2), scheduler.service, telegram-session.guard (validationError, error).
+- `invokeWithRetry`: введён тип `InvokeClient` в mtproto-retry.utils; на всех вызовах — `client as InvokeClient` (telegram-session.guard, telegram-heartbeat, telegram-user-client×3); `return (await client.invoke(request)) as T`.
+- Сборка с `strict: true` проходит.
+
+**Выполнено (any в telegram-bot — options, keyboard, массивы кнопок, 23.01.2026):**
+- `sendMessage(chatId, message, options?)` → `options?: Types.ExtraReplyMessage`; `sendMessageWithKeyboard(..., keyboard)` → `keyboard: Types.ExtraReplyMessage`.
+- `sendPrivateReply(..., options?)` → `Types.ExtraReplyMessage`; fallback с `reply_to_message_id` → `as Types.ExtraReplyMessage`.
+- `sendPrivateCallbackReply(..., keyboard?, options?)` → `keyboard?: { reply_markup?: Types.ExtraReplyMessage['reply_markup'] }`, `options?: Types.ExtraReplyMessage`; в `editMessageText` — `reply_markup: keyboard?.reply_markup as ExtraEditMessageText['reply_markup']`.
+- `keyboard: any[]` → `unknown[][]` (календарь, записи×2); `currentRow: any[]` → `unknown[]`; `keyboardButtons: any[]` → `unknown[][]`; вызовы `Markup.inlineKeyboard(keyboard)` / `(keyboardButtons)` — `as never` (HideableIKBtn не экспортируется Telegraf).
+- Импорт `Types` из `telegraf`.
+
+Сборка backend с `strict: true` проходит. Тесты — в последнюю очередь.
+
+**Выполнено (§19 Мониторинг и логирование, 23.01.2026):**
+- prom-client: `http_requests_total` (method, route, status), `http_request_duration_seconds` (method, route).
+- MetricsModule: MetricsService, MetricsInterceptor (finalize), MetricsController GET /metrics (text/plain). Пропуск /metrics, /health, /api/docs.
+- main.ts: /metrics в exclude; health.controller: metrics в /api и /api/v1. Сборка OK.
+
+**Выполнено (§20 Оптимизация запросов к БД, 23.01.2026):**
+- TypeOrmSlowQueryLogger: logQuerySlow в production при превышении maxQueryExecutionTime. database.config: maxQueryExecutionTime из DB_SLOW_QUERY_MS (по умолч. 5000), logger только в production.
+- Аудит N+1: appointments, notifications — relations/один запрос; в циклах массовые find не выявлены.
+
+**Выполнено (§21 Документация API, 23.01.2026):**
+- Swagger: добавлены теги health, metrics, settings, financial, reviews, audit, templates, contact-requests, telegram, scheduler.
+
+**Перепроверка (any, план):**
+- any вне telegram-bot: остаются в notifications, telegram-user-client, auth, users, settings, masters, appointments, telegram (scheduled-messages, telegram.service, telegram-user.controller), telegram-error-mapper, http-exception.filter и др. Рекомендуется постепенная замена (DTO, unknown, getErrorMessage).
+- COMPREHENSIVE_ANALYSIS_PLAN: блок BACKEND «Текущее состояние» обновлён (архитектура ✅, пагинация ✅, any ⚠️).
+
+**§14 @ts-expect-error / @mtkruto (углублённо):**
+- @ts-expect-error в telegram-user.controller не найден. client.invoke( {...} as any ) и частичные as any — из-за несовпадения типов @mtkruto Api с runtime-структурами (id: number[] vs readonly, BigInt, InputPeer). Рекомендация: при обновлении @mtkruto проверить типы для messages.* и убрать as any.
+
+**Выполнено (синхронизация плана и замена error: any, 23.01.2026):**
+- COMPREHENSIVE_ANALYSIS_PLAN: §2, §3, §6 — «Текущее состояние» и «Проверено» приведены в соответствие со статусом ✅.
+- «Проблемы из предыдущих планов», «Новые проблемы», «Следующие шаги» — обновлены (§9–§12, §17, §2–§3, §5–§6, §13–§14, §16 отмечены как выполненные; следующие — тесты в последнюю очередь, замена error: any, сокращение any).
+- error: any → unknown + getErrorMessage/getErrorStack/getErrorCode: users.controller (1×), users.service (1×, getErrorCode+getErrorMessage для 23503/foreign key), settings.controller (3×: getErrorStack; getErrorMessage+getErrorStack; getErrorMessage+getErrorStack). error-message.ts: добавлена getErrorCode. Сборка OK.
+
 ---
 
 🔄 **§4 noImplicitAny — оценка объёма (23.01.2026):**

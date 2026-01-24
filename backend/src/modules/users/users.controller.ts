@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, UseGuards, Request, Body, Query, Param } from '@nestjs/common';
+import { AuthRequest } from '../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { ReferralService } from './referral.service';
@@ -31,7 +32,7 @@ export class UsersController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Request() req?: any,
+    @Request() req?: AuthRequest,
   ) {
     // Только админы могут видеть всех пользователей
     if (req?.user?.role !== 'admin') {
@@ -42,7 +43,7 @@ export class UsersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Получение пользователя по ID (только для админов)' })
-  async findById(@Request() req: any, @Param('id') id: string) {
+  async findById(@Request() req: AuthRequest, @Param('id') id: string) {
     // Только админы могут видеть других пользователей
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
@@ -52,26 +53,26 @@ export class UsersController {
 
   @Get('me')
   @ApiOperation({ summary: 'Получение профиля текущего пользователя' })
-  async getProfile(@Request() req: any) {
-    return await this.usersService.findById(req.user.sub);
+  async getProfile(@Request() req: AuthRequest) {
+    return await this.usersService.findById(req.user!.sub!);
   }
 
   @Put('me')
   @ApiOperation({ summary: 'Обновление профиля' })
-  async updateProfile(@Request() req: any, @Body() data: any) {
-    return await this.usersService.update(req.user.sub, data);
+  async updateProfile(@Request() req: AuthRequest, @Body() data: any) {
+    return await this.usersService.update(req.user!.sub!, data);
   }
 
   @Post()
   @ApiOperation({ summary: 'Создание пользователя (только для админов)' })
-  async create(@Request() req: any, @Body() data: any) {
+  async create(@Request() req: AuthRequest, @Body() data: any) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
     const user = await this.usersService.create(data);
     
     // Логируем действие
-    await this.auditService.log(req.user.sub, AuditAction.USER_CREATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.USER_CREATED, {
       entityType: 'user',
       entityId: user.id,
       description: `Создан пользователь: ${user.firstName} ${user.lastName} (${user.role})`,
@@ -84,7 +85,7 @@ export class UsersController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Обновление пользователя (только для админов)' })
-  async updateUser(@Request() req: any, @Param('id') id: string, @Body() data: any) {
+  async updateUser(@Request() req: AuthRequest, @Param('id') id: string, @Body() data: any) {
     // Только админы могут обновлять других пользователей
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
@@ -103,7 +104,7 @@ export class UsersController {
     });
     
     // Логируем действие
-    await this.auditService.log(req.user.sub, AuditAction.USER_UPDATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.USER_UPDATED, {
       entityType: 'user',
       entityId: id,
       description: `Обновлен пользователь: ${updatedUser.firstName} ${updatedUser.lastName}`,
@@ -127,7 +128,7 @@ export class UsersController {
       await this.usersService.delete(id);
       
       // Логируем действие
-      await this.auditService.log(req.user.sub, AuditAction.USER_DELETED, {
+      await this.auditService.log(req.user!.sub!, AuditAction.USER_DELETED, {
         entityType: 'user',
         entityId: id,
         description: `Удален пользователь: ${user.firstName} ${user.lastName} (${user.role})`,
@@ -136,14 +137,14 @@ export class UsersController {
       });
       
       return { success: true, message: 'Пользователь успешно удален' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw error;
     }
   }
 
   @Get(':id/interaction-history')
   @ApiOperation({ summary: 'Получение истории взаимодействий с клиентом (только для админов)' })
-  async getInteractionHistory(@Request() req: any, @Param('id') id: string) {
+  async getInteractionHistory(@Request() req: AuthRequest, @Param('id') id: string) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
@@ -161,7 +162,7 @@ export class UsersController {
 
   @Get(':id/body-measurements/latest')
   @ApiOperation({ summary: 'Получение последнего замера объемов тела клиента (только для админов)' })
-  async getLatestBodyMeasurement(@Request() req: any, @Param('id') id: string) {
+  async getLatestBodyMeasurement(@Request() req: AuthRequest, @Param('id') id: string) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
@@ -170,13 +171,13 @@ export class UsersController {
 
   @Post(':id/body-measurements')
   @ApiOperation({ summary: 'Создание нового замера объемов тела (только для админов)' })
-  async createBodyMeasurement(@Request() req: any, @Param('id') id: string, @Body() data: any) {
+  async createBodyMeasurement(@Request() req: AuthRequest, @Param('id') id: string, @Body() data: any) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
     const measurement = await this.usersService.createBodyMeasurement(id, data);
     
-    await this.auditService.log(req.user.sub, AuditAction.USER_UPDATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.USER_UPDATED, {
       entityType: 'body_measurement',
       entityId: measurement.id,
       description: `Создан новый замер объемов тела для клиента`,
@@ -201,7 +202,7 @@ export class UsersController {
     }
     const measurement = await this.usersService.updateBodyMeasurement(measurementId, id, data);
     
-    await this.auditService.log(req.user.sub, AuditAction.USER_UPDATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.USER_UPDATED, {
       entityType: 'body_measurement',
       entityId: measurementId,
       description: `Обновлен замер объемов тела для клиента`,
@@ -216,7 +217,7 @@ export class UsersController {
   @Delete(':id/body-measurements/:measurementId')
   @ApiOperation({ summary: 'Удаление замера объемов тела (только для админов)' })
   async deleteBodyMeasurement(
-    @Request() req: any,
+    @Request() req: AuthRequest,
     @Param('id') id: string,
     @Param('measurementId') measurementId: string,
   ) {
@@ -225,7 +226,7 @@ export class UsersController {
     }
     await this.usersService.deleteBodyMeasurement(measurementId, id);
     
-    await this.auditService.log(req.user.sub, AuditAction.USER_DELETED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.USER_DELETED, {
       entityType: 'body_measurement',
       entityId: measurementId,
       description: `Удален замер объемов тела для клиента`,
@@ -238,16 +239,16 @@ export class UsersController {
 
   @Get('me/referral')
   @ApiOperation({ summary: 'Получение реферального кода текущего пользователя' })
-  async getReferralCode(@Request() req: any) {
-    const userId = req.user.sub;
+  async getReferralCode(@Request() req: AuthRequest) {
+    const userId = req.user!.sub!;
     const referralCode = await this.referralService.getOrGenerateReferralCode(userId);
     return { referralCode };
   }
 
   @Get('me/referral/stats')
   @ApiOperation({ summary: 'Получение статистики по рефералам текущего пользователя' })
-  async getReferralStats(@Request() req: any) {
-    const userId = req.user.sub;
+  async getReferralStats(@Request() req: AuthRequest) {
+    const userId = req.user!.sub!;
     return await this.referralService.getReferralStats(userId);
   }
 

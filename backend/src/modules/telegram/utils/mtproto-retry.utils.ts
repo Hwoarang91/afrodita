@@ -5,6 +5,9 @@
 
 import { handleMtprotoError, MtprotoErrorAction } from './mtproto-error.handler';
 
+/** Минимальный интерфейс для MTProto client в retry. Client из @mtkruto имеет более узкий invoke; на местах вызова используется приведение. */
+export type InvokeClient = { invoke: (r: object, p?: unknown) => Promise<unknown> };
+
 export interface InvokeWithRetryOptions {
   /** Макс. повторов при RETRY (по умолчанию 2 → до 3 попыток) */
   maxRetries?: number;
@@ -20,7 +23,7 @@ const DEFAULT_MAX_RETRIES = 2;
  * Остальные действия (INVALIDATE_SESSION, REQUIRE_2FA, SAFE_ERROR) — пробрасывает.
  */
 export async function invokeWithRetry<T = unknown>(
-  client: { invoke: (r: object) => Promise<T> },
+  client: InvokeClient,
   request: object,
   options?: InvokeWithRetryOptions,
 ): Promise<T> {
@@ -30,7 +33,7 @@ export async function invokeWithRetry<T = unknown>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await client.invoke(request);
+      return (await client.invoke(request)) as T;
     } catch (e: unknown) {
       lastError = e;
       const result = handleMtprotoError(e);

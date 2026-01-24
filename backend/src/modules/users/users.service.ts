@@ -9,6 +9,7 @@ import { BodyMeasurement } from '../../entities/body-measurement.entity';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
 import { normalizePagination } from '../../common/dto/pagination.dto';
+import { getErrorMessage, getErrorCode } from '../../common/utils/error-message';
 
 @Injectable()
 export class UsersService {
@@ -176,9 +177,10 @@ export class UsersService {
 
     try {
       await this.userRepository.remove(user);
-    } catch (error: any) {
-      // Если ошибка связана с внешними ключами, даем более понятное сообщение
-      if (error.code === '23503' || error.message?.includes('foreign key')) {
+    } catch (error: unknown) {
+      const code = getErrorCode(error);
+      const msg = getErrorMessage(error);
+      if (code === '23503' || msg.includes('foreign key')) {
         throw new BadRequestException(
           buildErrorResponse(
             400,

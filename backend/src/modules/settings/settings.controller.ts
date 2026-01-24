@@ -1,4 +1,6 @@
 import { Controller, Get, Put, Body, UseGuards, Request, Logger, BadRequestException } from '@nestjs/common';
+import { AuthRequest } from '../../common/types/request.types';
+import { getErrorMessage, getErrorStack } from '../../common/utils/error-message';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { SettingsService } from './settings.service';
 import { AuditService } from '../audit/audit.service';
@@ -34,7 +36,7 @@ export class SettingsController {
 
   @Put()
   @ApiOperation({ summary: 'Обновление настроек' })
-  async updateSettings(@Request() req, @Body() body: { bookingSettings?: any }) {
+  async updateSettings(@Request() req: AuthRequest, @Body() body: { bookingSettings?: any }) {
     this.logger.debug('Получен запрос на обновление настроек');
     
     // Получаем старые настройки для логирования изменений
@@ -46,14 +48,16 @@ export class SettingsController {
       
       // Определяем изменения
       const changes: Record<string, any> = {};
-      Object.keys(body.bookingSettings).forEach((key) => {
-        if (oldSettings[key] !== body.bookingSettings[key]) {
-          changes[key] = { old: oldSettings[key], new: body.bookingSettings[key] };
+      Object.keys(body.bookingSettings).forEach((key: string) => {
+        const o = (oldSettings as Record<string, unknown>)[key];
+        const n = (body.bookingSettings as Record<string, unknown>)[key];
+        if (o !== n) {
+          changes[key] = { old: o, new: n };
         }
       });
       
       // Логируем действие
-      await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+      await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
         entityType: 'settings',
         entityId: 'bookingSettings',
         description: 'Обновлены настройки бронирования',
@@ -76,10 +80,10 @@ export class SettingsController {
 
   @Put('telegram-auto-refresh-interval')
   @ApiOperation({ summary: 'Установить интервал автоматического обновления чатов' })
-  async setAutoRefreshInterval(@Request() req, @Body() body: { value: number }) {
+  async setAutoRefreshInterval(@Request() req: AuthRequest, @Body() body: { value: number }) {
     await this.settingsService.set('telegramAutoRefreshInterval', body.value);
     
-    await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
       entityType: 'settings',
       entityId: 'telegramAutoRefreshInterval',
       description: 'Обновлен интервал автоматического обновления чатов',
@@ -100,10 +104,10 @@ export class SettingsController {
 
   @Put('timezone')
   @ApiOperation({ summary: 'Установить часовой пояс' })
-  async setTimezone(@Request() req, @Body() body: { value: string }) {
+  async setTimezone(@Request() req: AuthRequest, @Body() body: { value: string }) {
     await this.settingsService.set('timezone', body.value);
     
-    await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
       entityType: 'settings',
       entityId: 'timezone',
       description: 'Обновлен часовой пояс',
@@ -124,10 +128,10 @@ export class SettingsController {
 
   @Put('working-hours')
   @ApiOperation({ summary: 'Установить рабочие часы' })
-  async setWorkingHours(@Request() req, @Body() body: { value: { start: string; end: string } }) {
+  async setWorkingHours(@Request() req: AuthRequest, @Body() body: { value: { start: string; end: string } }) {
     await this.settingsService.set('workingHours', body.value);
     
-    await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
       entityType: 'settings',
       entityId: 'workingHours',
       description: 'Обновлены рабочие часы',
@@ -148,13 +152,13 @@ export class SettingsController {
 
   @Put('reminder-intervals')
   @ApiOperation({ summary: 'Установить интервалы напоминаний' })
-  async setReminderIntervals(@Request() req, @Body() body: { value: number[] }) {
+  async setReminderIntervals(@Request() req: AuthRequest, @Body() body: { value: number[] }) {
     this.logger.debug('Получен запрос на обновление интервалов напоминаний');
     
     await this.settingsService.set('reminderIntervals', body.value);
     this.logger.log('Интервалы напоминаний успешно сохранены');
     
-    await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
       entityType: 'settings',
       entityId: 'reminderIntervals',
       description: 'Обновлены интервалы напоминаний о записях',
@@ -175,10 +179,10 @@ export class SettingsController {
 
   @Put('first-visit-discount')
   @ApiOperation({ summary: 'Установить настройки скидки на первый визит' })
-  async setFirstVisitDiscount(@Request() req, @Body() body: { value: { enabled: boolean; type: 'percent' | 'fixed'; value: number } }) {
+  async setFirstVisitDiscount(@Request() req: AuthRequest, @Body() body: { value: { enabled: boolean; type: 'percent' | 'fixed'; value: number } }) {
     const result = await this.settingsService.setFirstVisitDiscountSettings(body.value);
     
-    await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
       entityType: 'settings',
       entityId: 'firstVisitDiscount',
       description: 'Обновлены настройки скидки на первый визит',
@@ -261,7 +265,7 @@ export class SettingsController {
 
   @Put('bonuses')
   @ApiOperation({ summary: 'Установить настройки бонусов' })
-  async setBonusSettings(@Request() req, @Body() body: { value: { enabled: boolean; pointsPerRuble: number; pointsForRegistration: number; referralBonus: number } }) {
+  async setBonusSettings(@Request() req: AuthRequest, @Body() body: { value: { enabled: boolean; pointsPerRuble: number; pointsForRegistration: number; referralBonus: number } }) {
     // Маппим referralBonus из запроса на pointsForReferral в сервисе
     const result = await this.settingsService.setBonusSettings({
       enabled: body.value.enabled,
@@ -270,7 +274,7 @@ export class SettingsController {
       pointsForReferral: body.value.referralBonus, // Маппинг на backend поле
     });
     
-    await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
       entityType: 'settings',
       entityId: 'bonuses',
       description: 'Обновлены настройки бонусной системы',
@@ -294,7 +298,7 @@ export class SettingsController {
 
   @Put('telegram-admin-user')
   @ApiOperation({ summary: 'Установить администратора Telegram бота и веб-приложения' })
-  async setTelegramAdminUser(@Request() req, @Body() body: { userId: string | null }) {
+  async setTelegramAdminUser(@Request() req: AuthRequest, @Body() body: { userId: string | null }) {
     try {
       let user: User | null = null;
 
@@ -302,8 +306,8 @@ export class SettingsController {
         // Проверяем, что пользователь существует и имеет telegramId
         try {
           user = await this.usersService.findById(body.userId);
-        } catch (error: any) {
-          this.logger.error(`Пользователь не найден: ${body.userId}`, error.stack);
+        } catch (error: unknown) {
+          this.logger.error(`Пользователь не найден: ${body.userId}`, getErrorStack(error));
           throw new BadRequestException('Пользователь не найден');
         }
 
@@ -321,7 +325,7 @@ export class SettingsController {
       // Логируем действие только если есть пользователь в req.user
       if (req.user?.sub) {
         try {
-          await this.auditService.log(req.user.sub, AuditAction.SETTINGS_UPDATED, {
+          await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
             entityType: 'settings',
             entityId: 'telegramAdminUserId',
             description: 'Обновлен администратор Telegram бота и веб-приложения',
@@ -329,9 +333,8 @@ export class SettingsController {
             ipAddress: req.ip,
             userAgent: req.get('user-agent'),
           });
-        } catch (auditError: any) {
-          // Логируем ошибку аудита, но не прерываем выполнение
-          this.logger.error(`Ошибка логирования аудита: ${auditError.message}`, auditError.stack);
+        } catch (auditError: unknown) {
+          this.logger.error(`Ошибка логирования аудита: ${getErrorMessage(auditError)}`, getErrorStack(auditError));
         }
       } else {
         this.logger.warn('req.user.sub отсутствует, пропускаем логирование аудита');
@@ -352,8 +355,8 @@ export class SettingsController {
       }
 
       return { success: true, value: null };
-    } catch (error: any) {
-      this.logger.error(`Ошибка при установке администратора Telegram: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при установке администратора Telegram: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }

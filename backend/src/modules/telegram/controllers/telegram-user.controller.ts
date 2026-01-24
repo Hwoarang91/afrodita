@@ -14,6 +14,7 @@ import {
   Optional,
   StreamableFile,
 } from '@nestjs/common';
+import { AuthRequest } from '../../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
 import { TelegramConnectionMonitorService } from '../services/telegram-connection-monitor.service';
@@ -41,7 +42,7 @@ export class TelegramUserController {
   @ApiResponse({ status: 200, description: 'Сообщение отправлено' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   @ApiResponse({ status: 403, description: 'Telegram сессия не готова (initializing)' })
-  async sendMessage(@Body() dto: UserSendMessageDto, @Request() req) {
+  async sendMessage(@Body() dto: UserSendMessageDto, @Request() req: AuthRequest) {
     try {
       // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
       if (!req.user?.sub) {
@@ -109,16 +110,15 @@ export class TelegramUserController {
         };
       }
 
-      // Вызываем messages.sendMessage через MTProto
-      // @ts-expect-error — MTProto messages.sendMessage/invoke: типы @mtkruto не совпадают с декларациями
+      // Вызываем messages.sendMessage через MTProto (peer: типы @mtkruto InputPeer не совпадают с декларациями)
       const result = await client.invoke({
         _: 'messages.sendMessage',
-        peer,
+        peer: peer as never,
         message: dto.message,
         random_id: BigInt(Date.now()),
         ...(dto.parseMode && { parse_mode: dto.parseMode }),
         ...(dto.replyToMessageId && { reply_to_msg_id: dto.replyToMessageId }),
-        ...(dto.disableNotification !== undefined && { silent: dto.disableNotification }),
+        ...(dto.disableNotification === true && { silent: true as const }),
       }) as any;
 
       this.logger.log(`Сообщение отправлено от пользователя ${userId} в чат ${dto.chatId}`);
@@ -140,7 +140,7 @@ export class TelegramUserController {
   @ApiResponse({ status: 200, description: 'Медиа отправлено' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   @ApiResponse({ status: 403, description: 'Telegram сессия не готова (initializing)' })
-  async sendMedia(@Body() dto: UserSendMediaDto, @Request() req) {
+  async sendMedia(@Body() dto: UserSendMediaDto, @Request() req: AuthRequest) {
     try {
       // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
       if (!req.user?.sub) {
@@ -239,7 +239,7 @@ export class TelegramUserController {
   @ApiOperation({ summary: 'Получение списка чатов авторизованного пользователя' })
   @ApiResponse({ status: 200, description: 'Список чатов получен' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
-  async getChats(@Request() req, @Query('type') type?: 'private' | 'group' | 'all') {
+  async getChats(@Request() req: AuthRequest, @Query('type') type?: 'private' | 'group' | 'all') {
     try {
       // Проверяем, что пользователь авторизован
       if (!req.user?.sub) {
@@ -399,7 +399,7 @@ export class TelegramUserController {
   @ApiOperation({ summary: 'Получение списка контактов авторизованного пользователя' })
   @ApiResponse({ status: 200, description: 'Список контактов получен' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
-  async getContacts(@Request() req) {
+  async getContacts(@Request() req: AuthRequest) {
     try {
       // Проверяем, что пользователь авторизован
       if (!req.user?.sub) {
@@ -481,7 +481,7 @@ export class TelegramUserController {
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async getMessages(
     @Param('chatId') chatId: string,
-    @Request() req,
+    @Request() req: AuthRequest,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ) {
@@ -743,7 +743,7 @@ export class TelegramUserController {
     @Query('localId') localId: string,
     @Query('secret') secret: string,
     @Query('fileReference') fileReference: string | undefined,
-    @Request() req,
+    @Request() req: AuthRequest,
   ): Promise<StreamableFile> {
     if (!req.user?.sub || !req.telegramSessionId) {
       throw new UnauthorizedException('No active Telegram session found.');
@@ -797,7 +797,7 @@ export class TelegramUserController {
     type: TelegramSessionStatusDto,
   })
   @ApiResponse({ status: 401, description: 'JWT токен невалиден или отсутствует' })
-  async getSessionStatus(@Request() req): Promise<TelegramSessionStatusDto> {
+  async getSessionStatus(@Request() req: AuthRequest): Promise<TelegramSessionStatusDto> {
     try {
       // КРИТИЧНО: Проверяем только JWT, НЕ Telegram сессию
       if (!req.user?.sub) {
@@ -904,7 +904,7 @@ export class TelegramUserController {
     },
   })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
-  async getSessions(@Request() req): Promise<{ success: boolean; currentSessionId: string | null; sessions: SessionInfoDto[] }> {
+  async getSessions(@Request() req: AuthRequest): Promise<{ success: boolean; currentSessionId: string | null; sessions: SessionInfoDto[] }> {
     try {
       // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
       if (!req.user?.sub) {
@@ -982,7 +982,7 @@ export class TelegramUserController {
   @ApiResponse({ status: 404, description: 'Сессия не найдена или не принадлежит пользователю' })
   async deactivateSession(
     @Param('sessionId') sessionId: string,
-    @Request() req,
+    @Request() req: AuthRequest,
     @Query('permanent') permanent?: string,
   ): Promise<{ success: boolean }> {
     try {
@@ -1029,7 +1029,7 @@ export class TelegramUserController {
     },
   })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
-  async deactivateOtherSessions(@Request() req, @Query('keepSessionId') keepSessionId?: string): Promise<{ success: boolean }> {
+  async deactivateOtherSessions(@Request() req: AuthRequest, @Query('keepSessionId') keepSessionId?: string): Promise<{ success: boolean }> {
     try {
       // КРИТИЧНО: Проверка на null перед доступом к req.user.sub
       if (!req.user?.sub) {
@@ -1059,7 +1059,7 @@ export class TelegramUserController {
     description: 'Статус соединения успешно получен',
   })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
-  async getConnectionStatus(@Request() req) {
+  async getConnectionStatus(@Request() req: AuthRequest) {
     try {
       if (!req.user?.sub) {
         throw new UnauthorizedException('Authentication required');
@@ -1129,7 +1129,7 @@ export class TelegramUserController {
     @Param('chatId') chatId: string,
     @Param('messageId') messageId: string,
     @Body('toChatId') toChatId: string,
-    @Request() req,
+    @Request() req: AuthRequest,
   ) {
     try {
       if (!req.user?.sub) {
@@ -1196,7 +1196,7 @@ export class TelegramUserController {
   async deleteMessage(
     @Param('chatId') chatId: string,
     @Param('messageId') messageId: string,
-    @Request() req,
+    @Request() req: AuthRequest,
   ) {
     try {
       if (!req.user?.sub) {

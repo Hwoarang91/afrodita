@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
+import { AuthRequest } from '../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ReviewsService } from './reviews.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -17,10 +18,10 @@ export class ReviewsController {
   @Post()
   @ApiOperation({ summary: 'Создание отзыва' })
   async create(
-    @Request() req,
+    @Request() req: AuthRequest,
     @Body() body: { appointmentId: string; rating: number; comment?: string },
   ) {
-    return await this.reviewsService.create(req.user.sub, body.appointmentId, body.rating, body.comment);
+    return await this.reviewsService.create(req.user!.sub!, body.appointmentId, body.rating, body.comment);
   }
 
   @Get()

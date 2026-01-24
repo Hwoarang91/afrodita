@@ -13,10 +13,10 @@
     "baseUrl": ".",
     "incremental": true,
     "skipLibCheck": true,
-    "strict": false,
+    "strict": true,
     "strictNullChecks": true,
     "strictPropertyInitialization": false,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
@@ -38,6 +38,7 @@
     "dist",
     "**/*.spec.ts",
     "**/*.test.ts",
+    "**/*.e2e-spec.ts",
     "test",
     "coverage"
   ]

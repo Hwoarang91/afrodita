@@ -10,6 +10,7 @@ import { Service } from '../entities/service.entity';
 import { Notification, NotificationType, NotificationStatus, NotificationChannel } from '../entities/notification.entity';
 import { User, UserRole } from '../entities/user.entity';
 import { TelegramUserSession } from '../entities/telegram-user-session.entity';
+import { getErrorMessage, getErrorStack } from '../common/utils/error-message';
 
 @Injectable()
 export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
@@ -413,7 +414,7 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
 
       this.logger.log(`[CRON] ✅ Очистка Telegram сессий завершена`);
     } catch (error) {
-      this.logger.error(`[CRON] ❌ Ошибка при очистке Telegram сессий: ${error.message}`, error.stack);
+      this.logger.error(`[CRON] ❌ Ошибка при очистке Telegram сессий: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 }

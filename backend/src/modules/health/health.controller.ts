@@ -23,6 +23,7 @@ export class HealthController {
       documentation: '/api/docs',
       endpoints: {
         health: '/health',
+        metrics: '/metrics',
         api: '/api/v1',
         docs: '/api/docs',
       },
@@ -43,6 +44,7 @@ export class HealthController {
         masters: '/api/v1/masters',
         users: '/api/v1/users',
         health: '/health',
+        metrics: '/metrics',
       },
     };
   }

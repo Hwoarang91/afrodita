@@ -10,6 +10,7 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { AuthRequest } from '../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AuthService, TelegramAuthData } from './auth.service';
 import { JwtAuthService } from './services/jwt.service';
@@ -33,7 +34,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Авторизация по email и паролю' })
   @ApiResponse({ status: 200, description: 'Успешная авторизация' })
   @ApiResponse({ status: 401, description: 'Неверные данные авторизации' })
-  async login(@Body() loginDto: LoginDto, @Request() req) {
+  async login(@Body() loginDto: LoginDto, @Request() req: AuthRequest) {
     this.logger.debug(`Запрос на вход: email=${loginDto.email}`);
     try {
       const user = await this.authService.validateEmailPassword(
@@ -83,7 +84,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Авторизация через Telegram' })
   @ApiResponse({ status: 200, description: 'Успешная авторизация' })
   @ApiResponse({ status: 401, description: 'Неверные данные авторизации' })
-  async telegramAuth(@Body() data: TelegramAuthData, @Request() req) {
+  async telegramAuth(@Body() data: TelegramAuthData, @Request() req: AuthRequest) {
     const user = await this.authService.validateTelegramAuth(data);
     // Используем JwtAuthService для генерации токенов
     const tokenPair = await this.jwtAuthService.generateTokenPair(
@@ -123,7 +124,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Обновление токена' })
   @ApiResponse({ status: 200, description: 'Токен обновлен' })
   @ApiResponse({ status: 401, description: 'Неверный refresh token' })
-  async refreshToken(@Body('refreshToken') refreshToken: string, @Request() req) {
+  async refreshToken(@Body('refreshToken') refreshToken: string, @Request() req: AuthRequest) {
     return await this.authService.refreshToken(
       refreshToken,
       req.ip,
@@ -136,23 +137,23 @@ export class AuthController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Выход из системы' })
-  async logout(@Request() req) {
-    return await this.authService.logout(req.user.sub, req.ip, req.get('user-agent'));
+  async logout(@Request() req: AuthRequest) {
+    return await this.authService.logout(req.user!.sub!, req.ip, req.get('user-agent'));
   }
 
   @Post('phone')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Обновление номера телефона' })
-  async updatePhone(@Request() req, @Body() dto: UpdatePhoneDto) {
-    return await this.authService.updatePhone(req.user.sub, dto.phone);
+  async updatePhone(@Request() req: AuthRequest, @Body() dto: UpdatePhoneDto) {
+    return await this.authService.updatePhone(req.user!.sub!, dto.phone);
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Получение текущего пользователя' })
-  async getMe(@Request() req) {
+  async getMe(@Request() req: AuthRequest) {
     if (!req.user) {
       this.logger.warn('getMe: req.user не установлен');
       throw new UnauthorizedException('User not authenticated');
@@ -184,7 +185,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Регистрация первого администратора' })
   @ApiResponse({ status: 201, description: 'Администратор успешно зарегистрирован' })
   @ApiResponse({ status: 400, description: 'Администратор уже существует' })
-  async register(@Body() registerDto: RegisterDto, @Request() req) {
+  async register(@Body() registerDto: RegisterDto, @Request() req: AuthRequest) {
     this.logger.debug(`Запрос на регистрацию: email=${registerDto.email}`);
     try {
       const result = await this.authService.registerFirstAdmin(

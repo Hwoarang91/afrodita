@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Telegraf, Markup, Context } from 'telegraf';
+import { Telegraf, Markup, Context, Types } from 'telegraf';
 
 /** Минимальная форма чата (ctx.chat / getChat / TelegramChat): id, type, title, first_name, name, username, chatId. */
 type ChatLike = { id?: number; type?: string; title?: string; first_name?: string; name?: string; username?: string; chatId?: string };
@@ -1993,7 +1993,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     const daysInMonth = lastDay.getDate();
     const startDay = firstDay.getDay() === 0 ? 7 : firstDay.getDay();
 
-    const keyboard: any[] = [];
+    const keyboard: unknown[][] = [];
     // Сохраняем год и месяц в сессии для навигации
     this.getSession(ctx.from!.id);
     
@@ -2016,7 +2016,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
     // Дни месяца
     const today = new Date();
-    let currentRow: any[] = [];
+    let currentRow: unknown[] = [];
     
     // Пустые ячейки до первого дня
     for (let i = 1; i < startDay; i++) {
@@ -2050,10 +2050,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     keyboard.push([Markup.button.callback('◀️ Назад', 'master:back')]);
 
     try {
-      await ctx.editMessageText('Выберите дату:', Markup.inlineKeyboard(keyboard));
+      await ctx.editMessageText('Выберите дату:', Markup.inlineKeyboard(keyboard as never));
     } catch (error) {
       // Если не можем отредактировать, отправляем новое сообщение
-      await ctx.reply('Выберите дату:', Markup.inlineKeyboard(keyboard));
+      await ctx.reply('Выберите дату:', Markup.inlineKeyboard(keyboard as never));
     }
   }
 
@@ -2755,7 +2755,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
 
     let message = '*Ваши предстоящие записи:*\n\n';
-    const keyboard: any[] = [];
+    const keyboard: unknown[][] = [];
 
     for (const apt of upcoming.slice(0, 10)) {
       const date = new Date(apt.startTime);
@@ -2774,7 +2774,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
     keyboard.push([Markup.button.callback('📅 Новая запись', 'service:list')]);
 
-    await this.sendPrivateCallbackReply(ctx, message, Markup.inlineKeyboard(keyboard), { parse_mode: 'Markdown' });
+    await this.sendPrivateCallbackReply(ctx, message, Markup.inlineKeyboard(keyboard as never), { parse_mode: 'Markdown' });
   }
 
   // Показать записи для отмены
@@ -2813,7 +2813,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
 
     let message = '*Выберите запись для переноса:*\n\n';
-    const keyboard: any[] = [];
+    const keyboard: unknown[][] = [];
 
     for (const apt of upcoming.slice(0, 10)) {
       const date = new Date(apt.startTime);
@@ -2833,7 +2833,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
     await ctx.reply(message, {
       parse_mode: 'Markdown',
-      reply_markup: Markup.inlineKeyboard(keyboard).reply_markup,
+      reply_markup: Markup.inlineKeyboard(keyboard as never).reply_markup,
     });
   }
 
@@ -3242,7 +3242,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     return months[month];
   }
 
-  async sendMessage(chatId: string, message: string, options?: any): Promise<void> {
+  async sendMessage(chatId: string, message: string, options?: Types.ExtraReplyMessage): Promise<void> {
     if (this.bot) {
       try {
         await this.bot.telegram.sendMessage(chatId, message, options);
@@ -3468,7 +3468,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   async sendMessageWithKeyboard(
     chatId: string,
     message: string,
-    keyboard: any,
+    keyboard: Types.ExtraReplyMessage,
   ): Promise<void> {
     if (this.bot) {
       await this.bot.telegram.sendMessage(chatId, message, keyboard);
@@ -4033,7 +4033,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
    * Если команда вызвана в группе, ответ отправляется через личные сообщения
    * Если в личном чате - обычным способом
    */
-  private async sendPrivateReply(ctx: Context, message: string, options?: any): Promise<void> {
+  private async sendPrivateReply(ctx: Context, message: string, options?: Types.ExtraReplyMessage): Promise<void> {
     if (!ctx.chat || !ctx.from) return;
     const isGroup = this.isGroupChat(ctx.chat);
 
@@ -4055,7 +4055,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           await ctx.reply(message, {
             ...finalOptions,
             reply_to_message_id: ctx.message?.message_id,
-          });
+          } as Types.ExtraReplyMessage);
         } else {
           throw error;
         }
@@ -4070,7 +4070,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
    * Если callback вызван из группы, ответ отправляется через личные сообщения
    * Если из личного чата - редактирует сообщение или отправляет новое
    */
-  private async sendPrivateCallbackReply(ctx: Context, message: string, keyboard?: any, options?: any): Promise<void> {
+  private async sendPrivateCallbackReply(ctx: Context, message: string, keyboard?: { reply_markup?: Types.ExtraReplyMessage['reply_markup'] }, options?: Types.ExtraReplyMessage): Promise<void> {
     if (!ctx.chat || !ctx.from) return;
     const isGroup = this.isGroupChat(ctx.chat);
 
@@ -4105,7 +4105,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         try {
           await ctx.editMessageText(message, {
             ...options,
-            reply_markup: keyboard?.reply_markup,
+            reply_markup: keyboard?.reply_markup as import('telegraf').Types.ExtraEditMessageText['reply_markup'],
           });
           await ctx.answerCbQuery();
         } catch (error) {
@@ -4357,7 +4357,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         `💰 Цена: ${appointment.price}₽\n` +
         `👨‍💼 *Мастер:* ${(appointment.master as WithName)?.name || 'Мастер'}\n`;
 
-      const keyboardButtons: any[] = [];
+      const keyboardButtons: unknown[][] = [];
       
       if (appointment.status === AppointmentStatus.PENDING) {
         keyboardButtons.push([
@@ -4369,7 +4369,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       keyboardButtons.push([Markup.button.callback('◀️ Назад к записям', 'admin:pending')]);
       keyboardButtons.push([Markup.button.callback('🏠 Главное меню', 'admin:menu')]);
 
-      const keyboard = Markup.inlineKeyboard(keyboardButtons);
+      const keyboard = Markup.inlineKeyboard(keyboardButtons as never);
 
       await ctx.editMessageText(message, {
         parse_mode: 'Markdown',

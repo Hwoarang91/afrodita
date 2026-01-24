@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
+import { getErrorMessage } from '../../../common/utils/error-message';
 import { User } from '../../../entities/user.entity';
 import { RefreshToken } from '../../../entities/refresh-token.entity';
 
@@ -199,7 +200,7 @@ export class JwtAuthService {
 
       return user || null;
     } catch (error) {
-      this.logger.debug('Access token validation failed:', error.message);
+      this.logger.debug('Access token validation failed:', getErrorMessage(error));
       return null;
     }
   }

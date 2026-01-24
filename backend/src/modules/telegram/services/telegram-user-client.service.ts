@@ -11,7 +11,7 @@ import { TelegramClientEventEmitter } from './telegram-client-event-emitter.serv
 import { TelegramConnectionMonitorService } from './telegram-connection-monitor.service';
 import { User, UserRole } from '../../../entities/user.entity';
 import { handleMtprotoError, MtprotoErrorAction } from '../utils/mtproto-error.handler';
-import { invokeWithRetry } from '../utils/mtproto-retry.utils';
+import { invokeWithRetry, type InvokeClient } from '../utils/mtproto-retry.utils';
 import { assertSessionTransition } from '../utils/session-state-machine';
 
 /**
@@ -505,7 +505,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
       try {
         this.logger.debug(`Validating session ${session.id} with getMe()...`);
         const startTime = Date.now();
-        await invokeWithRetry(client, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
+        await invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
           onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser'),
         });
         const duration = Date.now() - startTime;
@@ -693,7 +693,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
       this.logger.debug(`Performing getMe() check for session ${sessionId} to ensure auth_key is final`);
       try {
         const startTime = Date.now();
-        await invokeWithRetry(client, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
+        await invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
           onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, userId, 'users.getFullUser'),
         });
         const duration = Date.now() - startTime;
@@ -1162,7 +1162,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
       try {
         this.logger.debug(`Validating session ${sessionId} with getMe()...`);
         const startTime = Date.now();
-        await invokeWithRetry(client, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
+        await invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
           onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser'),
         });
         const duration = Date.now() - startTime;

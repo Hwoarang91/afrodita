@@ -4,7 +4,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { TelegramUserClientService } from './telegram-user-client.service';
 import { TelegramConnectionMonitorService } from './telegram-connection-monitor.service';
 import { Client } from '@mtkruto/node';
-import { invokeWithRetry } from '../utils/mtproto-retry.utils';
+import { invokeWithRetry, type InvokeClient } from '../utils/mtproto-retry.utils';
 
 interface HeartbeatStatus {
   sessionId: string;
@@ -200,7 +200,7 @@ export class TelegramHeartbeatService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Выполняем легковесный запрос для проверки соединения (с retry при FLOOD_WAIT)
-      const checkPromise = invokeWithRetry(client, {
+      const checkPromise = invokeWithRetry(client as InvokeClient, {
         _: 'users.getFullUser',
         id: { _: 'inputUserSelf' },
       });

@@ -1,4 +1,5 @@
 import { Controller, Get, UseGuards, Request, Param } from '@nestjs/common';
+import { AuthRequest } from '../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { FinancialService } from './financial.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -15,8 +16,8 @@ export class FinancialController {
 
   @Get('transactions')
   @ApiOperation({ summary: 'Получение транзакций пользователя' })
-  async getUserTransactions(@Request() req) {
-    return await this.financialService.getUserTransactions(req.user.sub);
+  async getUserTransactions(@Request() req: AuthRequest) {
+    return await this.financialService.getUserTransactions(req.user!.sub!);
   }
 
   @Get('users/:userId/transactions')

@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
+import { AuthRequest } from '../../../common/types/request.types';
 import { Response as ExpressResponse } from 'express';
 import { AuthService, TelegramAuthData } from '../auth.service';
 import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
@@ -57,7 +58,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Неверные данные авторизации' })
   async login(
     @Body() loginDto: LoginRequestDto,
-    @Request() req,
+    @Request() req: ExpressRequest,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<LoginResponseDto> {
     this.logger.debug(`Запрос на вход: email=${loginDto.email}`);
@@ -126,7 +127,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Неверный refresh token' })
   async refresh(
     @Body() refreshDto: RefreshRequestDto,
-    @Request() req,
+    @Request() req: ExpressRequest,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<RefreshResponseDto> {
     try {
@@ -194,14 +195,15 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Выход из системы' })
   async logout(
-    @Request() req,
+    @Request() req: AuthRequest,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<{ message: string }> {
     try {
-      const user = req.user;
+      if (!req.user?.sub) throw new UnauthorizedException('User not authenticated');
+      const sub = req.user.sub;
 
       // Инвалидируем все refresh tokens пользователя
-      await this.jwtService.logout(user.sub);
+      await this.jwtService.logout(sub);
 
       // Очищаем cookies
       this.clearAuthCookies(res);
@@ -209,13 +211,13 @@ export class AuthController {
 
       // Логируем выход
       await this.authService.logAuthAction(
-        user.sub,
+        sub,
         await this.getAuthAction('LOGOUT'),
         req.ip,
         req.get('user-agent'),
       );
 
-      this.logger.log(`Пользователь ${user.sub} вышел из системы`);
+      this.logger.log(`Пользователь ${sub} вышел из системы`);
 
       return { message: 'Logged out successfully' };
     } catch (error: unknown) {
@@ -228,20 +230,21 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Выход из системы на всех устройствах' })
   async logoutAll(
-    @Request() req,
+    @Request() req: AuthRequest,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<{ message: string }> {
     try {
-      const user = req.user;
+      if (!req.user?.sub) throw new UnauthorizedException('User not authenticated');
+      const sub = req.user.sub;
 
       // Инвалидируем все refresh tokens пользователя на всех устройствах
-      await this.jwtService.logoutAllDevices(user.sub);
+      await this.jwtService.logoutAllDevices(sub);
 
       // Очищаем cookies
       this.clearAuthCookies(res);
       this.clearCsrfCookie(res);
 
-      this.logger.log(`Пользователь ${user.sub} вышел из системы на всех устройствах`);
+      this.logger.log(`Пользователь ${sub} вышел из системы на всех устройствах`);
 
       return { message: 'Logged out from all devices' };
     } catch (error: unknown) {
@@ -263,22 +266,21 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Получение текущего пользователя' })
-  async getMe(@Request() req) {
+  async getMe(@Request() req: AuthRequest) {
     if (!req.user) {
       this.logger.warn('getMe: req.user не установлен');
       throw new UnauthorizedException('User not authenticated');
     }
-    
-    this.logger.debug(`getMe: Возвращаем данные пользователя: ${req.user.email || req.user.sub}`);
-    
-    // Возвращаем только необходимые поля пользователя
+    const u = req.user;
+    this.logger.debug(`getMe: Возвращаем данные пользователя: ${u.email || u.sub}`);
+
     return {
-      id: req.user.sub || req.user.id,
-      email: req.user.email,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-      role: req.user.role,
-      bonusPoints: req.user.bonusPoints || 0,
+      id: u.sub || u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      role: u.role,
+      bonusPoints: u.bonusPoints || 0,
     };
   }
 
@@ -297,7 +299,7 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Администратор уже существует' })
   async register(
     @Body() registerDto: RegisterDto,
-    @Request() req,
+    @Request() req: ExpressRequest,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
     this.logger.debug(`Запрос на регистрацию: email=${registerDto.email}`);
@@ -383,7 +385,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Неверные данные авторизации' })
   async telegramAuth(
     @Body() data: TelegramAuthData,
-    @Request() req,
+    @Request() req: ExpressRequest,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
     this.logger.log(`[TELEGRAM AUTH] Telegram Mini App авторизация: ${data.id}`);
@@ -454,7 +456,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Неверный номер телефона или ошибка отправки кода' })
   async requestPhoneCode(
     @Body() dto: TelegramPhoneRequestDto,
-    @Request() req,
+    @Request() req: AuthRequest,
   ): Promise<{ phoneCodeHash: string }> {
     this.logger.debug(`Запрос кода для телефона: ${dto.phoneNumber}`);
     try {
@@ -533,7 +535,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Ошибка конфигурации (отсутствуют API credentials)' })
   @ApiResponse({ status: 500, description: 'Внутренняя ошибка сервера' })
-  async generateQrCode(@Request() req): Promise<TelegramQrGenerateResponseDto> {
+  async generateQrCode(@Request() req: AuthRequest): Promise<TelegramQrGenerateResponseDto> {
     this.logger.log('Запрос на генерацию QR-кода', {
       url: req.url,
       method: req.method,
@@ -562,7 +564,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'QR токен не найден или истек' })
   async checkQrTokenStatus(
     @Param('tokenId') tokenId: string,
-    @Request() req: ExpressRequest & { user?: { sub?: string } },
+    @Request() req: AuthRequest,
     @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<TelegramQrStatusResponseDto> {
     this.logger.debug(`Проверка статуса QR токена: ${tokenId}`);

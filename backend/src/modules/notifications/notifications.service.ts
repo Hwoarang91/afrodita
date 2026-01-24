@@ -7,6 +7,7 @@ import { Appointment } from '../../entities/appointment.entity';
 import { User, UserRole } from '../../entities/user.entity';
 import { TelegramService } from '../telegram/telegram.service';
 import { SettingsService } from '../settings/settings.service';
+import { getErrorMessage } from '../../common/utils/error-message';
 import * as Handlebars from 'handlebars';
 
 @Injectable()
@@ -185,20 +186,21 @@ export class NotificationsService {
       saved.sentAt = new Date();
     } catch (error) {
       saved.status = NotificationStatus.FAILED;
-      saved.error = error.message;
+      saved.error = getErrorMessage(error);
     }
 
     return await this.notificationRepository.save(saved);
   }
 
   private getDefaultTitle(type: NotificationType): string {
-    const titles = {
+    const titles: Partial<Record<NotificationType, string>> = {
       [NotificationType.APPOINTMENT_CONFIRMED]: '✅ Запись подтверждена',
       [NotificationType.APPOINTMENT_REMINDER]: '⏰ Напоминание о записи',
       [NotificationType.APPOINTMENT_CANCELLED]: '❌ Запись отменена',
       [NotificationType.APPOINTMENT_RESCHEDULED]: '🔄 Запись перенесена',
       [NotificationType.BONUS_EARNED]: '🎁 Бонусы начислены',
       [NotificationType.FEEDBACK_REQUEST]: '💬 Оставьте отзыв',
+      [NotificationType.BIRTHDAY_GREETING]: '🎂 С днём рождения',
       [NotificationType.MARKETING]: '📢 Специальное предложение',
     };
     return titles[type] || 'Уведомление';
@@ -244,7 +246,7 @@ export class NotificationsService {
       return `⏰ Напоминание: у вас запись на ${data.serviceName} к ${data.masterName} ${timePhrase} (${dateStr} в ${timeStr}). Пожалуйста, приходите вовремя!`;
     }
 
-    const messages = {
+    const messages: Partial<Record<NotificationType, string>> = {
       [NotificationType.APPOINTMENT_CONFIRMED]: `Ваша запись на ${data.serviceName} к ${data.masterName} подтверждена на ${new Date(data.startTime).toLocaleString('ru-RU')}. Стоимость: ${data.price} руб.`,
       [NotificationType.APPOINTMENT_CANCELLED]: data.reason 
         ? `Ваша запись была отменена.\nПричина: ${data.reason}`
@@ -252,6 +254,7 @@ export class NotificationsService {
       [NotificationType.APPOINTMENT_RESCHEDULED]: `Ваша запись на ${data.serviceName} перенесена на ${new Date(data.startTime).toLocaleString('ru-RU')}.`,
       [NotificationType.BONUS_EARNED]: `Вам начислено ${data.points} бонусных баллов!`,
       [NotificationType.FEEDBACK_REQUEST]: `Пожалуйста, оставьте отзыв о посещении ${data.serviceName} у ${data.masterName}.`,
+      [NotificationType.BIRTHDAY_GREETING]: (data as { message?: string }).message || 'С днём рождения! Желаем счастья и здоровья!',
       [NotificationType.MARKETING]: data.message || 'Специальное предложение для вас!',
     };
     return messages[type] || 'Уведомление';
@@ -340,7 +343,7 @@ export class NotificationsService {
           }
         } catch (error) {
           saved.status = NotificationStatus.FAILED;
-          saved.error = error.message;
+          saved.error = getErrorMessage(error);
           results.failed++;
         }
 

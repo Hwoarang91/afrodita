@@ -73,19 +73,17 @@ npm run dev
 **Статус:** ✅ **ВЫПОЛНЕНО** — isRequire2faActionError в mapper, все проверки убраны из handler и auth.service.
 
 **Текущее состояние:**
-- В `mtproto-error.handler.ts` используется `message.includes()` для проверки ошибок (строки 51, 60-63)
-- Это нарушает принцип, что все проверки должны быть в `telegram-error-mapper.ts`
-- В `auth.service.ts:726` также используется `error.message.includes('SESSION_PASSWORD_NEEDED')`
+- ✅ `isRequire2faActionError` и др. проверки в `telegram-error-mapper.ts`; все `message.includes()` убраны из `mtproto-error.handler.ts` и `auth.service.ts`.
 
 **Проверено:**
-- ❌ `backend/src/modules/telegram/utils/mtproto-error.handler.ts:51,60-63` - использование `message.includes()`
-- ❌ `backend/src/modules/auth/auth.service.ts:726` - использование `error.message.includes()`
+- ✅ mtproto-error.handler.ts — проверки через mapper
+- ✅ auth.service.ts — использование mapper, без message.includes
 
 **Решение:**
-1. Переместить все проверки в `telegram-error-mapper.ts`
-2. Использовать функции `isFatalTelegramError`, `isRetryableTelegramError` из mapper
-3. Удалить все `message.includes()` из `mtproto-error.handler.ts`
-4. Исправить `auth.service.ts:726` для использования mapper
+1. ✅ Переместить все проверки в `telegram-error-mapper.ts`
+2. ✅ Использовать `isFatalTelegramError`, `isRetryableTelegramError`, `isRequire2faActionError` из mapper
+3. ✅ Удалить все `message.includes()` из mtproto-error.handler и auth.service
+4. ✅ Исправить auth.service для использования mapper
 
 **Файлы для изменения:**
 - `backend/src/modules/telegram/utils/mtproto-error.handler.ts`
@@ -101,20 +99,19 @@ npm run dev
 **Статус:** ✅ **ВЫПОЛНЕНО** — appointments, reviews с page/limit; notifications sendBroadcast .take(5000).
 
 **Текущее состояние:**
-- `appointments.service.ts:231` - `findAll()` возвращает все записи без лимита
-- `reviews.service.ts:99` - `findAll()` возвращает все записи без лимита
-- `notifications.service.ts:294` - может вернуть всех пользователей без лимита
+- ✅ `appointments.service` — findAll с page/limit (PaginationDto, normalizePagination)
+- ✅ `reviews.service` — findAll с page/limit
+- ✅ `notifications.service` — sendBroadcast с .take(5000) для выборки пользователей
 
 **Проверено:**
-- ❌ `backend/src/modules/appointments/appointments.service.ts:231` - нет пагинации
-- ❌ `backend/src/modules/reviews/reviews.service.ts:99` - нет пагинации
-- ⚠️ `backend/src/modules/notifications/notifications.service.ts:294` - нет лимита для пользователей
+- ✅ appointments — пагинация
+- ✅ reviews — пагинация
+- ✅ notifications — лимит 5000 для рассылки
 
 **Решение:**
-1. Добавить пагинацию в `appointments.service.ts:findAll()`
-2. Добавить пагинацию в `reviews.service.ts:findAll()`
-3. Добавить лимит для запроса пользователей в `notifications.service.ts`
-4. Добавить валидацию максимального значения limit (например, max 100)
+1. ✅ Пагинация в appointments и reviews
+2. ✅ Лимит в notifications.sendBroadcast
+3. ✅ Валидация limit (PaginationDto, max 100) — см. §6
 
 **Файлы для изменения:**
 - `backend/src/modules/appointments/appointments.service.ts`
@@ -128,20 +125,20 @@ npm run dev
 
 ### 4. TypeScript strict mode отключен
 
-**Статус:** ⚠️ **ПРОБЛЕМА ТИПОБЕЗОПАСНОСТИ** — частично: включены noFallthroughCasesInSwitch, noImplicitReturns; strict/strictNullChecks/noImplicitAny — нет
+**Статус:** ✅ **ЧАСТИЧНО ВЫПОЛНЕНО** — strict: true, strictNullChecks, noImplicitAny включены; сборка OK
 
 **Текущее состояние:**
-- `backend/tsconfig.json`: `strict: false`, strictNullChecks, noImplicitAny и др. — выключены
-- ✅ `noFallthroughCasesInSwitch: true`, `noImplicitReturns: true`, `noUnusedLocals: true` (сборка OK)
+- `backend/tsconfig.json`: `strict: true`, strictNullChecks, noImplicitAny (сборка OK)
+- ✅ `noFallthroughCasesInSwitch`, `noImplicitReturns`, `noUnusedLocals` включены
 
 **Проверено:**
-- ✅ `backend/tsconfig.json` — noFallthroughCasesInSwitch, noImplicitReturns, noUnusedLocals включены
+- ✅ strict: true — исправлены: `error` в catch → getErrorMessage/getErrorStack (auth.service, jwt.service, notifications.service, scheduler.service, telegram-session.guard); InvokeClient+приведение в invokeWithRetry (mtproto-retry.utils, telegram-session.guard, telegram-heartbeat, telegram-user-client×3); `return (await client.invoke(request)) as T` в mtproto-retry
 
 **Решение:**
-1. ✅ Первый шаг: noFallthroughCasesInSwitch, noImplicitReturns
-2. ✅ noUnusedLocals — убраны ≈61 неиспользуемых импорта/переменных и 6 неиспользуемых параметров конструктора (jwt.service ConfigService; jwt.strategy AuthService; telegram-connection-monitor TelegramUserClientService; referral.service Transaction; auth.service JwtService, TelegramSessionService)
-3. Далее: strictNullChecks — ✅ исправлены (settings, telegram-user-client, telegram-user.controller, auth, telegram.service, telegram-bot.service; сборка OK); noImplicitAny (~75), strict: true
-4. Исправлять ошибки по мере включения
+1. ✅ noFallthroughCasesInSwitch, noImplicitReturns, noUnusedLocals
+2. ✅ strictNullChecks, noImplicitAny
+3. ✅ strict: true — error.message/stack→getErrorMessage/getErrorStack; InvokeClient для @mtkruto Client; mtproto-retry return as T
+4. Тесты — в последнюю очередь
 
 **Файлы для изменения:**
 - `backend/tsconfig.json`
@@ -153,29 +150,21 @@ npm run dev
 
 ### 5. Множественные использования типа `any`
 
-**Статус:** ⚠️ **ПРОБЛЕМА ТИПОБЕЗОПАСНОСТИ** — значительная часть в telegram-bot исправлена; остаются `options`/`keyboard` в sendMessage/sendPrivate*, `keyboard: any[]`, `currentRow`, `selectedServices`, `servicesToBook`, `keyboardButtons`.
+**Статус:** ✅ **ВЫПОЛНЕНО** — options/keyboard и keyboard-массивы в telegram-bot типизированы
 
 **Текущее состояние:**
-- ✅ `auth.controller.ts`: `error: unknown`, `req: ExpressRequest`, getErrorMessage/getErrorStack
-- ✅ `telegram-bot.service.ts`:
-  - `catch (error: any)` → `unknown`, getErrorMessage/getErrorStack
-  - `ctx: any` → `Context`, `chat: any` → `ChatLike`; типы `ChatLike`, `ReplaceVarsUser`
-  - `(entity: any)` → `MentionEntity`; `(chatInfo as any)` → `ChatInfoFromApi` (getChat)
-  - `(apt.service as any)`, `(appointment.service as any)` → `WithName`; `(apt.master as any)`, `(appointment.master as any)` → `WithName`; `(appointmentWithRelations.master as any)` → `MasterLike` (id, userId, name)
-  - `(apt.client as any)`, `(appointment.client as any)`, `(appointmentWithRelations.client as any)` → `ClientLike`
-  - `role: 'client' as any` → `UserRole.CLIENT`
-  - `availableMasters: any[]` → `Master[]`; `user: any` → `User | null`; `promo: any`, `item: any` в forEach — типизированы (promotions, faq)
-  - `(ctx.callbackQuery as any).data` → приведение; `ctx.message.text` в handleBroadcastMessage → `(ctx.message as { text?: string })?.text ?? ''`
-  - ✅ `selectedServices`, `servicesToBook` → `Service[]`
-  - ⚠️ Оставлены `any`: `options`/`keyboard` в sendMessage, sendPrivateReply, sendPrivateCallbackReply; `keyboard: any[]`, `currentRow`, `keyboardButtons` (типы Telegraf HideableIKBtn не совместимы с push/row-построением)
+- ✅ `sendMessage(chatId, message, options?)` → `Types.ExtraReplyMessage`; `sendMessageWithKeyboard(..., keyboard)` → `Types.ExtraReplyMessage`
+- ✅ `sendPrivateReply(..., options?)` → `Types.ExtraReplyMessage`; `reply_to_message_id` при fallback → `as Types.ExtraReplyMessage`
+- ✅ `sendPrivateCallbackReply(..., keyboard?, options?)` → `keyboard?: { reply_markup?: Types.ExtraReplyMessage['reply_markup'] }`, `options?: Types.ExtraReplyMessage`; `editMessageText` reply_markup → `as ExtraEditMessageText['reply_markup']`
+- ✅ `keyboard: any[]` → `unknown[][]` (календарь, записи×2); `currentRow: any[]` → `unknown[]`; `keyboardButtons: any[]` → `unknown[][]`; на границе с Telegraf: `Markup.inlineKeyboard(keyboard as never)` (HideableIKBtn[][] не экспортируется)
 
 **Проверено:**
-- ✅ `backend/src/modules/telegram/telegram-bot.service.ts` — сборка проходит
+- ✅ `backend/src/modules/telegram/telegram-bot.service.ts` — сборка с strict: true проходит
 
 **Решение:**
-1. ✅ entity, chatInfo, apt/appointment.service|master|client, appointmentWithRelations, role, availableMasters, user, promo, faq
-2. При появлении типов Telegraf — убрать `any` у options/keyboard в sendMessage/sendPrivate*
-3. ⚠️ keyboard-массивы: Telegraf HideableIKBtn[][] не подходит для поэлементного push; оставлены any[]. При апгрейде Telegraf/типов — пересмотреть.
+1. ✅ entity, chatInfo, apt/appointment.*, role, availableMasters, user, promo, faq, selectedServices, servicesToBook
+2. ✅ options/keyboard в sendMessage, sendMessageWithKeyboard, sendPrivateReply, sendPrivateCallbackReply — Types.ExtraReplyMessage и { reply_markup }
+3. ✅ keyboard-массивы — unknown[][], unknown[]; на вызове Markup.inlineKeyboard — `as never`
 
 **Файлы для изменения:**
 - `backend/src/modules/telegram/telegram-bot.service.ts`
@@ -189,18 +178,15 @@ npm run dev
 **Статус:** ✅ **ВЫПОЛНЕНО** — PaginationDto, normalizePagination (max 100) в users, services, masters, appointments, reviews.
 
 **Текущее состояние:**
-- Нет проверки максимального значения `limit` в запросах
-- Пользователь может запросить миллион записей, что приведет к DoS
+- ✅ PaginationDto и `normalizePagination(..., { max: 100 })` в users, services, masters, appointments, reviews.
 
 **Проверено:**
-- ❌ `users.controller.ts` - нет проверки limit
-- ❌ `services.controller.ts` - нет проверки limit
-- ❌ `masters.controller.ts` - нет проверки limit
+- ✅ users, services, masters, appointments, reviews — limit ограничен (max 100)
 
 **Решение:**
-1. Создать DTO для пагинации с валидацией `@Max(100)` для limit
-2. Применить DTO во всех контроллерах
-3. Добавить дефолтное значение limit=20, max=100
+1. ✅ PaginationDto с @Max(100) для limit
+2. ✅ normalizePagination в контроллерах/сервисах
+3. ✅ дефолт limit=20, max=100
 
 **Файлы для создания/изменения:**
 - `backend/src/common/dto/pagination.dto.ts` (создать)
@@ -409,22 +395,15 @@ npm run dev
 
 ### 14. Использование @ts-ignore комментариев
 
-**Статус:** ✅ **ВЫПОЛНЕНО** — все @ts-ignore убраны; 1 @ts-expect-error только где нужен
+**Статус:** ✅ **ВЫПОЛНЕНО** — @ts-ignore убраны; в telegram-user — as any для invoke
 
 **Текущее состояние:**
-- ✅ 6 `@ts-ignore` в backend: 5 удалены (Unused — тип. ошибок не было, достаточно `as any` или текущих типов), 1 заменён на `@ts-expect-error` в `telegram-user.controller.ts` (messages.sendMessage/invoke, типы @mtkruto)
-- ✅ auth, telegram-user-client (DatabaseStorage, new Client), telegram.service (restrictChatMember) — директивы сняты, краткие комментарии где нужно
+- ✅ `@ts-ignore` в backend убраны
+- В `telegram-user.controller.ts` @ts-expect-error не найден; для `client.invoke( {...} )` используются `as any` на аргументах (напр. `id: [messageIdNum] as any`, `random_id: [BigInt(...)] as any`, весь объект `as any`). Причина: типы @mtkruto для Api (messages.sendMessage, messages.deleteMessages, messages.forwardMessages и др.) строже runtime-структур (number[] vs readonly, BigInt, вложенные InputPeer и т.д.).
 
-**Проверено:**
-- ✅ `auth.service.ts` — @ts-ignore снят
-- ✅ `telegram-user-client.service.ts` — 2 сняты; JSDoc для DatabaseStorage
-- ✅ `telegram-user.controller.ts` — @ts-expect-error оставлен для invoke
-- ✅ `telegram.service.ts` — 2 сняты; комментарий про as any
-
-**Решение:**
-1. ⚠️ При появлении типов MTProto/Storage в @mtkruto — убрать оставшийся @ts-expect-error
-2. ✅ Убрать все `@ts-ignore`
-3. ✅ Использовать `@ts-expect-error` только где реальная ошибка типов
+**Углублённо (§14):**
+- Рекомендация: при обновлении @mtkruto проверить экспорт типов для messages.* и подставлять типизированные объекты; до тех пор `as any` на invoke-аргументах оставить.
+- `telegram.service` (restrictChatMember, Markup.inlineKeyboard), `telegram-user-client` (Storage, DatabaseStorage) — по-прежнему точечные `as any` на границе с Telegraf/MTKruto.
 
 **Оценка:** 3-4 часа
 
@@ -510,12 +489,11 @@ npm run dev
 
 ### 19. Улучшение мониторинга и логирования
 
-**Статус:** 🔄 Улучшение observability
+**Статус:** ✅ **ВЫПОЛНЕНО** — Prometheus-метрики, /metrics
 
 **Текущее состояние:**
-- Базовое логирование есть
-- Отсутствуют метрики производительности
-- Нет интеграции с системами мониторинга
+- ✅ Метрики: prom-client, http_requests_total, http_request_duration_seconds; MetricsInterceptor (finalize); GET /metrics (text/plain) для Prometheus/Grafana
+- ✅ MetricsModule, /metrics в exclude и в /api, /api/v1; ErrorMetricsService (ошибки по ErrorCode) — был ранее
 
 **Оценка:** 8-12 часов
 
@@ -523,12 +501,12 @@ npm run dev
 
 ### 20. Оптимизация запросов к БД
 
-**Статус:** 🔄 Улучшение производительности
+**Статус:** ✅ **ЧАСТИЧНО ВЫПОЛНЕНО** — медленные запросы, N+1 аудит
 
 **Текущее состояние:**
-- Индексы добавлены для основных таблиц
-- Некоторые запросы могут иметь N+1 проблемы
-- Нет анализа медленных запросов
+- ✅ Медленные запросы: maxQueryExecutionTime (DB_SLOW_QUERY_MS, по умолч. 5000 в prod), TypeOrmSlowQueryLogger (logQuerySlow) в production
+- ✅ Аудит N+1: appointments, notifications — relations/один запрос; массовые find в циклах не выявлены
+- Индексы — ранее; при необходимости: подписка на query runner для метрик
 
 **Оценка:** 6-8 часов
 
@@ -536,7 +514,11 @@ npm run dev
 
 ### 21. Улучшение документации API
 
-**Статус:** 🔄 Улучшение документации
+**Статус:** ✅ **ЧАСТИЧНО ВЫПОЛНЕНО** — теги Swagger
+
+**Текущее состояние:**
+- ✅ Swagger: добавлены теги health, metrics, settings, financial, reviews, audit, templates, contact-requests, telegram, scheduler (к auth, appointments, services, masters, users, notifications, analytics)
+- Контроллеры с @ApiTags, @ApiOperation — были; при необходимости: @ApiBody, DTO-схемы
 
 **Оценка:** 4-6 часов
 
@@ -550,10 +532,10 @@ npm run dev
 - ✅ Хорошая модульная структура
 - ✅ Правильное использование TypeORM
 - ✅ Настроена валидация и обработка ошибок
-- ❌ Нарушение архитектурных принципов (message.includes вне mapper)
-- ❌ TypeScript strict mode отключен
-- ❌ Множественные использования any типа
-- ❌ Отсутствие пагинации в некоторых запросах
+- ✅ Архитектурные принципы — message.includes в mapper (§2)
+- ✅ TypeScript strict: true, strictNullChecks, noImplicitAny (сборка OK)
+- ⚠️ any: telegram-bot типизирован (§5); в notifications, telegram-user-client, auth, users, http-exception.filter, telegram-user.controller и др. — остаются; рекомендуются DTO и unknown/приведения
+- ✅ Пагинация — appointments, reviews; notifications sendBroadcast .take(5000) (§3)
 
 **Зависимости:**
 - NestJS 10.3.0
@@ -604,8 +586,8 @@ npm run dev
 
 ### Фаза 2: Важные улучшения (2-3 недели)
 
-7. ⚠️ Включить TypeScript strict mode постепенно (8-12 часов) — noFallthroughCasesInSwitch, noImplicitReturns ✅; strictNullChecks, noImplicitAny — далее
-8. ⚠️ Заменить все any типы (4-6 часов) — частично: telegram-bot entity, chatInfo, apt/appointment.*, appointmentWithRelations, role, availableMasters, user, promo, faq; остаются options/keyboard в sendMessage/sendPrivate*, keyboard-массивы
+7. ✅ Включить TypeScript strict mode постепенно — strict: true, strictNullChecks, noImplicitAny (сборка OK)
+8. ✅ Заменить все any типы в telegram-bot — options/keyboard (Types.ExtraReplyMessage, { reply_markup }), keyboard/currentRow/keyboardButtons (unknown[][], unknown[]; Markup.inlineKeyboard as never)
 9. ✅ Убрать @ts-ignore комментарии (3-4 часа) — 6 мест: 5 сняты, 1 @ts-expect-error (messages.sendMessage)
 10. ✅ Исправить небезопасные значения по умолчанию для секретов (2-3 часа) — main, data-source, database.config
 11. ✅ Убрать жестко закодированные URL (1-2 часа) — FRONTEND_URL в telegram-bot
@@ -621,9 +603,9 @@ npm run dev
 ### Фаза 3: Дополнительные улучшения (3-4 недели)
 
 18. 🔄 Улучшить покрытие тестами (16-24 часа)
-19. 🔄 Улучшить мониторинг (8-12 часов)
-20. 🔄 Оптимизировать запросы к БД (6-8 часов)
-21. 🔄 Улучшить документацию API (4-6 часов)
+19. ✅ Улучшить мониторинг — prom-client, /metrics, http_requests_total, http_request_duration_seconds
+20. ✅ Оптимизировать запросы к БД — maxQueryExecutionTime, TypeOrmSlowQueryLogger, аудит N+1
+21. ✅ Улучшить документацию API — теги Swagger (health, metrics, settings, financial, reviews, audit, templates, contact-requests, telegram, scheduler)
 
 **Итого:** 34-50 часов
 
@@ -645,45 +627,44 @@ npm run dev
 - ✅ 2FA аутентификация — checkPassword из @mtkruto/node, самописный SRP удалён
 - ✅ Архитектурные принципы соблюдаются — message.includes убраны, проверки в telegram-error-mapper
 - ✅ Все запросы имеют пагинацию — appointments, reviews; notifications sendBroadcast с .take(5000)
-- ⚠️ TypeScript strict: noFallthroughCasesInSwitch, noImplicitReturns, noUnusedLocals включены; strict/strictNullChecks — нет
+- ✅ TypeScript strict: true, strictNullChecks, noImplicitAny, noUnusedLocals (сборка OK)
 - ❌ Нет использований any типа
 - ⚠️ Покрытие тестами >80% для критичных модулей
 - ✅ Rate limiting на auth — authLimiter на /auth/login, /auth/register
 - ✅ Транзакции в processPayment — manager.transaction для bonusPoints + Transaction
 - ✅ Валидация размера входных данных — body 10mb, @MaxLength в DTO
-- ⚠️ Метрики и мониторинг настроены
-- ⚠️ Документация API полная
+- ✅ Метрики: /metrics (Prometheus), http_requests_total, http_request_duration_seconds; ErrorMetricsService
+- ✅ Документация API: Swagger, теги для основных модулей
 
 ---
 
 ## Проблемы из предыдущих планов, перенесенные в этот план
 
-1. **Низкое покрытие тестами модуля auth** - частично исправлено, требуется добавить тесты для 2FA, JWT и Local стратегий
-2. **Небезопасные значения по умолчанию для секретов** - все еще актуально, требуется проверка
-3. **Жестко закодированные URL** - все еще актуально, требуется проверка
-4. **Неполная валидация переменных окружения** - все еще актуально, требуется проверка
-5. **TODO комментарии в коде** - все еще актуально, требуется реализация
-6. **Улучшение обработки ошибок** - хорошо реализовано, но можно добавить retry механизмы
+1. **Низкое покрытие тестами модуля auth** — частично исправлено; требуются тесты для 2FA, JWT, Local (§8)
+2. **Небезопасные значения по умолчанию для секретов** — ✅ §9: main, data-source, database.config без fallback в prod
+3. **Жестко закодированные URL** — ✅ §10: telegram-bot, FRONTEND_URL из env
+4. **Неполная валидация переменных окружения** — ✅ §11: env.validation, ValidateIf, MinLength, IsUrl
+5. **TODO комментарии в коде** — ✅ §12: RegisterDto, MediaPreview, TelegramUserMessagesTab
+6. **Улучшение обработки ошибок** — ✅ §17: retry для MTProto (invokeWithRetry)
 
 ## Новые проблемы, обнаруженные при анализе
 
-1. **Нарушение архитектурных принципов** - использование message.includes() вне mapper
-2. **Отсутствие пагинации** - критичные запросы возвращают все записи
-3. **TypeScript strict mode отключен** - проблемы типобезопасности
-4. **Множественные использования any** - 30+ использований
-5. **Отсутствие валидации limit** - риск DoS
-6. **Отсутствие rate limiting** - закомментирован в main.ts
-7. **Использование @ts-ignore** - 7 использований
-8. **Отсутствие транзакций** - в некоторых критичных операциях
+1. **Нарушение архитектурных принципов** — ✅ §2: message.includes в mapper, убраны из handler и auth.service
+2. **Отсутствие пагинации** — ✅ §3: appointments, reviews, notifications.take(5000)
+3. **TypeScript strict mode** — ✅ strict: true, strictNullChecks, noImplicitAny
+4. **Множественные использования any** — ⚠️ telegram-bot типизирован (§5); остаются в др. модулях
+5. **Отсутствие валидации limit** — ✅ §6: PaginationDto, normalizePagination(max 100)
+6. **Отсутствие rate limiting** — ✅ §13: authLimiter на /auth/login, /auth/register
+7. **Использование @ts-ignore** — ✅ §14: убраны; as any на границе @mtkruto
+8. **Отсутствие транзакций** — ✅ §16: processPayment с manager.transaction
 
 ---
 
 ## Следующие шаги
 
-1. **Немедленно:** Начать с Фазы 1 - критические исправления
-2. **Приоритет 1:** Исправить нарушение архитектурных принципов
-3. **Приоритет 2:** Добавить пагинацию в критичные запросы
-4. **Приоритет 3:** Включить TypeScript strict mode постепенно
-5. Провести code review после каждой фазы
-6. Обновлять REPORT.md по мере выполнения задач
-7. Тестировать изменения в dev окружении перед production
+1. **Приоритет:** Улучшение покрытия тестами (§8 auth, §18) — в последнюю очередь
+2. Постепенная замена `error: any` / `e: any` на `unknown` и getErrorMessage (точечно)
+3. Сокращение any в notifications, telegram-user-client, auth, users и др. (DTO, unknown)
+4. Проводить code review после каждой фазы
+5. Обновлять REPORT.md по мере выполнения задач
+6. Тестировать изменения в dev перед production

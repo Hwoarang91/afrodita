@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TypeOrmOptionsFactory, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
+import { TypeOrmSlowQueryLogger } from './typeorm-slow-query.logger';
 
 @Injectable()
 export class DatabaseConfig implements TypeOrmOptionsFactory {
@@ -33,8 +34,12 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
       database: this.configService.get<string>('DB_NAME', 'afrodita'),
       entities: [__dirname + '/../**/*.entity{.ts,.js}'],
       migrations: [__dirname + '/../migrations/*{.ts,.js}'],
-      synchronize: this.configService.get<string>('NODE_ENV') !== 'production',
-      logging: this.configService.get<string>('NODE_ENV') === 'development',
+      synchronize: !isProduction,
+      logging: !isProduction,
+      ...(isProduction && {
+        maxQueryExecutionTime: this.configService.get<number>('DB_SLOW_QUERY_MS', 5000),
+        logger: new TypeOrmSlowQueryLogger(new Logger('TypeORM')),
+      }),
       ssl: this.configService.get<string>('DB_SSL') === 'true' ? { rejectUnauthorized: false } : false,
       retryAttempts: 10,
       retryDelay: 3000,

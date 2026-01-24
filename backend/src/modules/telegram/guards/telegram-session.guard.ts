@@ -3,6 +3,8 @@ import { TelegramSessionService } from '../services/telegram-session.service';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
 import { buildErrorResponse } from '../../../common/utils/error-response.builder';
 import { ErrorCode } from '../../../common/interfaces/error-response.interface';
+import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
+import type { InvokeClient } from '../utils/mtproto-retry.utils';
 
 /**
  * Guard для проверки наличия активной Telegram сессии
@@ -126,21 +128,21 @@ export class TelegramSessionGuard implements CanActivate {
             // КРИТИЧНО: Валидируем сессию через getMe() (с retry при FLOOD_WAIT)
             try {
               const { invokeWithRetry } = await import('../utils/mtproto-retry.utils');
-              await invokeWithRetry(client, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
+              await invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } });
               this.logger.log(`TelegramSessionGuard: ✅ Session ${activeSession.id} validated successfully via getMe()`);
-            } catch (validationError: any) {
-              this.logger.error(`TelegramSessionGuard: ❌ Session ${activeSession.id} validation failed: ${validationError.message}`);
+            } catch (validationError: unknown) {
+              this.logger.error(`TelegramSessionGuard: ❌ Session ${activeSession.id} validation failed: ${getErrorMessage(validationError)}`);
               throw new UnauthorizedException(
                 'Telegram session is invalid. Please re-authorize via phone or QR code.',
               );
             }
-          } catch (error: any) {
+          } catch (error: unknown) {
             // Если это уже UnauthorizedException - пробрасываем дальше
             if (error instanceof UnauthorizedException) {
               throw error;
             }
             // Иначе логируем и пробрасываем как 401
-            this.logger.error(`TelegramSessionGuard: Error validating client for session ${activeSession.id}: ${error.message}`, error.stack);
+            this.logger.error(`TelegramSessionGuard: Error validating client for session ${activeSession.id}: ${getErrorMessage(error)}`, getErrorStack(error));
             throw new UnauthorizedException(
               'Telegram session found but cannot be validated. Please re-authorize.',
             );

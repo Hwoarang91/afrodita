@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, Logger, HttpException, HttpStatus, OnModuleDestroy } from '@nestjs/common';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
+import { getErrorMessage } from '../../common/utils/error-message';
 import { mapTelegramErrorToResponse } from '../telegram/utils/telegram-error-mapper';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
@@ -348,7 +349,7 @@ export class AuthService implements OnModuleDestroy {
           this.logger.log(`[TELEGRAM AUTH] Validation successful`);
           return true;
         } catch (error) {
-          this.logger.log(`[TELEGRAM AUTH] Validation failed: ${error.message}`);
+          this.logger.log(`[TELEGRAM AUTH] Validation failed: ${getErrorMessage(error)}`);
           return false;
         }
       }
@@ -372,12 +373,12 @@ export class AuthService implements OnModuleDestroy {
       // Создаем строку для проверки: сортируем ключи и формируем строку
       dataCheckString = Object.keys(userData)
         .sort()
-        .filter(key => {
-          const value = userData[key];
+        .filter((key: string) => {
+          const value = (userData as Record<string, unknown>)[key];
           return value !== undefined && value !== null && value !== '';
         })
-        .map((key) => {
-          const value = userData[key];
+        .map((key: string) => {
+          const value = (userData as Record<string, unknown>)[key];
           // Для числовых значений преобразуем в строку
           if (typeof value === 'number') {
             return `${key}=${value}`;
@@ -797,7 +798,7 @@ export class AuthService implements OnModuleDestroy {
           telegramId: authUser.id.toString(),
           role: UserRole.CLIENT,
           isActive: true,
-        });
+        } as DeepPartial<User>);
         await this.userRepository.save(user);
         this.logger.log(`Created new user for Telegram auth: ${user.id}, phone: ${normalizedPhone}`);
       } else {

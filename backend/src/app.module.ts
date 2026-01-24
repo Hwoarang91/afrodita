@@ -21,6 +21,7 @@ import { ContactRequestsModule } from './modules/contact-requests/contact-reques
 import { DatabaseConfig } from './config/database.config';
 import { SchedulerModule } from './tasks/scheduler.module';
 import { HealthModule } from './modules/health/health.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
 import { validate } from './config/env.validation';
 
 @Module({
@@ -56,6 +57,7 @@ import { validate } from './config/env.validation';
     ContactRequestsModule,
     SchedulerModule,
     HealthModule,
+    MetricsModule,
   ],
 })
 export class AppModule {}

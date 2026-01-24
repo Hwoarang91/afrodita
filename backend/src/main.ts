@@ -236,7 +236,7 @@ async function bootstrap() {
 
   // API prefix (исключаем health endpoint и корневые API роуты)
   app.setGlobalPrefix('api/v1', {
-    exclude: ['/health', '/api', '/api/v1', '/api/docs'],
+    exclude: ['/health', '/metrics', '/api', '/api/v1', '/api/docs'],
   });
   logger.log('API prefix установлен');
 
@@ -254,6 +254,16 @@ async function bootstrap() {
     .addTag('users', 'Пользователи')
     .addTag('notifications', 'Уведомления')
     .addTag('analytics', 'Аналитика')
+    .addTag('health', 'Health check и корневые endpoints')
+    .addTag('metrics', 'Prometheus-метрики')
+    .addTag('settings', 'Настройки')
+    .addTag('financial', 'Финансы и бонусы')
+    .addTag('reviews', 'Отзывы')
+    .addTag('audit', 'Аудит')
+    .addTag('templates', 'Шаблоны уведомлений')
+    .addTag('contact-requests', 'Заявки на контакт')
+    .addTag('telegram', 'Telegram: бот, чаты, пользователи, рассылки')
+    .addTag('scheduler', 'Планировщик (cron)')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
@@ -281,6 +291,7 @@ async function bootstrap() {
       logger.log(`✅ Backend успешно запущен на порту ${port}`);
       logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
       logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
+      logger.log(`📊 Prometheus метрики: http://0.0.0.0:${port}/metrics`);
     } else {
       // Проверяем, может сервер все равно работает, но listening еще не обновился
       logger.warn(`⚠️ listening = false, но продолжаем работу`);
@@ -289,6 +300,7 @@ async function bootstrap() {
       logger.log(`✅ Backend запущен на порту ${port} (проверка статуса может быть неточной)`);
       logger.log(`📚 Swagger документация: http://0.0.0.0:${port}/api/docs`);
       logger.log(`🏥 Health check: http://0.0.0.0:${port}/health`);
+      logger.log(`📊 Prometheus метрики: http://0.0.0.0:${port}/metrics`);
     }
   } catch (listenError: unknown) {
     const error = listenError instanceof Error ? listenError : new Error(String(listenError));

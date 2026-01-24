@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Delete, Body, UseGuards, Request, Query, Param } from '@nestjs/common';
+import { AuthRequest } from '../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { AuditService } from '../audit/audit.service';
@@ -26,9 +27,9 @@ export class NotificationsController {
 
   @Get()
   @ApiOperation({ summary: 'Получение уведомлений пользователя' })
-  async getUserNotifications(@Request() req) {
+  async getUserNotifications(@Request() req: AuthRequest) {
     return await this.notificationRepository.find({
-      where: { userId: req.user.sub },
+      where: { userId: req.user!.sub! },
       order: { createdAt: 'DESC' },
       take: 50,
     });
@@ -39,7 +40,7 @@ export class NotificationsController {
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Массовая рассылка сообщений (только для админов)' })
   @ApiBody({ type: BroadcastDto })
-  async sendBroadcast(@Request() req, @Body() dto: BroadcastDto) {
+  async sendBroadcast(@Request() req: AuthRequest, @Body() dto: BroadcastDto) {
     const result = await this.notificationsService.sendBroadcast(
       dto.title,
       dto.message,
@@ -51,7 +52,7 @@ export class NotificationsController {
     );
     
     // Логируем действие
-    await this.auditService.log(req.user.sub, AuditAction.BROADCAST_SENT, {
+    await this.auditService.log(req.user!.sub!, AuditAction.BROADCAST_SENT, {
       entityType: 'broadcast',
       description: `Отправлена рассылка: ${dto.title} (канал: ${dto.channel}, получателей: ${result.total})`,
       changes: {
@@ -119,9 +120,9 @@ export class NotificationsController {
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Массовое удаление уведомлений (только для админов)' })
   @ApiBody({ schema: { type: 'object', properties: { ids: { type: 'array', items: { type: 'string' } } } } })
-  async deleteNotifications(@Body() body: { ids: string[] }, @Request() req) {
+  async deleteNotifications(@Body() body: { ids: string[] }, @Request() req: AuthRequest) {
     const deleted = await this.notificationsService.deleteNotifications(body.ids);
-    await this.auditService.log(req.user.sub, AuditAction.NOTIFICATION_DELETED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.NOTIFICATION_DELETED, {
       entityType: 'notification',
       description: `Удалено ${deleted} уведомлений`,
       changes: { deletedCount: deleted, ids: body.ids },
@@ -135,9 +136,9 @@ export class NotificationsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Удаление уведомления (только для админов)' })
-  async deleteNotification(@Param('id') id: string, @Request() req) {
+  async deleteNotification(@Param('id') id: string, @Request() req: AuthRequest) {
     await this.notificationsService.deleteNotification(id);
-    await this.auditService.log(req.user.sub, AuditAction.NOTIFICATION_DELETED, {
+    await this.auditService.log(req.user!.sub!, AuditAction.NOTIFICATION_DELETED, {
       entityType: 'notification',
       entityId: id,
       description: `Удалено уведомление с ID: ${id}`,
