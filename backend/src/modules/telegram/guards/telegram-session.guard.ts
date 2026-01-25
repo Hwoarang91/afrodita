@@ -115,8 +115,8 @@ export class TelegramSessionGuard implements CanActivate {
               try {
                 await client.connect();
                 this.logger.log(`TelegramSessionGuard: ✅ Client connected successfully for session ${activeSession.id}`);
-              } catch (connectError: any) {
-                this.logger.error(`TelegramSessionGuard: ❌ Failed to connect client for session ${activeSession.id}: ${connectError.message}`);
+              } catch (connectError: unknown) {
+                this.logger.error(`TelegramSessionGuard: ❌ Failed to connect client for session ${activeSession.id}: ${getErrorMessage(connectError)}`);
                 throw new UnauthorizedException(
                   'Telegram session found but connection failed. Please re-authorize.',
                 );
@@ -161,9 +161,8 @@ export class TelegramSessionGuard implements CanActivate {
           try {
             this.telegramSessionService.save(request, session);
             this.logger.log(`TelegramSessionGuard: ✅ Session saved to request.session for future requests`);
-          } catch (error: any) {
-            this.logger.error(`TelegramSessionGuard: Failed to save session to request.session: ${error.message}`, error.stack);
-            // Продолжаем - сессия найдена в БД, это не критично
+          } catch (error: unknown) {
+            this.logger.error(`TelegramSessionGuard: Failed to save session to request.session: ${getErrorMessage(error)}`, getErrorStack(error));
           }
         } else {
           // КРИТИЧНО: Проверяем, есть ли сессии в других статусах (initializing, invalid)
@@ -197,12 +196,11 @@ export class TelegramSessionGuard implements CanActivate {
           this.logger.warn(`[TelegramSessionGuard] 🔥 SESSION LOOKUP RESULT: userId=${userId}, found=false, userSessions=${userSessions.length}, sessions=${userSessions.map(s => `${s.id}(${s.status}, active=${s.isActive}, userId=${s.userId})`).join(', ') || 'none'}`);
           this.logger.warn(`TelegramSessionGuard: No sessions found in DB for userId=${userId}`);
         }
-      } catch (error: any) {
-        // Если это уже ForbiddenException или UnauthorizedException - пробрасываем дальше
+      } catch (error: unknown) {
         if (error instanceof ForbiddenException || error instanceof UnauthorizedException) {
           throw error;
         }
-        this.logger.error(`TelegramSessionGuard: Error loading session from DB: ${error.message}`, error.stack);
+        this.logger.error(`TelegramSessionGuard: Error loading session from DB: ${getErrorMessage(error)}`, getErrorStack(error));
       }
     }
 
@@ -234,13 +232,11 @@ export class TelegramSessionGuard implements CanActivate {
           );
           throw new ForbiddenException(errorResponse);
         }
-      } catch (error: any) {
-        // Если это уже ForbiddenException - пробрасываем дальше
+      } catch (error: unknown) {
         if (error instanceof ForbiddenException) {
           throw error;
         }
-        // Иначе логируем и продолжаем с 401
-        this.logger.debug(`TelegramSessionGuard: Error checking session status: ${error.message}`);
+        this.logger.debug(`TelegramSessionGuard: Error checking session status: ${getErrorMessage(error)}`);
       }
       
       // Нет сессий вообще - это 401 NO_SESSION

@@ -33,8 +33,8 @@ export class NotificationsService {
       NotificationChannel.TELEGRAM,
       {
         appointmentId: appointment.id,
-        masterName: (appointment.master as any)?.name || 'Мастер',
-        serviceName: (appointment.service as any)?.name || 'Услуга',
+        masterName: appointment.master?.name ?? 'Мастер',
+        serviceName: appointment.service?.name ?? 'Услуга',
         startTime: appointment.startTime,
         price: appointment.price,
       },
@@ -48,8 +48,8 @@ export class NotificationsService {
       NotificationChannel.TELEGRAM,
       {
         appointmentId: appointment.id,
-        masterName: (appointment.master as any)?.name || 'Мастер',
-        serviceName: (appointment.service as any)?.name || 'Услуга',
+        masterName: appointment.master?.name ?? 'Мастер',
+        serviceName: appointment.service?.name ?? 'Услуга',
         startTime: appointment.startTime,
         reminderHours: reminderHours,
       },
@@ -64,8 +64,8 @@ export class NotificationsService {
       NotificationChannel.TELEGRAM,
       {
         appointmentId: appointment.id,
-        masterName: (appointment.master as any)?.name || 'Мастер',
-        serviceName: (appointment.service as any)?.name || 'Услуга',
+        masterName: appointment.master?.name ?? 'Мастер',
+        serviceName: appointment.service?.name ?? 'Услуга',
         startTime: appointment.startTime,
         reason: cancellationReason,
       },
@@ -79,8 +79,8 @@ export class NotificationsService {
       NotificationChannel.TELEGRAM,
       {
         appointmentId: appointment.id,
-        masterName: (appointment.master as any)?.name || 'Мастер',
-        serviceName: (appointment.service as any)?.name || 'Услуга',
+        masterName: appointment.master?.name ?? 'Мастер',
+        serviceName: appointment.service?.name ?? 'Услуга',
         startTime: appointment.startTime,
       },
     );
@@ -115,8 +115,8 @@ export class NotificationsService {
       NotificationChannel.TELEGRAM,
       {
         appointmentId: appointment.id,
-        masterName: (appointment.master as any)?.name || 'Мастер',
-        serviceName: (appointment.service as any)?.name || 'Услуга',
+        masterName: appointment.master?.name ?? 'Мастер',
+        serviceName: appointment.service?.name ?? 'Услуга',
       },
       { replyMarkup: keyboard.reply_markup },
     );
@@ -126,8 +126,8 @@ export class NotificationsService {
     userId: string,
     type: NotificationType,
     channel: NotificationChannel,
-    data: Record<string, any>,
-    options?: { replyMarkup?: any },
+    data: Record<string, unknown>,
+    options?: { replyMarkup?: unknown },
   ): Promise<Notification> {
     // Получение шаблона
     const template = await this.templateRepository.findOne({
@@ -206,10 +206,11 @@ export class NotificationsService {
     return titles[type] || 'Уведомление';
   }
 
-  private async getDefaultMessage(type: NotificationType, data: Record<string, any>): Promise<string> {
+  private async getDefaultMessage(type: NotificationType, data: Record<string, unknown>): Promise<string> {
+    const d = data as Record<string, unknown>;
     if (type === NotificationType.APPOINTMENT_REMINDER) {
-      const reminderHours = data.reminderHours || 24;
-      const startTime = new Date(data.startTime);
+      const reminderHours = Number(d.reminderHours) || 24;
+      const startTime = new Date((d.startTime as string | number | Date) || Date.now());
       
       // Получаем таймзону из настроек для правильного отображения времени
       const timezone = await this.settingsService.get('timezone', 'Europe/Moscow');
@@ -243,19 +244,19 @@ export class NotificationsService {
         timePhrase = `через ${reminderHours} ${reminderHours === 1 ? 'час' : reminderHours < 5 ? 'часа' : 'часов'}`;
       }
       
-      return `⏰ Напоминание: у вас запись на ${data.serviceName} к ${data.masterName} ${timePhrase} (${dateStr} в ${timeStr}). Пожалуйста, приходите вовремя!`;
+      return `⏰ Напоминание: у вас запись на ${String(d.serviceName ?? '')} к ${String(d.masterName ?? '')} ${timePhrase} (${dateStr} в ${timeStr}). Пожалуйста, приходите вовремя!`;
     }
 
     const messages: Partial<Record<NotificationType, string>> = {
-      [NotificationType.APPOINTMENT_CONFIRMED]: `Ваша запись на ${data.serviceName} к ${data.masterName} подтверждена на ${new Date(data.startTime).toLocaleString('ru-RU')}. Стоимость: ${data.price} руб.`,
-      [NotificationType.APPOINTMENT_CANCELLED]: data.reason 
-        ? `Ваша запись была отменена.\nПричина: ${data.reason}`
+      [NotificationType.APPOINTMENT_CONFIRMED]: `Ваша запись на ${String(d.serviceName ?? '')} к ${String(d.masterName ?? '')} подтверждена на ${new Date((d.startTime as string | number | Date) || 0).toLocaleString('ru-RU')}. Стоимость: ${d.price} руб.`,
+      [NotificationType.APPOINTMENT_CANCELLED]: d.reason
+        ? `Ваша запись была отменена.\nПричина: ${String(d.reason)}`
         : `Ваша запись была отменена.`,
-      [NotificationType.APPOINTMENT_RESCHEDULED]: `Ваша запись на ${data.serviceName} перенесена на ${new Date(data.startTime).toLocaleString('ru-RU')}.`,
-      [NotificationType.BONUS_EARNED]: `Вам начислено ${data.points} бонусных баллов!`,
-      [NotificationType.FEEDBACK_REQUEST]: `Пожалуйста, оставьте отзыв о посещении ${data.serviceName} у ${data.masterName}.`,
-      [NotificationType.BIRTHDAY_GREETING]: (data as { message?: string }).message || 'С днём рождения! Желаем счастья и здоровья!',
-      [NotificationType.MARKETING]: data.message || 'Специальное предложение для вас!',
+      [NotificationType.APPOINTMENT_RESCHEDULED]: `Ваша запись на ${String(d.serviceName ?? '')} перенесена на ${new Date((d.startTime as string | number | Date) || 0).toLocaleString('ru-RU')}.`,
+      [NotificationType.BONUS_EARNED]: `Вам начислено ${Number(d.points) || 0} бонусных баллов!`,
+      [NotificationType.FEEDBACK_REQUEST]: `Пожалуйста, оставьте отзыв о посещении ${String(d.serviceName ?? '')} у ${String(d.masterName ?? '')}.`,
+      [NotificationType.BIRTHDAY_GREETING]: (d.message as string | undefined) || 'С днём рождения! Желаем счастья и здоровья!',
+      [NotificationType.MARKETING]: (d.message as string | undefined) || 'Специальное предложение для вас!',
     };
     return messages[type] || 'Уведомление';
   }
@@ -364,7 +365,7 @@ export class NotificationsService {
     const allNotifications = await this.notificationRepository.find({
       where: {
         type: NotificationType.MARKETING,
-        payload: { broadcast: true } as any,
+        payload: { broadcast: true } as Record<string, unknown>,
       },
       order: { createdAt: 'DESC' },
       relations: ['user'],
@@ -385,8 +386,8 @@ export class NotificationsService {
     }>();
 
     for (const notification of allNotifications) {
-      const payload = notification.payload || {};
-      const broadcastId = payload.broadcastId;
+      const payload = (notification.payload || {}) as Record<string, unknown>;
+      const broadcastId = payload.broadcastId as string | undefined;
       
       // Используем broadcastId если есть, иначе создаем ключ из title + message + channel + округленное время
       const key = broadcastId || `${notification.title}|${notification.message}|${notification.channel}|${Math.floor(notification.createdAt.getTime() / 60000)}`;
@@ -447,7 +448,7 @@ export class NotificationsService {
     const notifications = await this.notificationRepository.find({
       where: {
         type: NotificationType.MARKETING,
-        payload: { broadcast: true, broadcastId } as any,
+        payload: { broadcast: true, broadcastId } as Record<string, unknown>,
       },
       order: { createdAt: 'DESC' },
       relations: ['user'],
@@ -496,7 +497,7 @@ export class NotificationsService {
     const allNotifications = await this.notificationRepository.find({
       where: {
         type: NotificationType.MARKETING,
-        payload: { broadcast: true } as any,
+        payload: { broadcast: true } as Record<string, unknown>,
         title,
         message,
         channel,

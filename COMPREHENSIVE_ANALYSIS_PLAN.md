@@ -262,14 +262,12 @@ npm run dev
 **Статус:** ✅ **ВЫПОЛНЕНО РАНЕЕ** — main, data-source, database.config: проверки для production, без fallback.
 
 **Текущее состояние:**
-- В `main.ts` строка 139: `'your-session-secret-key-change-me'` как fallback (возможно уже исправлено)
-- В `data-source.ts` строки 10-14: дефолтные значения `'localhost'`, `'postgres'`, `'postgres'` (возможно уже исправлено)
-- В `database.config.ts` строки 12-16: дефолтные значения для БД (возможно уже исправлено)
-- Риск компрометации в production
+- ✅ main: SESSION_SECRET||JWT_SECRET; в prod throw, если оба не заданы; fallback `development-insecure...` только при !sessionSecret (dev)
+- ✅ database.config: в prod throw при отсутствии DB_HOST/USER/PASSWORD/NAME; password в prod без fallback `postgres`
+- ✅ data-source: в prod throw до создания DataSource при отсутствии DB_*
 
 **Проверено:**
-- ⚠️ Требуется проверка текущего состояния файлов
-- ❌ Возможно все еще есть fallback значения для секретов в production
+- ✅ main, database.config, data-source — в production нет небезопасных fallback для секретов
 
 **Решение:**
 1. Удалить все fallback значения для секретов в production
@@ -292,13 +290,11 @@ npm run dev
 **Статус:** ✅ **ВЫПОЛНЕНО РАНЕЕ** — telegram-bot: FRONTEND_URL из env, проверка наличия.
 
 **Текущее состояние:**
-- В `telegram-bot.service.ts:4474` жестко закодирован URL: `'https://your-domain.com'` (возможно уже исправлено)
-- Некоторые значения по умолчанию могут быть небезопасными
-- Требуется проверка всего кода на наличие других жестко закодированных значений
+- ✅ telegram-bot: FRONTEND_URL из `configService.get('FRONTEND_URL')`, логирование при отсутствии
+- ✅ main: localhost только в dev-ветке CORS; в prod — FRONTEND_URL, ADMIN_URL из env
 
 **Проверено:**
-- ⚠️ Требуется проверка текущего состояния файлов
-- ❌ Возможно все еще есть жестко закодированные URL
+- ✅ telegram-bot, main — жёстко закодированных URL (your-domain и т.п.) не найдено
 
 **Решение:**
 1. Вынести все URL в переменные окружения
@@ -320,14 +316,12 @@ npm run dev
 **Статус:** ✅ **ВЫПОЛНЕНО РАНЕЕ** — env.validation: ValidateIf, MinLength(32), IsUrl для FRONTEND/ADMIN, обязательные в prod.
 
 **Текущее состояние:**
-- **ВСЕ** переменные окружения могут быть помечены как `@IsOptional()` (38 использований)
-- Отсутствует валидация для критичных переменных в production
-- Нет проверки формата URL, email и т.д.
-- Нет разделения валидации для dev/prod окружений
+- ✅ ValidateIf для prod: DB_HOST, DB_USER, DB_PASSWORD, JWT_SECRET, SESSION_SECRET
+- ✅ MinLength(32) для JWT_SECRET, MinLength(8) для DB_PASSWORD; @IsUrl для FRONTEND_URL, ADMIN_URL
+- ✅ validate(): в prod requiredFields (JWT or SESSION, DB_*), throw при отсутствии
 
 **Проверено:**
-- ⚠️ Требуется проверка текущего состояния `env.validation.ts`
-- ❌ Возможно все еще все поля опциональны
+- ✅ env.validation — условная обязательность в prod, валидация формата URL и длины секретов
 
 **Решение:**
 1. Добавить обязательные поля для production (JWT_SECRET, DB_PASSWORD, SESSION_SECRET)
@@ -375,13 +369,10 @@ npm run dev
 **Статус:** ✅ **ВЫПОЛНЕНО** — authLimiter на /api/v1/auth/login и /api/v1/auth/register.
 
 **Текущее состояние:**
-- Rate limiting закомментирован в `main.ts:171-172`
-- Нет rate limiting на `/api/v1/auth/login`
-- Нет rate limiting на `/api/v1/auth/register`
+- ✅ main: `app.use('/api/v1/auth/login', authLimiter)` и `app.use('/api/v1/auth/register', authLimiter)`
 
 **Проверено:**
-- ❌ `backend/src/main.ts:171-172` - rate limiting закомментирован
-- ❌ Нет применения `authLimiter` на auth endpoints
+- ✅ authLimiter применяется на /auth/login и /auth/register
 
 **Решение:**
 1. Раскомментировать и применить rate limiting
@@ -663,8 +654,9 @@ npm run dev
 ## Следующие шаги
 
 1. **Приоритет:** Улучшение покрытия тестами (§8 auth, §18) — в последнюю очередь
-2. Постепенная замена `error: any` / `e: any` на `unknown` и getErrorMessage (точечно)
-3. Сокращение any в notifications, telegram-user-client, auth, users и др. (DTO, unknown)
-4. Проводить code review после каждой фазы
-5. Обновлять REPORT.md по мере выполнения задач
-6. Тестировать изменения в dev перед production
+2. Постепенная замена `error: any` / `e: any` на `unknown` и getErrorMessage — остаются: (пусто). ✅ выполнено: users, settings, appointments (8), scheduler (2), telegram.service (1), scheduled-messages (2), telegram-heartbeat (2), telegram-connection-monitor (1), session-encryption (2), telegram-session (3+1 load), telegram-session.guard (3+1+connectError), auth.controller (2), telegram.controller (6+getChat _error), auth.service (15+3: safeDisconnectClient, requestPhoneCode invokeError, checkQrTokenStatus referral), telegram-user.controller (16: …), telegram-user-client.service (23: …). 23.01: доисправлены оставшиеся 5× (auth 3, telegram.controller 1, guard 1).
+3. Сокращение any в notifications, telegram-user-client, auth, users и др. (DTO, unknown). ✅ частично: users.controller, settings.controller, masters, scheduled-messages, auto-replies, scheduler, telegram (setChatPermissions), websocket, audit, notifications, users, settings.service, telegram-session, scheduled-messages, templates — 23.01; jwt-auth.guard (handleRequest err, user, info → unknown), entities (user preferences, notification payload → Record<string, unknown>), telegram.controller (userInfo: unknown, TelegramChatFromApi для chatInfo, убраны (chatInfo as any).xxx) — 23.01. Остаются: telegram-user-client, auth (expressRequest, user: any), telegram (deleteMyCommands, getUserProfilePhotos, getChat, getChatMember, telegram.controller (telegramChatsService as any).telegramChatRepository в 2 местах), filters (http-exception, validation-exception — exceptionResponse as any), safe-logger, sensitive-data-masker и др.
+4. §17: circuit breaker для внешних сервисов; улучшение пользовательских сообщений об ошибках
+5. Проводить code review после каждой фазы
+6. Обновлять REPORT.md по мере выполнения задач
+7. Тестировать изменения в dev перед production

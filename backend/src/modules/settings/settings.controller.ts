@@ -36,21 +36,30 @@ export class SettingsController {
 
   @Put()
   @ApiOperation({ summary: 'Обновление настроек' })
-  async updateSettings(@Request() req: AuthRequest, @Body() body: { bookingSettings?: any }) {
+  async updateSettings(
+    @Request() req: AuthRequest,
+    @Body() body: { bookingSettings?: Record<string, unknown> },
+  ) {
     this.logger.debug('Получен запрос на обновление настроек');
     
     // Получаем старые настройки для логирования изменений
     const oldSettings = await this.settingsService.getBookingSettings();
     
     if (body.bookingSettings) {
-      const result = await this.settingsService.setBookingSettings(body.bookingSettings);
+      const bs = body.bookingSettings as {
+        manualConfirmation: boolean;
+        minAdvanceBooking: number;
+        maxAdvanceBooking: number;
+        cancellationDeadline: number;
+      };
+      const result = await this.settingsService.setBookingSettings(bs);
       this.logger.log('Настройки bookingSettings успешно обновлены');
       
       // Определяем изменения
-      const changes: Record<string, any> = {};
+      const changes: Record<string, { old: unknown; new: unknown }> = {};
       Object.keys(body.bookingSettings).forEach((key: string) => {
         const o = (oldSettings as Record<string, unknown>)[key];
-        const n = (body.bookingSettings as Record<string, unknown>)[key];
+        const n = body.bookingSettings![key];
         if (o !== n) {
           changes[key] = { old: o, new: n };
         }

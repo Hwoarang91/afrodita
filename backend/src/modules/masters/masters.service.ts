@@ -10,6 +10,11 @@ import { CacheService } from '../../common/cache/cache.service';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
 import { normalizePagination } from '../../common/dto/pagination.dto';
+import { CreateMasterDto } from './dto/create-master.dto';
+import { UpdateMasterDto } from './dto/update-master.dto';
+import { CreateWorkScheduleDto } from './dto/create-work-schedule.dto';
+import { UpdateWorkScheduleDto } from './dto/update-work-schedule.dto';
+import { CreateBlockIntervalDto } from './dto/create-block-interval.dto';
 
 @Injectable()
 export class MastersService {
@@ -109,7 +114,7 @@ export class MastersService {
     });
   }
 
-  async createSchedule(masterId: string, dto: any): Promise<WorkSchedule> {
+  async createSchedule(masterId: string, dto: CreateWorkScheduleDto): Promise<WorkSchedule> {
     const master = await this.findById(masterId);
     const schedule = this.workScheduleRepository.create({
       masterId: master.id,
@@ -121,7 +126,7 @@ export class MastersService {
     return await this.workScheduleRepository.save(schedule);
   }
 
-  async updateSchedule(scheduleId: string, dto: any): Promise<WorkSchedule> {
+  async updateSchedule(scheduleId: string, dto: UpdateWorkScheduleDto): Promise<WorkSchedule> {
     const schedule = await this.workScheduleRepository.findOne({
       where: { id: scheduleId },
     });
@@ -145,13 +150,13 @@ export class MastersService {
     await this.workScheduleRepository.remove(schedule);
   }
 
-  async createBlockInterval(masterId: string, dto: any): Promise<BlockInterval> {
+  async createBlockInterval(masterId: string, dto: CreateBlockIntervalDto): Promise<BlockInterval> {
     const master = await this.findById(masterId);
     const blockInterval = this.blockIntervalRepository.create({
-      masterId: master.id,
+      master,
       startTime: new Date(dto.startTime),
       endTime: new Date(dto.endTime),
-      reason: dto.reason || null,
+      ...(dto.reason != null && dto.reason !== '' ? { reason: dto.reason } : {}),
     });
     return await this.blockIntervalRepository.save(blockInterval);
   }
@@ -166,14 +171,14 @@ export class MastersService {
     await this.blockIntervalRepository.remove(blockInterval);
   }
 
-  async create(dto: any): Promise<Master> {
+  async create(dto: CreateMasterDto & { userId?: string | null }): Promise<Master> {
     // Преобразуем specialization в specialties для совместимости
     const specialties = dto.specialization 
       ? [dto.specialization] 
       : dto.specialties || [];
 
     // Если bio не указано, но есть specialization, используем specialization как bio
-    const bio = dto.bio || dto.specialization || null;
+    const bio = dto.bio || dto.specialization || undefined;
 
     // Создаём временного пользователя для мастера, если userId не указан
     // В реальном приложении это должно быть через отдельный эндпоинт или при регистрации
@@ -185,8 +190,8 @@ export class MastersService {
       rating: dto.rating || 5.0,
       breakDuration: dto.breakDuration || 15,
       isActive: dto.isActive !== undefined ? dto.isActive : true,
-      photoUrl: dto.photoUrl || null,
-      education: dto.education || null,
+      photoUrl: dto.photoUrl ?? undefined,
+      education: dto.education ?? undefined,
     };
 
     // ВНИМАНИЕ: В реальном приложении userId должен быть обязательным
@@ -194,7 +199,7 @@ export class MastersService {
     // Это временное решение - в production нужно создавать User сначала
     const master = this.masterRepository.create({
       ...masterData,
-      userId: dto.userId || null, // Разрешаем null вместо несуществующего UUID
+      ...(dto.userId != null && dto.userId !== '' ? { userId: dto.userId } : {}),
     });
 
     const savedMaster = await this.masterRepository.save(master);
@@ -211,7 +216,7 @@ export class MastersService {
     return await this.findById(savedMaster.id);
   }
 
-  async update(id: string, dto: any): Promise<Master> {
+  async update(id: string, dto: UpdateMasterDto): Promise<Master> {
     this.logger.debug(`Обновление мастера: ${id}`);
     const master = await this.findById(id);
     

@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional, Inject, forwardRef } from '@nestjs/common';
+import { getErrorMessage } from '../../../common/utils/error-message';
 import { TelegramHeartbeatService } from './telegram-heartbeat.service';
 import {
   TelegramClientEventEmitter,
@@ -194,8 +195,8 @@ export class TelegramConnectionMonitorService implements OnModuleInit, OnModuleD
         };
       }
       return null;
-    } catch (error: any) {
-      this.logger.error(`Error loading session info for ${sessionId}: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Error loading session info for ${sessionId}: ${getErrorMessage(error)}`);
       return null;
     }
   }

@@ -7,7 +7,8 @@ import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../../entities/user.entity';
+import { User, UserRole } from '../../entities/user.entity';
+import { BodyMeasurement } from '../../entities/body-measurement.entity';
 import { AuditAction } from '../../entities/audit-log.entity';
 
 @ApiTags('users')
@@ -59,13 +60,13 @@ export class UsersController {
 
   @Put('me')
   @ApiOperation({ summary: 'Обновление профиля' })
-  async updateProfile(@Request() req: AuthRequest, @Body() data: any) {
+  async updateProfile(@Request() req: AuthRequest, @Body() data: Partial<User>) {
     return await this.usersService.update(req.user!.sub!, data);
   }
 
   @Post()
   @ApiOperation({ summary: 'Создание пользователя (только для админов)' })
-  async create(@Request() req: AuthRequest, @Body() data: any) {
+  async create(@Request() req: AuthRequest, @Body() data: Partial<User>) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
@@ -85,7 +86,7 @@ export class UsersController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Обновление пользователя (только для админов)' })
-  async updateUser(@Request() req: AuthRequest, @Param('id') id: string, @Body() data: any) {
+  async updateUser(@Request() req: AuthRequest, @Param('id') id: string, @Body() data: Partial<User>) {
     // Только админы могут обновлять других пользователей
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
@@ -96,10 +97,14 @@ export class UsersController {
     const updatedUser = await this.usersService.update(id, data);
     
     // Определяем изменения
-    const changes: Record<string, any> = {};
-    Object.keys(data).forEach((key) => {
-      if ((oldUser as any)[key] !== (data as any)[key]) {
-        changes[key] = { old: (oldUser as any)[key], new: (data as any)[key] };
+    const changes: Record<string, { old: unknown; new: unknown }> = {};
+    const dataObj = data as Record<string, unknown>;
+    const oldObj = oldUser as unknown as Record<string, unknown>;
+    Object.keys(dataObj).forEach((key) => {
+      const o = oldObj[key];
+      const n = dataObj[key];
+      if (o !== n) {
+        changes[key] = { old: o, new: n };
       }
     });
     
@@ -118,7 +123,7 @@ export class UsersController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Удаление пользователя (только для админов)' })
-  async delete(@Request() req: any, @Param('id') id: string) {
+  async delete(@Request() req: AuthRequest, @Param('id') id: string) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
@@ -153,7 +158,7 @@ export class UsersController {
 
   @Get(':id/body-measurements')
   @ApiOperation({ summary: 'Получение всех замеров объемов тела клиента (только для админов)' })
-  async getBodyMeasurements(@Request() req: any, @Param('id') id: string) {
+  async getBodyMeasurements(@Request() req: AuthRequest, @Param('id') id: string) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
@@ -171,7 +176,7 @@ export class UsersController {
 
   @Post(':id/body-measurements')
   @ApiOperation({ summary: 'Создание нового замера объемов тела (только для админов)' })
-  async createBodyMeasurement(@Request() req: AuthRequest, @Param('id') id: string, @Body() data: any) {
+  async createBodyMeasurement(@Request() req: AuthRequest, @Param('id') id: string, @Body() data: Partial<BodyMeasurement>) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');
     }
@@ -192,10 +197,10 @@ export class UsersController {
   @Put(':id/body-measurements/:measurementId')
   @ApiOperation({ summary: 'Обновление замера объемов тела (только для админов)' })
   async updateBodyMeasurement(
-    @Request() req: any,
+    @Request() req: AuthRequest,
     @Param('id') id: string,
     @Param('measurementId') measurementId: string,
-    @Body() data: any,
+    @Body() data: Partial<BodyMeasurement>,
   ) {
     if (req?.user?.role !== 'admin') {
       throw new Error('Access denied');

@@ -1,6 +1,7 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
 import { buildErrorResponse } from '../../../common/utils/error-response.builder';
 import { ErrorCode } from '../../../common/interfaces/error-response.interface';
 
@@ -93,8 +94,8 @@ export class SessionEncryptionService {
 
       // Формат: iv:tag:encryptedData (все в base64)
       return `${iv.toString('base64')}:${tag.toString('base64')}:${encrypted}`;
-    } catch (error: any) {
-      this.logger.error(`Error encrypting session data: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Error encrypting session data: ${getErrorMessage(error)}`, getErrorStack(error));
       throw new Error('Failed to encrypt session data');
     }
   }
@@ -148,14 +149,11 @@ export class SessionEncryptionService {
       decrypted += decipher.final('utf8');
 
       return decrypted;
-    } catch (error: any) {
-      // Если это уже HttpException с ErrorResponse - пробрасываем как есть
+    } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
       }
-      
-      // Для остальных ошибок создаем ErrorResponse
-      this.logger.error(`Error decrypting session data: ${error.message}`, error.stack);
+      this.logger.error(`Error decrypting session data: ${getErrorMessage(error)}`, getErrorStack(error));
       const errorResponse = buildErrorResponse(
         HttpStatus.UNAUTHORIZED,
         ErrorCode.SESSION_INVALID,

@@ -76,7 +76,7 @@ export class Notification {
   message: string;
 
   @Column({ type: 'jsonb', nullable: true })
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
 
   @Column({ type: 'timestamp', nullable: true })
   sentAt: Date;

@@ -10,6 +10,7 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import { getErrorMessage } from '../../common/utils/error-message';
 import { AuthRequest } from '../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AuthService, TelegramAuthData } from './auth.service';
@@ -73,8 +74,8 @@ export class AuthController {
           bonusPoints: user.bonusPoints,
         },
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка входа для ${loginDto.email}: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка входа для ${loginDto.email}: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -198,8 +199,8 @@ export class AuthController {
       );
       this.logger.log(`Успешная регистрация первого администратора: ${registerDto.email}`);
       return result;
-    } catch (error: any) {
-      this.logger.error(`Ошибка регистрации для ${registerDto.email}: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка регистрации для ${registerDto.email}: ${getErrorMessage(error)}`);
       throw error;
     }
   }

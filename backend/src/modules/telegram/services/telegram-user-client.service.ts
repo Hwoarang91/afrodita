@@ -13,6 +13,7 @@ import { User, UserRole } from '../../../entities/user.entity';
 import { handleMtprotoError, MtprotoErrorAction } from '../utils/mtproto-error.handler';
 import { invokeWithRetry, type InvokeClient } from '../utils/mtproto-retry.utils';
 import { assertSessionTransition } from '../utils/session-state-machine';
+import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
 
 /**
  * Кастомный Storage адаптер для MTKruto, который сохраняет сессии в БД с шифрованием
@@ -95,7 +96,7 @@ class DatabaseStorage implements Partial<Storage> {
 
       // Для других типов возвращаем null или значение как есть
       return (current !== null && current !== undefined ? current : null) as T | null;
-    } catch (error) {
+    } catch (_error: unknown) {
       return null;
     }
   }
@@ -131,7 +132,7 @@ class DatabaseStorage implements Partial<Storage> {
                 data = JSON.parse(decrypted);
               }
             }
-          } catch (decryptError) {
+          } catch (_decryptError: unknown) {
             // Если не удалось расшифровать (сессия повреждена или пустая), начинаем с пустого объекта
             data = {};
           }
@@ -161,8 +162,8 @@ class DatabaseStorage implements Partial<Storage> {
         }
         await manager.save(session);
       });
-    } catch (error: any) {
-      throw new Error(`Failed to save session data: ${error.message}`);
+    } catch (error: unknown) {
+      throw new Error(`Failed to save session data: ${getErrorMessage(error)}`);
     }
   }
 
@@ -186,7 +187,7 @@ class DatabaseStorage implements Partial<Storage> {
       let decrypted: string;
       try {
         decrypted = this.encryptionService.decrypt(session.encryptedSessionData);
-      } catch (error: any) {
+      } catch (_error: unknown) {
         // Если не удалось расшифровать - просто возвращаемся (Storage контракт)
         return;
       }
@@ -210,7 +211,7 @@ class DatabaseStorage implements Partial<Storage> {
       session.encryptedSessionData = encrypted;
       session.lastUsedAt = new Date();
       await this.sessionRepository.save(session);
-    } catch (error: any) {
+    } catch (_error: unknown) {
       // Игнорируем ошибки удаления
     }
   }
@@ -240,7 +241,7 @@ class DatabaseStorage implements Partial<Storage> {
         if (decrypted && decrypted.trim() !== '' && decrypted !== '{}') {
           data = JSON.parse(decrypted);
         }
-      } catch (decryptError) {
+      } catch (_decryptError: unknown) {
         // Если не удалось расшифровать (например, сессия только создается), возвращаем пустой генератор
         return;
       }
@@ -512,11 +513,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.log(`✅ Session ${session.id} validated successfully`);
         // Эмитим событие успешного invoke (Task 2.1)
         this.eventEmitter?.emitInvoke(sessionId, 'users.getFullUser', session.userId, duration);
-      } catch (e: any) {
+      } catch (e: unknown) {
         const errorResult = handleMtprotoError(e);
         this.logger.error(`❌ Session ${session.id} validation failed: ${errorResult.reason}`);
         // Эмитим событие ошибки (Task 2.1)
-        this.eventEmitter?.emitError(sessionId, e, session.userId, 'Session validation');
+        this.eventEmitter?.emitError(sessionId, (e instanceof Error ? e : new Error(getErrorMessage(e))) as Error, session.userId, 'Session validation');
         if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
           // Инвалидируем эту конкретную сессию
           session.status = 'invalid';
@@ -527,7 +528,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
           // Отключаем и удаляем клиент из кеша
           try {
             await client.disconnect();
-          } catch (disconnectError) {
+          } catch (_disconnectError: unknown) {
             // Игнорируем ошибки отключения
           }
           this.clients.delete(sessionId);
@@ -561,8 +562,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
       }
 
       return client;
-    } catch (error: any) {
-      this.logger.error(`Error getting client for user ${userId}: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Error getting client for user ${userId}: ${getErrorMessage(error)}`, getErrorStack(error));
       return null;
     }
   }
@@ -700,16 +701,17 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.log(`✅ getMe() successful - auth_key is valid and registered for session ${sessionId}`);
         // Эмитим событие успешного invoke (Task 2.1)
         this.eventEmitter?.emitInvoke(sessionId, 'users.getFullUser', userId, duration);
-      } catch (getMeError: any) {
-        this.logger.error(`❌ getMe() failed for session ${sessionId}: ${getMeError.message}`);
+      } catch (getMeError: unknown) {
+        const msg = getErrorMessage(getMeError);
+        this.logger.error(`❌ getMe() failed for session ${sessionId}: ${msg}`);
         // Эмитим событие ошибки (Task 2.1)
-        this.eventEmitter?.emitError(sessionId, getMeError, userId, 'Session save validation');
+        this.eventEmitter?.emitError(sessionId, getMeError instanceof Error ? getMeError : new Error(getErrorMessage(getMeError)), userId, 'Session save validation');
         // Если getMe() не прошел, сессия невалидна
         session.status = 'invalid';
         session.isActive = false;
-        session.invalidReason = `Session validation failed: ${getMeError.message}`;
+        session.invalidReason = `Session validation failed: ${msg}`;
         await this.sessionRepository.save(session);
-        throw new Error(`Session validation failed: ${getMeError.message}`);
+        throw new Error(`Session validation failed: ${msg}`);
       }
 
       // КРИТИЧНО: Проверяем, что MTProto state записан в DatabaseStorage
@@ -741,13 +743,14 @@ export class TelegramUserClientService implements OnModuleDestroy {
           }
           this.logger.log(`✅ auth_key found after retry for session ${sessionId}`);
         }
-      } catch (e: any) {
-        this.logger.error(`❌ Failed to verify MTProto state for session ${sessionId}: ${e.message}`);
+      } catch (e: unknown) {
+        const msg = getErrorMessage(e);
+        this.logger.error(`❌ Failed to verify MTProto state for session ${sessionId}: ${msg}`);
         session.status = 'invalid';
         session.isActive = false;
-        session.invalidReason = `MTProto state verification failed: ${e.message}`;
+        session.invalidReason = `MTProto state verification failed: ${msg}`;
         await this.sessionRepository.save(session);
-        throw new Error(`MTProto state verification failed: ${e.message}`);
+        throw new Error(`MTProto state verification failed: ${msg}`);
       }
 
       // КРИТИЧНО: Перечитываем сессию из БД чтобы убедиться, что encryptedSessionData записана
@@ -790,14 +793,15 @@ export class TelegramUserClientService implements OnModuleDestroy {
       try {
         assertSessionTransition('initializing', 'active', session.id);
         this.logger.log(`[SessionStateMachine] ✅ Transition allowed: initializing → active for session ${session.id}`);
-      } catch (transitionError: any) {
-        this.logger.error(`[SessionStateMachine] ❌ Transition blocked: ${transitionError.message}`);
+      } catch (transitionError: unknown) {
+        const msg = getErrorMessage(transitionError);
+        this.logger.error(`[SessionStateMachine] ❌ Transition blocked: ${msg}`);
         // Если переход запрещен, помечаем сессию как invalid
         session.status = 'invalid';
         session.isActive = false;
-        session.invalidReason = `State transition blocked: ${transitionError.message}`;
+        session.invalidReason = `State transition blocked: ${msg}`;
         await this.sessionRepository.save(session);
-        throw new Error(`Cannot activate session ${session.id}: ${transitionError.message}`);
+        throw new Error(`Cannot activate session ${session.id}: ${msg}`);
       }
       
       session.phoneNumber = phoneNumber;
@@ -867,8 +871,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
             createdAt: Date.now(),
           });
           this.logger.log(`[saveSession] ✅ Session saved to request.session successfully: userId=${userId}, sessionId=${sessionId}`);
-        } catch (error: any) {
-          this.logger.error(`[saveSession] ❌ Failed to save session to request.session: ${error.message}`, error.stack);
+        } catch (error: unknown) {
+          this.logger.error(`[saveSession] ❌ Failed to save session to request.session: ${getErrorMessage(error)}`, getErrorStack(error));
           // НЕ пробрасываем ошибку - сессия уже в БД, это не критично
         }
       } else {
@@ -886,8 +890,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
       if (finalCheck) {
         this.logger.log(`✅ Final verification: Session ${finalCheck.id} is confirmed in DB`);
       }
-    } catch (error: any) {
-      this.logger.error(`Error saving session for user ${userId}: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Error saving session for user ${userId}: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -923,8 +927,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
       );
 
       this.logger.log(`Session deleted for user ${userId}`);
-    } catch (error: any) {
-      this.logger.error(`Error deleting session for user ${userId}: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Error deleting session for user ${userId}: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -1005,10 +1009,10 @@ export class TelegramUserClientService implements OnModuleDestroy {
         await client.disconnect();
         // Эмитим событие отключения (Task 2.1)
         this.eventEmitter?.emitDisconnect(sessionId, session.userId, 'Session removed');
-      } catch (e) {
-        this.logger.warn(`Error disconnecting client for session ${sessionId}: ${(e as Error).message}`);
+      } catch (e: unknown) {
+        this.logger.warn(`Error disconnecting client for session ${sessionId}: ${getErrorMessage(e)}`);
         // Эмитим событие ошибки при отключении (Task 2.1)
-        this.eventEmitter?.emitError(sessionId, e as Error, session.userId, 'Session remove disconnect');
+        this.eventEmitter?.emitError(sessionId, e instanceof Error ? e : new Error(getErrorMessage(e)), session.userId, 'Session remove disconnect');
       }
       this.clients.delete(sessionId);
       // Очищаем статус heartbeat для этой сессии (Task 1.2)
@@ -1040,10 +1044,10 @@ export class TelegramUserClientService implements OnModuleDestroy {
             await client.disconnect();
             // Эмитим событие отключения (Task 2.1)
             this.eventEmitter?.emitDisconnect(session.id, session.userId, reason);
-          } catch (e) {
-            this.logger.warn(`Error disconnecting client for session ${session.id}: ${(e as Error).message}`);
+          } catch (e: unknown) {
+            this.logger.warn(`Error disconnecting client for session ${session.id}: ${getErrorMessage(e)}`);
             // Эмитим событие ошибки при отключении (Task 2.1)
-            this.eventEmitter?.emitError(session.id, e as Error, session.userId, 'Invalidate all sessions disconnect');
+            this.eventEmitter?.emitError(session.id, e instanceof Error ? e : new Error(getErrorMessage(e)), session.userId, 'Invalidate all sessions disconnect');
           }
           this.clients.delete(session.id);
           // Очищаем статус heartbeat для этой сессии (Task 1.2)
@@ -1060,8 +1064,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
       }
 
       this.logger.log(`Invalidated ${activeSessions.length} active session(s) due to ${reason}`);
-    } catch (error: any) {
-      this.logger.error(`Error invalidating sessions: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Error invalidating sessions: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -1169,11 +1173,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
         this.logger.log(`✅ Session ${sessionId} validated successfully`);
         // Эмитим событие успешного invoke (Task 2.1)
         this.eventEmitter?.emitInvoke(sessionId, 'users.getFullUser', session.userId, duration);
-      } catch (e: any) {
+      } catch (e: unknown) {
         const errorResult = handleMtprotoError(e);
         this.logger.error(`❌ Session ${sessionId} validation failed: ${errorResult.reason}`);
         // Эмитим событие ошибки (Task 2.1)
-        this.eventEmitter?.emitError(sessionId, e, session.userId, 'Session validation');
+        this.eventEmitter?.emitError(sessionId, e instanceof Error ? e : new Error(getErrorMessage(e)), session.userId, 'Session validation');
         if (errorResult.action === MtprotoErrorAction.INVALIDATE_SESSION) {
           // Инвалидируем эту конкретную сессию
           session.status = 'invalid';
@@ -1185,7 +1189,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
             await client.disconnect();
             // Эмитим событие отключения (Task 2.1)
             this.eventEmitter?.emitDisconnect(sessionId, session.userId, errorResult.reason);
-          } catch (disconnectError) {
+          } catch (_disconnectError: unknown) {
             // Игнорируем ошибки отключения
           }
           this.clients.delete(sessionId);
@@ -1198,8 +1202,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
         throw e;
       }
       return client;
-    } catch (error: any) {
-      this.logger.error(`Error getting client for session ${sessionId}: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Error getting client for session ${sessionId}: ${getErrorMessage(error)}`, getErrorStack(error));
       return null;
     }
   }
@@ -1325,11 +1329,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
         // Эмитим событие отключения (Task 2.1)
         this.eventEmitter?.emitDisconnect(sessionId, userId, 'Module destroyed');
         this.logger.log(`Client disconnected for session ${sessionId}`);
-      } catch (error: any) {
-        this.logger.error(`Error disconnecting client for session ${sessionId}: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Error disconnecting client for session ${sessionId}: ${getErrorMessage(error)}`);
         // Эмитим событие ошибки при отключении (Task 2.1)
         const session = await this.sessionRepository.findOne({ where: { id: sessionId } }).catch(() => null);
-        this.eventEmitter?.emitError(sessionId, error, session?.userId, 'Module destroy disconnect');
+        this.eventEmitter?.emitError(sessionId, error instanceof Error ? error : new Error(getErrorMessage(error)), session?.userId, 'Module destroy disconnect');
       }
       // Очищаем статус heartbeat для этой сессии (Task 1.2)
       this.heartbeatService?.clearHeartbeatStatus(sessionId);

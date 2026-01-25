@@ -70,7 +70,7 @@ export class User {
   isActive!: boolean;
 
   @Column({ type: 'jsonb', nullable: true })
-  preferences!: Record<string, any>;
+  preferences!: Record<string, unknown>;
 
   @Column({ type: 'text', nullable: true })
   adminNotes!: string; // Комментарий админа (виден только админам)

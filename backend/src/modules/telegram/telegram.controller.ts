@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Get, Param, UseGuards, Query, Delete, Logger } from '@nestjs/common';
+import { getErrorMessage } from '../../common/utils/error-message';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { TelegramService } from './telegram.service';
 import { TelegramBotService } from './telegram-bot.service';
@@ -23,6 +24,15 @@ import {
   SetChatDescriptionDto,
   ForwardMessageDto,
 } from './dto/send-message.dto';
+
+/** Минимальные поля объекта чата из Telegram API (getChat) */
+interface TelegramChatFromApi {
+  type?: string;
+  title?: string;
+  username?: string;
+  description?: string;
+  members_count?: number;
+}
 
 @ApiTags('telegram')
 @Controller('telegram')
@@ -52,7 +62,7 @@ export class TelegramController {
       const chatInfo = await this.telegramService.getChat(dto.chatId);
       
       // Получаем информацию о пользователе, если это личный чат
-      let userInfo: any = null;
+      let userInfo: unknown = null;
       if (chatInfo.type === 'private') {
         try {
           // Для личного чата chatId равен userId, преобразуем в число
@@ -67,10 +77,9 @@ export class TelegramController {
       }
       
       // Заменяем переменные
-      message = this.telegramBotService.replaceMessageVariables(message, userInfo, chatInfo);
-    } catch (error: any) {
-      // Если не удалось получить информацию о чате, отправляем сообщение без замены переменных
-      this.logger.warn(`Не удалось получить информацию о чате для замены переменных: ${error.message}`);
+      message = this.telegramBotService.replaceMessageVariables(message, userInfo as Parameters<TelegramBotService['replaceMessageVariables']>[1], chatInfo);
+    } catch (error: unknown) {
+      this.logger.warn(`Не удалось получить информацию о чате для замены переменных: ${getErrorMessage(error)}`);
     }
     
     // Определяем parse_mode автоматически, если не указан явно
@@ -149,7 +158,7 @@ export class TelegramController {
     if (caption) {
       try {
         const chatInfo = await this.telegramService.getChat(dto.chatId);
-        let userInfo: any = null;
+        let userInfo: unknown = null;
         if (chatInfo.type === 'private') {
           try {
             // Для личного чата chatId равен userId, преобразуем в число
@@ -162,9 +171,9 @@ export class TelegramController {
             // Игнорируем ошибку
           }
         }
-        caption = this.telegramBotService.replaceMessageVariables(caption, userInfo, chatInfo);
-      } catch (error: any) {
-        this.logger.warn(`Не удалось получить информацию о чате для замены переменных в caption: ${error.message}`);
+        caption = this.telegramBotService.replaceMessageVariables(caption, userInfo as Parameters<TelegramBotService['replaceMessageVariables']>[1], chatInfo);
+      } catch (error: unknown) {
+        this.logger.warn(`Не удалось получить информацию о чате для замены переменных в caption: ${getErrorMessage(error)}`);
       }
     }
     
@@ -481,13 +490,13 @@ export class TelegramController {
     }
     
     // Получаем актуальную информацию о чате из Telegram API
-    let chatInfo: any = null;
+    let chatInfo: TelegramChatFromApi | null = null;
     let membersCount = chat.membersCount || 0;
     
     try {
-      chatInfo = await this.telegramService.getChat(chatId);
+      chatInfo = (await this.telegramService.getChat(chatId)) as TelegramChatFromApi | null;
       if (chatInfo) {
-        const totalMembers = (chatInfo as any).members_count || membersCount;
+        const totalMembers = chatInfo.members_count ?? membersCount;
         // Вычитаем бота из общего количества участников
         // Для групп и супергрупп бот считается участником
         if (chat.type === 'group' || chat.type === 'supergroup') {
@@ -507,7 +516,7 @@ export class TelegramController {
           // Если не удалось получить, используем значение из chatInfo
         }
       }
-    } catch (error: any) {
+    } catch (_error: unknown) {
       // Если не удалось получить информацию из API, используем данные из БД
       // И вычитаем бота, если это группа
       if ((chat.type === 'group' || chat.type === 'supergroup') && membersCount > 0) {
@@ -611,7 +620,10 @@ export class TelegramController {
 
   @Post('chats/:chatId/permissions')
   @ApiOperation({ summary: 'Установить разрешения чата' })
-  async setChatPermissions(@Param('chatId') chatId: string, @Body() body: any) {
+  async setChatPermissions(
+    @Param('chatId') chatId: string,
+    @Body() body: Parameters<TelegramService['setChatPermissions']>[1],
+  ) {
     const result = await this.telegramService.setChatPermissions(chatId, body);
     return { success: true, result };
   }
@@ -649,8 +661,9 @@ export class TelegramController {
         const chatInfo = await this.telegramService.getChat(chat.chatId);
         
         if (chatInfo) {
+          const ci = chatInfo as TelegramChatFromApi;
           // Чат существует, обновляем информацию
-          const totalMembers = (chatInfo as any).members_count || chat.membersCount || 0;
+          const totalMembers = ci.members_count ?? chat.membersCount ?? 0;
           let membersCount = totalMembers;
           
           if (chat.type === 'group' || chat.type === 'supergroup') {
@@ -658,9 +671,9 @@ export class TelegramController {
           }
           
           chat.membersCount = membersCount;
-          chat.title = (chatInfo as any).title || chat.title;
-          chat.username = (chatInfo as any).username || chat.username;
-          chat.description = (chatInfo as any).description || chat.description;
+          chat.title = ci.title ?? chat.title;
+          chat.username = ci.username ?? chat.username;
+          chat.description = ci.description ?? chat.description;
           chat.isActive = true;
           
           // Обновляем через сервис
@@ -668,15 +681,15 @@ export class TelegramController {
           await chatRepo.save(chat);
           results.updated++;
         }
-      } catch (error: any) {
-        // Если чат не найден или бот удален из чата
-        if (error.code === 400 || error.description?.includes('chat not found') || error.description?.includes('bot is not a member')) {
+      } catch (error: unknown) {
+        const e = error as { code?: number; description?: string };
+        if (e.code === 400 || e.description?.includes('chat not found') || e.description?.includes('bot is not a member')) {
           chat.isActive = false;
           const chatRepo = (this.telegramChatsService as any).telegramChatRepository;
           await chatRepo.save(chat);
           results.removed++;
         } else {
-          results.errors.push(`Ошибка при проверке чата ${chat.chatId}: ${error.message}`);
+          results.errors.push(`Ошибка при проверке чата ${chat.chatId}: ${getErrorMessage(error)}`);
         }
       }
     }
@@ -698,8 +711,8 @@ export class TelegramController {
         if (chatId && !processedChatIds.has(chatId)) {
           try {
             // Проверяем, является ли это группой/супергруппой/каналом
-            const chatInfo = await this.telegramService.getChat(chatId);
-            const chatType = (chatInfo as any).type;
+            const chatInfo = (await this.telegramService.getChat(chatId)) as TelegramChatFromApi | null;
+            const chatType = chatInfo?.type;
             
             if (chatType === 'group' || chatType === 'supergroup' || chatType === 'channel') {
               // Проверяем, является ли бот участником
@@ -709,7 +722,7 @@ export class TelegramController {
                 
                 if (member && member.status !== 'left' && member.status !== 'kicked') {
                   // Бот является участником, сохраняем чат через сервис
-                  const chatRepo = (this.telegramChatsService as any).telegramChatRepository;
+                  const chatRepo = (this.telegramChatsService as unknown as { telegramChatRepository: { findOne: (o: object) => Promise<unknown>; create: (o: object) => unknown; save: (e: unknown) => Promise<unknown> } }).telegramChatRepository;
                   const existingChat = await chatRepo.findOne({ where: { chatId } });
                   
                   if (!existingChat) {
@@ -724,18 +737,18 @@ export class TelegramController {
                       chatTypeEnum = ChatType.PRIVATE;
                     }
                     
-                    const totalMembers = (chatInfo as any).members_count || null;
-                    let membersCount = totalMembers;
+                    const totalMembers = chatInfo?.members_count ?? null;
+                    let membersCount: number | null = totalMembers;
                     if (chatType === 'group' || chatType === 'supergroup') {
-                      membersCount = totalMembers ? Math.max(0, totalMembers - 1) : null;
+                      membersCount = totalMembers != null ? Math.max(0, totalMembers - 1) : null;
                     }
                     
                     const newChat = chatRepo.create({
                       chatId: chatId,
                       type: chatTypeEnum,
-                      title: (chatInfo as any).title || null,
-                      username: (chatInfo as any).username || null,
-                      description: (chatInfo as any).description || null,
+                      title: chatInfo?.title ?? null,
+                      username: chatInfo?.username ?? null,
+                      description: chatInfo?.description ?? null,
                       membersCount: membersCount,
                       isActive: true,
                     });
@@ -744,18 +757,17 @@ export class TelegramController {
                   }
                   processedChatIds.add(chatId);
                 }
-              } catch (memberError: any) {
+              } catch (_memberError: unknown) {
                 // Бот не является участником, пропускаем
               }
             }
-          } catch (error: any) {
+          } catch (_err: unknown) {
             // Ошибка при получении информации о чате, пропускаем
           }
         }
       }
-    } catch (error: any) {
-      // Если getUpdates не доступен (например, при использовании webhook), просто логируем
-      this.logger.warn(`Не удалось получить обновления для поиска новых чатов: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.warn(`Не удалось получить обновления для поиска новых чатов: ${getErrorMessage(error)}`);
     }
 
     return {

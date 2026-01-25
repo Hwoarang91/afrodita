@@ -72,6 +72,6 @@ export class UpdateTemplateDto {
 export class PreviewTemplateDto {
   @ApiProperty({ description: 'Тестовые данные для подстановки в шаблон' })
   @IsObject()
-  sampleData: Record<string, any>;
+  sampleData: Record<string, unknown>;
 }
 

@@ -35,7 +35,7 @@ export class AuditController {
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ) {
-    const filters: any = {};
+    const filters: Parameters<AuditService['findAll']>[0] = {};
     if (userId) filters.userId = userId;
     if (action) filters.action = action;
     if (entityType) filters.entityType = entityType;

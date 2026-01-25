@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, Optional, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
+import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
 import { TelegramUserClientService } from './telegram-user-client.service';
 import { TelegramConnectionMonitorService } from './telegram-connection-monitor.service';
 import { Client } from '@mtkruto/node';
@@ -155,8 +156,8 @@ export class TelegramHeartbeatService implements OnModuleInit, OnModuleDestroy {
       }
 
       await Promise.allSettled(checkPromises);
-    } catch (error: any) {
-      this.logger.error(`Error during heartbeat check: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Error during heartbeat check: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -229,31 +230,30 @@ export class TelegramHeartbeatService implements OnModuleInit, OnModuleDestroy {
         0,
         undefined,
       );
-    } catch (error: any) {
-      // Ошибка при проверке
+    } catch (error: unknown) {
+      const errMsg = getErrorMessage(error);
       status.isConnected = false;
       status.consecutiveFailures++;
-      status.lastError = error.message;
+      status.lastError = errMsg;
       status.lastCheck = new Date();
       this.heartbeatStatuses.set(sessionId, status);
 
       if (status.consecutiveFailures >= this.maxConsecutiveFailures) {
         this.logger.warn(
-          `⚠️ Client ${sessionId} heartbeat check failed (${status.consecutiveFailures} consecutive failures): ${error.message}`,
+          `⚠️ Client ${sessionId} heartbeat check failed (${status.consecutiveFailures} consecutive failures): ${errMsg}`,
         );
       } else {
         this.logger.debug(
-          `Client ${sessionId} heartbeat check failed (attempt ${status.consecutiveFailures}/${this.maxConsecutiveFailures}): ${error.message}`,
+          `Client ${sessionId} heartbeat check failed (attempt ${status.consecutiveFailures}/${this.maxConsecutiveFailures}): ${errMsg}`,
         );
       }
 
-      // Уведомляем ConnectionMonitorService об обновлении статуса (Task 2.3)
       this.connectionMonitorService?.updateHeartbeatStatus(
         sessionId,
         false,
         status.lastCheck,
         status.consecutiveFailures,
-        error.message,
+        errMsg,
       );
     }
   }

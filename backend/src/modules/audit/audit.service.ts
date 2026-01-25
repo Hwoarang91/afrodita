@@ -17,7 +17,7 @@ export class AuditService {
       entityType?: string;
       entityId?: string;
       description?: string;
-      changes?: Record<string, any>;
+      changes?: Record<string, unknown>;
       ipAddress?: string;
       userAgent?: string;
     } = {},

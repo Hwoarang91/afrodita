@@ -183,17 +183,16 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
               }
             }
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           errorCount++;
-          this.logger.error(`Ошибка при обработке записи ${appointment.id}: ${error.message}`, error.stack);
-          // Продолжаем обработку остальных записей
+          this.logger.error(`Ошибка при обработке записи ${appointment.id}: ${getErrorMessage(error)}`, getErrorStack(error));
         }
       }
 
       // Всегда логируем результат, даже если все счётчики = 0
       this.logger.log(`[CRON] ✅ Напоминания обработаны: отправлено ${sentCount}, пропущено ${skippedCount}, ошибок ${errorCount}`);
-    } catch (error: any) {
-      this.logger.error(`Критическая ошибка в sendAppointmentReminders: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Критическая ошибка в sendAppointmentReminders: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 

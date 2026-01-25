@@ -20,6 +20,7 @@ import { SettingsService } from '../settings/settings.service';
 import { TelegramBotService } from '../telegram/telegram-bot.service';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
+import { getErrorMessage, getErrorStack } from '../../common/utils/error-message';
 import { normalizePagination } from '../../common/dto/pagination.dto';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
@@ -151,17 +152,15 @@ export class AppointmentsService {
     // Отправка уведомления админам о новой записи (всегда, независимо от статуса)
     try {
       await this.telegramBotService.notifyAdminsAboutNewAppointment(savedAppointment);
-    } catch (error: any) {
-      // Логируем ошибку, но не прерываем выполнение
-      this.logger.error(`Ошибка при отправке уведомления админам о новой записи: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомления админам о новой записи: ${getErrorMessage(error)}`, getErrorStack(error));
     }
 
     // Отправка уведомления мастеру о новой записи (всегда, независимо от статуса)
     try {
       await this.telegramBotService.notifyMasterAboutNewAppointment(savedAppointment);
-    } catch (error: any) {
-      // Логируем ошибку, но не прерываем выполнение
-      this.logger.error(`Ошибка при отправке уведомления мастеру о новой записи: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомления мастеру о новой записи: ${getErrorMessage(error)}`, getErrorStack(error));
     }
 
     return savedAppointment;
@@ -312,8 +311,8 @@ export class AppointmentsService {
           updated,
           updated.cancellationReason,
         );
-      } catch (error: any) {
-        this.logger.error(`Ошибка при отправке уведомления админам об отмене: ${error.message}`, error.stack);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при отправке уведомления админам об отмене: ${getErrorMessage(error)}`, getErrorStack(error));
       }
     } else if (dto.startTime) {
       await this.notificationsService.sendAppointmentRescheduled(updated);
@@ -324,8 +323,8 @@ export class AppointmentsService {
           oldStartTime,
           originalStatus,
         );
-      } catch (error: any) {
-        this.logger.error(`Ошибка при отправке уведомления администратору об изменении записи: ${error.message}`, error.stack);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при отправке уведомления администратору об изменении записи: ${getErrorMessage(error)}`, getErrorStack(error));
       }
     } else if (dto.status && dto.status !== originalStatus) {
       // Уведомление администратору об изменении статуса (если время не менялось)
@@ -335,8 +334,8 @@ export class AppointmentsService {
           undefined,
           originalStatus,
         );
-      } catch (error: any) {
-        this.logger.error(`Ошибка при отправке уведомления администратору об изменении статуса: ${error.message}`, error.stack);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка при отправке уведомления администратору об изменении статуса: ${getErrorMessage(error)}`, getErrorStack(error));
       }
     }
 
@@ -377,8 +376,8 @@ export class AppointmentsService {
         cancelled,
         reason,
       );
-    } catch (error: any) {
-      this.logger.error(`Ошибка при отправке уведомления админам об отмене: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомления админам об отмене: ${getErrorMessage(error)}`, getErrorStack(error));
     }
 
     return cancelled;
@@ -431,8 +430,8 @@ export class AppointmentsService {
         new Date(appointment.startTime),
         appointment.status,
       );
-    } catch (error: any) {
-      this.logger.error(`Ошибка при отправке уведомления администратору о переносе записи: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомления администратору о переносе записи: ${getErrorMessage(error)}`, getErrorStack(error));
     }
 
     return rescheduled;
@@ -720,8 +719,8 @@ export class AppointmentsService {
     // Уведомление администратору о подтверждении записи
     try {
       await this.telegramBotService.notifyAdminAboutConfirmedAppointment(confirmed);
-    } catch (error: any) {
-      this.logger.error(`Ошибка при отправке уведомления администратору о подтверждении: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при отправке уведомления администратору о подтверждении: ${getErrorMessage(error)}`, getErrorStack(error));
     }
 
     return confirmed;

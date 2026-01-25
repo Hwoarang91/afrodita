@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../entities/user.entity';
+import { AutoReply } from '../../entities/auto-reply.entity';
 
 @ApiTags('telegram')
 @Controller('telegram/auto-replies')
@@ -34,13 +35,13 @@ export class AutoRepliesController {
 
   @Post()
   @ApiOperation({ summary: 'Создать новый автоматический ответ' })
-  async create(@Body() data: any) {
+  async create(@Body() data: Parameters<AutoRepliesService['create']>[0]) {
     return await this.autoRepliesService.create(data);
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Обновить автоматический ответ' })
-  async update(@Param('id') id: string, @Body() data: any) {
+  async update(@Param('id') id: string, @Body() data: Partial<AutoReply>) {
     return await this.autoRepliesService.update(id, data);
   }
 

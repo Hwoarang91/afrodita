@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
 import { ScheduledMessage, ScheduledMessageStatus, ScheduledMessageType } from '../../entities/scheduled-message.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { getErrorMessage } from '../../common/utils/error-message';
 import { TelegramService } from './telegram.service';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 
@@ -59,7 +60,7 @@ export class ScheduledMessagesService {
     scheduledAt: Date;
     isRecurring?: boolean;
     recurringPattern?: string;
-    recurringConfig?: Record<string, any>;
+    recurringConfig?: Record<string, unknown>;
     recurringEndDate?: Date;
   }): Promise<ScheduledMessage> {
     const scheduledMessage = this.scheduledMessageRepository.create({
@@ -148,9 +149,10 @@ export class ScheduledMessagesService {
   private calculateNextScheduledDate(
     currentDate: Date,
     pattern: string,
-    config?: Record<string, any>,
+    config?: Record<string, unknown>,
   ): Date {
     const nextDate = new Date(currentDate);
+    const c = config as { days?: number; hours?: number; minutes?: number } | undefined;
 
     switch (pattern) {
       case 'daily':
@@ -163,12 +165,12 @@ export class ScheduledMessagesService {
         nextDate.setMonth(nextDate.getMonth() + 1);
         break;
       case 'custom':
-        if (config?.days) {
-          nextDate.setDate(nextDate.getDate() + config.days);
-        } else if (config?.hours) {
-          nextDate.setHours(nextDate.getHours() + config.hours);
-        } else if (config?.minutes) {
-          nextDate.setMinutes(nextDate.getMinutes() + config.minutes);
+        if (c?.days != null) {
+          nextDate.setDate(nextDate.getDate() + c.days);
+        } else if (c?.hours != null) {
+          nextDate.setHours(nextDate.getHours() + c.hours);
+        } else if (c?.minutes != null) {
+          nextDate.setMinutes(nextDate.getMinutes() + c.minutes);
         }
         break;
       default:
@@ -197,15 +199,15 @@ export class ScheduledMessagesService {
           this.logger.log(`Сообщение ${message.id} успешно отправлено`);
           // Отправляем событие через WebSocket для синхронизации
           this.webSocketGateway.emitScheduledMessageStatusChange(message.id, 'sent');
-        } catch (error: any) {
-          this.logger.error(`Ошибка при отправке сообщения ${message.id}: ${error.message}`);
-          await this.markAsFailed(message.id, error.message);
-          // Отправляем событие через WebSocket для синхронизации
+        } catch (error: unknown) {
+          const msg = getErrorMessage(error);
+          this.logger.error(`Ошибка при отправке сообщения ${message.id}: ${msg}`);
+          await this.markAsFailed(message.id, msg);
           this.webSocketGateway.emitScheduledMessageStatusChange(message.id, 'failed');
         }
       }
-    } catch (error: any) {
-      this.logger.error(`Ошибка при обработке запланированных сообщений: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при обработке запланированных сообщений: ${getErrorMessage(error)}`);
     }
   }
 

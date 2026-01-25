@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException, Logger, HttpException, HttpStatus, OnModuleDestroy } from '@nestjs/common';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
-import { getErrorMessage } from '../../common/utils/error-message';
+import { getErrorMessage, getErrorStack } from '../../common/utils/error-message';
 import { mapTelegramErrorToResponse } from '../telegram/utils/telegram-error-mapper';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
@@ -118,8 +118,8 @@ export class AuthService implements OnModuleDestroy {
       if (client && client.connected) {
         await client.disconnect();
       }
-    } catch (error: any) {
-      this.logger.error(`Failed to disconnect client (${context}): ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Failed to disconnect client (${context}): ${getErrorMessage(error)}`);
     }
   }
 
@@ -285,8 +285,8 @@ export class AuthService implements OnModuleDestroy {
       try {
         await this.referralService.processReferralRegistration(user.id);
         this.logger.log(`Обработана регистрация через Telegram Web App для пользователя ${user.id}`);
-      } catch (error: any) {
-        this.logger.error(`Ошибка обработки реферальной регистрации: ${error.message}`);
+      } catch (error: unknown) {
+        this.logger.error(`Ошибка обработки реферальной регистрации: ${getErrorMessage(error)}`);
       }
     } else {
       // Обновление данных существующего пользователя
@@ -412,8 +412,8 @@ export class AuthService implements OnModuleDestroy {
       }
 
       return isValid;
-    } catch (error: any) {
-      this.logger.error(`Ошибка при проверке Telegram auth: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при проверке Telegram auth: ${getErrorMessage(error)}`, getErrorStack(error));
       return false;
     }
   }
@@ -575,8 +575,8 @@ export class AuthService implements OnModuleDestroy {
         try {
           await client.connect();
           this.logger.log(`[requestPhoneCode] Клиент успешно подключен`);
-        } catch (connectError: any) {
-          this.logger.error(`[requestPhoneCode] Ошибка подключения клиента: ${connectError.message}`, connectError.stack);
+        } catch (connectError: unknown) {
+          this.logger.error(`[requestPhoneCode] Ошибка подключения клиента: ${getErrorMessage(connectError)}`, getErrorStack(connectError));
           const errorResponse = mapTelegramErrorToResponse(connectError);
           throw new HttpException(errorResponse, errorResponse.statusCode);
         }
@@ -600,8 +600,8 @@ export class AuthService implements OnModuleDestroy {
           },
         } as any);
         this.logger.log(`[requestPhoneCode] auth.sendCode успешно выполнен, результат: ${result._}, phoneCodeHash: ${result.phone_code_hash ? result.phone_code_hash.substring(0, 20) + '...' : 'N/A'}`);
-      } catch (invokeError: any) {
-        this.logger.error(`[requestPhoneCode] Ошибка при вызове auth.sendCode: ${invokeError.message}`, invokeError.stack);
+      } catch (invokeError: unknown) {
+        this.logger.error(`[requestPhoneCode] Ошибка при вызове auth.sendCode: ${getErrorMessage(invokeError)}`, getErrorStack(invokeError));
         // КРИТИЧНО: Используем mapTelegramErrorToResponse для правильной обработки Telegram ошибок
         const errorResponse = mapTelegramErrorToResponse(invokeError);
         this.logger.error(`[requestPhoneCode] Mapped error: ${JSON.stringify(errorResponse)}`);
@@ -646,11 +646,8 @@ export class AuthService implements OnModuleDestroy {
       this.logger.log(`Code sent to phone: ${phoneNumber}`);
 
       return { phoneCodeHash };
-    } catch (error: any) {
-      this.logger.error(`Error requesting phone code: ${error.message}`, error.stack);
-
-      // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо string.includes
-      // Это единственный правильный способ обработки Telegram ошибок
+    } catch (error: unknown) {
+      this.logger.error(`Error requesting phone code: ${getErrorMessage(error)}`, getErrorStack(error));
       const errorResponse = mapTelegramErrorToResponse(error);
       throw new HttpException(errorResponse, errorResponse.statusCode);
     }
@@ -712,16 +709,11 @@ export class AuthService implements OnModuleDestroy {
           phone_code_hash: phoneCodeHash,
           phone_code: code,
         });
-      } catch (error: any) {
-        // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо string.includes
+      } catch (error: unknown) {
         const errorResponse = mapTelegramErrorToResponse(error);
-        
-        // Если это PHONE_CODE_EXPIRED, удаляем из хранилища
         if (errorResponse.errorCode === ErrorCode.PHONE_CODE_EXPIRED) {
           this.phoneCodeHashStore.delete(normalizedPhone);
         }
-        
-        // Проверяем, требуется ли 2FA (только через mapper, без message.includes)
         if (errorResponse.errorCode === ErrorCode.INVALID_2FA_PASSWORD) {
           // Требуется 2FA - получаем подсказку пароля и сохраняем клиент
           this.logger.debug(`2FA required for phone: ${phoneNumber}, saving phoneCodeHash: ${phoneCodeHash}`);
@@ -736,8 +728,8 @@ export class AuthService implements OnModuleDestroy {
               passwordHint = (passwordResult as any).hint;
               this.logger.debug(`Password hint retrieved: ${passwordHint}`);
             }
-          } catch (hintError: any) {
-            this.logger.warn(`Failed to get password hint: ${hintError.message}`);
+          } catch (hintError: unknown) {
+            this.logger.warn(`Failed to get password hint: ${getErrorMessage(hintError)}`);
           }
           
           // КРИТИЧЕСКИ ВАЖНО: Получаем sessionId из phoneCodeHashStore по нормализованному номеру
@@ -860,18 +852,14 @@ export class AuthService implements OnModuleDestroy {
         tokens: null, // Не возвращаем токены для дашборда
         requires2FA: false,
       };
-    } catch (error: any) {
-      this.logger.error(`Error verifying phone code: ${error.message}`, error.stack);
-      
-      // КРИТИЧНО: Если error уже HttpException с ErrorResponse - пробрасываем как есть
+    } catch (error: unknown) {
+      this.logger.error(`Error verifying phone code: ${getErrorMessage(error)}`, getErrorStack(error));
       if (error instanceof HttpException) {
         const response = error.getResponse();
         if (typeof response === 'object' && response !== null && 'errorCode' in response) {
-          throw error; // Уже стандартизирован
+          throw error;
         }
       }
-      
-      // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо прямого throw error
       const errorResponse = mapTelegramErrorToResponse(error);
       throw new HttpException(errorResponse, errorResponse.statusCode);
     }
@@ -944,29 +932,24 @@ export class AuthService implements OnModuleDestroy {
         qrUrl,
         expiresAt: Math.floor(expiresAt.getTime() / 1000),
       };
-    } catch (error: any) {
-      this.logger.error(`Error generating QR code: ${error.message}`, error.stack);
-      
-      // Если ошибка уже является HttpException, пробрасываем её как есть
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error);
+      this.logger.error(`Error generating QR code: ${msg}`, getErrorStack(error));
       if (error instanceof HttpException) {
         throw error;
       }
-      
-      // Если отсутствуют API credentials, возвращаем более информативную ошибку
-      if (error.message?.includes('TELEGRAM_API_ID') || error.message?.includes('TELEGRAM_API_HASH')) {
+      if (msg.includes('TELEGRAM_API_ID') || msg.includes('TELEGRAM_API_HASH')) {
         const errorResponse = buildErrorResponse(
           HttpStatus.BAD_REQUEST,
           ErrorCode.INTERNAL_SERVER_ERROR,
-          error.message || 'Telegram API credentials not configured',
+          msg || 'Telegram API credentials not configured',
         );
         throw new HttpException(errorResponse, HttpStatus.BAD_REQUEST);
       }
-      
-      // Для других ошибок возвращаем 500 с информативным сообщением
       const errorResponse = buildErrorResponse(
         HttpStatus.INTERNAL_SERVER_ERROR,
         ErrorCode.INTERNAL_SERVER_ERROR,
-        `Failed to generate QR code: ${error.message || 'Unknown error'}`,
+        `Failed to generate QR code: ${msg || 'Unknown error'}`,
       );
       throw new HttpException(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
@@ -1097,8 +1080,8 @@ export class AuthService implements OnModuleDestroy {
                   try {
                     await this.referralService.processReferralRegistration(user.id);
                     this.logger.log(`Обработана регистрация через QR-код для пользователя ${user.id}`);
-                  } catch (error: any) {
-                    this.logger.error(`Ошибка обработки реферальной регистрации через QR-код: ${error.message}`);
+                  } catch (error: unknown) {
+                    this.logger.error(`Ошибка обработки реферальной регистрации через QR-код: ${getErrorMessage(error)}`);
                   }
                 }
               } else {
@@ -1152,9 +1135,7 @@ export class AuthService implements OnModuleDestroy {
             };
           }
         }
-      } catch (acceptError: any) {
-        // Токен еще не принят или ошибка
-        // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо string.includes
+      } catch (acceptError: unknown) {
         const telegramErrorResponse = mapTelegramErrorToResponse(acceptError);
         
         // Если это ошибка истечения токена, помечаем как expired
@@ -1188,8 +1169,8 @@ export class AuthService implements OnModuleDestroy {
         expiresAt: Math.floor(stored.expiresAt.getTime() / 1000),
         timeRemaining,
       };
-    } catch (error: any) {
-      this.logger.error(`Error checking QR token status: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Error checking QR token status: ${getErrorMessage(error)}`, getErrorStack(error));
       return { status: 'expired' };
     }
   }
@@ -1274,19 +1255,14 @@ export class AuthService implements OnModuleDestroy {
       }
       
       return this.verify2FAPasswordWithStored(normalizedPhone, password, phoneCodeHash, stored, ipAddress, userAgent, expressRequest);
-    } catch (error: any) {
-      this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
-      
-      // КРИТИЧНО: Если error уже HttpException с ErrorResponse - пробрасываем как есть
+    } catch (error: unknown) {
+      this.logger.error(`Error verifying 2FA password: ${getErrorMessage(error)}`, getErrorStack(error));
       if (error instanceof HttpException) {
         const response = error.getResponse();
         if (typeof response === 'object' && response !== null && 'errorCode' in response) {
-          throw error; // Уже стандартизирован
+          throw error;
         }
       }
-      
-      // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо прямого throw error
-      // Это гарантирует, что все ошибки преобразуются в ErrorResponse
       const errorResponse = mapTelegramErrorToResponse(error);
       throw new HttpException(errorResponse, errorResponse.statusCode);
     }
@@ -1421,19 +1397,12 @@ export class AuthService implements OnModuleDestroy {
         user,
         tokens: null, // Не возвращаем токены для дашборда
       };
-    } catch (error: any) {
-      this.logger.error(`Error verifying 2FA password: ${error.message}`, error.stack);
-
-      // КРИТИЧНО: Используем mapTelegramErrorToResponse вместо string.includes
-      // Это единственный правильный способ обработки Telegram ошибок
+    } catch (error: unknown) {
+      this.logger.error(`Error verifying 2FA password: ${getErrorMessage(error)}`, getErrorStack(error));
       const telegramErrorResponse = mapTelegramErrorToResponse(error);
-      
-      // Если это известная Telegram ошибка, используем её ErrorResponse
       if (telegramErrorResponse.errorCode !== ErrorCode.INTERNAL_SERVER_ERROR) {
         throw new HttpException(telegramErrorResponse, telegramErrorResponse.statusCode);
       }
-      
-      // Если это неизвестная ошибка, создаем общий ErrorResponse
       const errorResponse = buildErrorResponse(
         HttpStatus.UNAUTHORIZED,
         ErrorCode.INVALID_2FA_PASSWORD,

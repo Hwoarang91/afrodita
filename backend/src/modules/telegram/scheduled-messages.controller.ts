@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../entities/user.entity';
+import { ScheduledMessage } from '../../entities/scheduled-message.entity';
 
 @ApiTags('telegram')
 @Controller('telegram/scheduled-messages')
@@ -40,13 +41,13 @@ export class ScheduledMessagesController {
 
   @Post()
   @ApiOperation({ summary: 'Создать новое запланированное сообщение' })
-  async create(@Body() data: any) {
+  async create(@Body() data: Parameters<ScheduledMessagesService['create']>[0]) {
     return await this.scheduledMessagesService.create(data);
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Обновить запланированное сообщение' })
-  async update(@Param('id') id: string, @Body() data: any) {
+  async update(@Param('id') id: string, @Body() data: Partial<ScheduledMessage>) {
     return await this.scheduledMessagesService.update(id, data);
   }
 

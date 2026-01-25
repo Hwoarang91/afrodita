@@ -1,11 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
 import { SessionEncryptionService } from './session-encryption.service';
 import { SensitiveDataMasker } from '../../../common/utils/sensitive-data-masker';
+
+/** Request-like объект с session (express-session + кастомные ключи, напр. telegramSession). object совместим с Session & Partial<SessionData>. */
+export interface RequestWithSession {
+  session?: object;
+}
 
 export interface TelegramSessionPayload {
   userId: string;
   sessionId: string; // ID сессии из БД
-  sessionData: any; // MTProto session data (опционально, для совместимости)
+  sessionData?: unknown; // MTProto session data (опционально, для совместимости)
   phoneNumber?: string;
   createdAt: number;
 }
@@ -41,7 +47,7 @@ export class TelegramSessionService {
    * @param request Express request объект
    * @param payload Данные сессии для сохранения
    */
-  save(request: any, payload: TelegramSessionPayload): void {
+  save(request: RequestWithSession, payload: TelegramSessionPayload): void {
     try {
       // КРИТИЧНО: Инициализируем request.session если его нет
       if (!request.session) {
@@ -50,8 +56,8 @@ export class TelegramSessionService {
       }
 
       const encrypted = this.encryption.encrypt(JSON.stringify(payload));
-
-      request.session[SESSION_KEY] = encrypted;
+      const s = request.session as Record<string, unknown> | undefined;
+      if (s) s[SESSION_KEY] = encrypted;
 
       // Используем маскирование для чувствительных данных
       const maskedPhone = payload.phoneNumber ? SensitiveDataMasker.maskPhoneNumber(payload.phoneNumber) : 'N/A';
@@ -59,8 +65,8 @@ export class TelegramSessionService {
       this.logger.log(
         `[TELEGRAM] ✅ Session saved (userId=${payload.userId}, sessionId=${payload.sessionId})`,
       );
-    } catch (error: any) {
-      this.logger.error(`[TELEGRAM] ❌ Failed to save session: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`[TELEGRAM] ❌ Failed to save session: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -71,17 +77,22 @@ export class TelegramSessionService {
    * @param request Express request объект
    * @returns Расшифрованные данные сессии или null если не найдена
    */
-  load(request: any): TelegramSessionPayload | null {
+  load(request: RequestWithSession): TelegramSessionPayload | null {
     try {
       if (!request.session) {
         this.logger.warn('[TELEGRAM] ⚠️ request.session is not available');
         return null;
       }
 
-      const encrypted = request.session?.[SESSION_KEY];
+      const s = request.session as Record<string, unknown> | undefined;
+      const encrypted = s?.[SESSION_KEY];
 
-      if (!encrypted) {
+      if (encrypted == null) {
         this.logger.warn('[TELEGRAM] ❌ Session not found in request.session');
+        return null;
+      }
+      if (typeof encrypted !== 'string') {
+        this.logger.warn('[TELEGRAM] ❌ Session value is not a string');
         return null;
       }
 
@@ -94,8 +105,8 @@ export class TelegramSessionService {
       );
 
       return decrypted;
-    } catch (error: any) {
-      this.logger.error(`[TELEGRAM] ❌ Failed to decrypt session: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`[TELEGRAM] ❌ Failed to decrypt session: ${getErrorMessage(error)}`, getErrorStack(error));
       return null;
     }
   }
@@ -105,14 +116,15 @@ export class TelegramSessionService {
    * 
    * @param request Express request объект
    */
-  clear(request: any): void {
+  clear(request: RequestWithSession): void {
     try {
-      if (request.session && request.session[SESSION_KEY]) {
-        delete request.session[SESSION_KEY];
+      const s = request.session as Record<string, unknown> | undefined;
+      if (s && SESSION_KEY in s) {
+        delete s[SESSION_KEY];
         this.logger.warn('[TELEGRAM] 🧹 Session cleared');
       }
-    } catch (error: any) {
-      this.logger.error(`[TELEGRAM] ❌ Failed to clear session: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`[TELEGRAM] ❌ Failed to clear session: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -122,7 +134,8 @@ export class TelegramSessionService {
    * @param request Express request объект
    * @returns true если сессия существует, false иначе
    */
-  has(request: any): boolean {
-    return !!(request.session?.[SESSION_KEY]);
+  has(request: RequestWithSession): boolean {
+    const s = request.session as Record<string, unknown> | undefined;
+    return !!(s?.[SESSION_KEY]);
   }
 }

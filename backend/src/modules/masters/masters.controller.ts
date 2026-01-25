@@ -6,6 +6,8 @@ import { AuditService } from '../audit/audit.service';
 import { CreateMasterDto } from './dto/create-master.dto';
 import { UpdateMasterDto } from './dto/update-master.dto';
 import { CreateWorkScheduleDto } from './dto/create-work-schedule.dto';
+import { UpdateWorkScheduleDto } from './dto/update-work-schedule.dto';
+import { CreateBlockIntervalDto } from './dto/create-block-interval.dto';
 import { AuditAction } from '../../entities/audit-log.entity';
 
 @ApiTags('masters')
@@ -69,7 +71,7 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Обновление расписания (только для админов)' })
-  async updateSchedule(@Param('scheduleId') scheduleId: string, @Body() dto: any) {
+  async updateSchedule(@Param('scheduleId') scheduleId: string, @Body() dto: UpdateWorkScheduleDto) {
     return await this.mastersService.updateSchedule(scheduleId, dto);
   }
 
@@ -139,7 +141,7 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Создание заблокированного интервала (только для админов)' })
-  async createBlockInterval(@Param('id') id: string, @Body() dto: any) {
+  async createBlockInterval(@Param('id') id: string, @Body() dto: CreateBlockIntervalDto) {
     return await this.mastersService.createBlockInterval(id, dto);
   }
 

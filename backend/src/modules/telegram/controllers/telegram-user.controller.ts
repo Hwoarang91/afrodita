@@ -23,6 +23,7 @@ import { TelegramSessionGuard } from '../guards/telegram-session.guard';
 import { UserSendMessageDto, UserSendMediaDto } from '../dto/user-send-message.dto';
 import { SessionInfoDto } from '../dto/session-management.dto';
 import { TelegramSessionStatusDto } from '../dto/telegram-session-status.dto';
+import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
 
 @ApiTags('telegram')
 @Controller('telegram/user')
@@ -101,7 +102,7 @@ export class TelegramUserController {
             access_hash: BigInt(0),
           };
         }
-      } catch (error: any) {
+      } catch (_error: unknown) {
         // Если не удалось получить пользователя, используем базовый peer
         peer = {
           _: 'inputPeerUser',
@@ -128,9 +129,9 @@ export class TelegramUserController {
         messageId: result.updates?.[0]?.message?.id || null,
         result,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка отправки сообщения: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to send message: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка отправки сообщения: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to send message: ${getErrorMessage(error)}`);
     }
   }
 
@@ -228,9 +229,9 @@ export class TelegramUserController {
         messageId: result.updates?.[0]?.message?.id || null,
         result,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка отправки медиа: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to send media: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка отправки медиа: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to send media: ${getErrorMessage(error)}`);
     }
   }
 
@@ -274,7 +275,7 @@ export class TelegramUserController {
           },
           hash: BigInt(0),
         }) as any;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Используем централизованный обработчик MTProto ошибок
         const { handleMtprotoError, MtprotoErrorAction } = await import('../utils/mtproto-error.handler');
         const errorResult = handleMtprotoError(error);
@@ -388,9 +389,9 @@ export class TelegramUserController {
         chats,
         total: chats.length,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка получения списка чатов: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to get chats: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка получения списка чатов: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to get chats: ${getErrorMessage(error)}`);
     }
   }
 
@@ -428,7 +429,7 @@ export class TelegramUserController {
           _: 'contacts.getContacts',
           hash: BigInt(0),
         }) as any;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Используем централизованный обработчик MTProto ошибок
         const { handleMtprotoError, MtprotoErrorAction } = await import('../utils/mtproto-error.handler');
         const errorResult = handleMtprotoError(error);
@@ -468,9 +469,9 @@ export class TelegramUserController {
         contacts,
         total: contacts.length,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка получения списка контактов: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to get contacts: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка получения списка контактов: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to get contacts: ${getErrorMessage(error)}`);
     }
   }
 
@@ -722,9 +723,9 @@ export class TelegramUserController {
         messages,
         total: messages.length,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка получения истории сообщений: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to get messages: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка получения истории сообщений: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to get messages: ${getErrorMessage(error)}`);
     }
   }
 
@@ -776,8 +777,8 @@ export class TelegramUserController {
         offset: BigInt(0),
         limit: 512 * 1024,
       })) as { bytes?: Uint8Array; _?: string };
-    } catch (e) {
-      this.logger.warn(`upload.getFile failed: ${e instanceof Error ? e.message : String(e)}`);
+    } catch (e: unknown) {
+      this.logger.warn(`upload.getFile failed: ${getErrorMessage(e)}`);
       throw new UnauthorizedException('Failed to download file from Telegram.');
     }
     if (!result?.bytes || !(result.bytes instanceof Uint8Array)) {
@@ -862,8 +863,8 @@ export class TelegramUserController {
       return {
         hasSession: false,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка получения статуса сессии: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка получения статуса сессии: ${getErrorMessage(error)}`, getErrorStack(error));
       
       // КРИТИЧНО: Если это UnauthorizedException (нет JWT) - пробрасываем
       if (error instanceof UnauthorizedException) {
@@ -947,9 +948,9 @@ export class TelegramUserController {
         currentSessionId: currentSession?.id || null,
         sessions: sessionsInfo,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка получения сессий: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to get sessions: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка получения сессий: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to get sessions: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1002,9 +1003,9 @@ export class TelegramUserController {
       }
 
       return { success: true };
-    } catch (error: any) {
-      this.logger.error(`Ошибка ${permanent === 'true' ? 'удаления' : 'деактивации'} сессии: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to ${permanent === 'true' ? 'remove' : 'deactivate'} session: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка ${permanent === 'true' ? 'удаления' : 'деактивации'} сессии: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to ${permanent === 'true' ? 'remove' : 'deactivate'} session: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1042,9 +1043,9 @@ export class TelegramUserController {
       await this.telegramUserClientService.deactivateOtherSessions(userId, keepSessionId);
 
       return { success: true };
-    } catch (error: any) {
-      this.logger.error(`Ошибка деактивации других сессий: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to deactivate other sessions: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка деактивации других сессий: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to deactivate other sessions: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1112,9 +1113,9 @@ export class TelegramUserController {
         createdAt: status.createdAt.toISOString(),
         lastUsedAt: status.lastUsedAt ? status.lastUsedAt.toISOString() : null,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка получения статуса соединения: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to get connection status: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка получения статуса соединения: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to get connection status: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1180,9 +1181,9 @@ export class TelegramUserController {
         messageId: result.updates?.[0]?.message?.id || null,
         result,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка пересылки сообщения: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to forward message: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка пересылки сообщения: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to forward message: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1234,9 +1235,9 @@ export class TelegramUserController {
         success: true,
         result,
       };
-    } catch (error: any) {
-      this.logger.error(`Ошибка удаления сообщения: ${error.message}`, error.stack);
-      throw new UnauthorizedException(`Failed to delete message: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка удаления сообщения: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new UnauthorizedException(`Failed to delete message: ${getErrorMessage(error)}`);
     }
   }
 }

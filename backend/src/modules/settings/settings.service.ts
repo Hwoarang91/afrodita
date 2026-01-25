@@ -12,14 +12,14 @@ export class SettingsService {
     private settingsRepository: Repository<Settings>,
   ) {}
 
-  async get(key: string, defaultValue: any = null): Promise<any> {
+  async get<T = unknown>(key: string, defaultValue?: T): Promise<T> {
     const setting = await this.settingsRepository.findOne({
       where: { key },
     });
-    return setting ? setting.value : defaultValue;
+    return (setting ? setting.value : defaultValue) as T;
   }
 
-  async set(key: string, value: any): Promise<Settings> {
+  async set(key: string, value: unknown): Promise<Settings> {
     let setting = await this.settingsRepository.findOne({
       where: { key },
     });
@@ -104,8 +104,7 @@ export class SettingsService {
   }
 
   async getTelegramAdminUserId(): Promise<string | null> {
-    const userId = await this.get('telegramAdminUserId', null);
-    return userId;
+    return await this.get<string | null>('telegramAdminUserId', null);
   }
 
   async setTelegramAdminUserId(userId: string | null): Promise<Settings> {

@@ -216,7 +216,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           
           if (hasMention) {
             // Отправляем приватный ответ на упоминание
-            const customStartMessage = await this.settingsService.get('telegramStartMessage', null);
+            const customStartMessage = await this.settingsService.get<string | null>('telegramStartMessage', null);
             const keyboard = Markup.inlineKeyboard([
               [{ text: '📅 Записаться', switch_inline_query: 'book' }],
               [{ text: '📋 Мои записи', switch_inline_query: 'appointments' }],
@@ -759,7 +759,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         ]);
 
         // Загружаем настраиваемое сообщение для /start
-        const customStartMessage = await this.settingsService.get('telegramStartMessage', null);
+        const customStartMessage = await this.settingsService.get<string | null>('telegramStartMessage', null);
         let groupMessage = customStartMessage || 
           `👋 Привет, ${ctx.from.first_name}!\n\n` +
           `Я бот салона красоты "Афродита". Для работы со мной используйте кнопки ниже или перейдите в личный чат.`;
@@ -778,7 +778,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       // В личном чате показываем полное меню
       // Загружаем настраиваемое сообщение для /start
-      const customStartMessage = await this.settingsService.get('telegramStartMessage', null);
+      const customStartMessage = await this.settingsService.get<string | null>('telegramStartMessage', null);
       
       // Если у пользователя нет телефона, запрашиваем контакт
       if (!user.phone) {
@@ -3615,7 +3615,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Получаем настраиваемое приветственное сообщение из настроек
-      const customWelcomeMessage = await this.settingsService.get('telegramGroupWelcomeMessage', null);
+      const customWelcomeMessage = await this.settingsService.get<string | null>('telegramGroupWelcomeMessage', null);
       
       // Формируем приветственное сообщение
       let welcomeText: string;

@@ -1,5 +1,6 @@
 import { Controller, Post, UseGuards, Request, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { AuthRequest } from '../common/types/request.types';
 import { SchedulerService } from './scheduler.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -29,7 +30,7 @@ export class SchedulerController {
 
   @Post('reminders/trigger')
   @ApiOperation({ summary: 'Ручной запуск проверки напоминаний (только для админов)' })
-  async triggerReminders(@Request() _req: any) {
+  async triggerReminders(@Request() _req: AuthRequest) {
     await this.schedulerService.sendAppointmentReminders();
     return { success: true, message: 'Проверка напоминаний запущена' };
   }

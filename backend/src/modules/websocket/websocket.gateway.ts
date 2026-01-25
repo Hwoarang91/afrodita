@@ -15,6 +15,7 @@ import {
   TelegramClientInvokeEvent,
   TelegramClientFloodWaitEvent,
 } from '../telegram/services/telegram-client-event-emitter.service';
+import { Appointment } from '../../entities/appointment.entity';
 
 interface EventLogSubscription {
   socketId: string;
@@ -168,7 +169,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     this.server.to(`slots:${masterId}:${serviceId}:${date}`).emit('slot-update', { slots });
   }
 
-  emitNewAppointment(appointment: any) {
+  emitNewAppointment(appointment: Appointment) {
     this.server.emit('new-appointment', appointment);
   }
 
@@ -177,7 +178,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   }
 
   // Синхронизация данных между админ панелями
-  emitDataSync(type: 'appointment' | 'user' | 'master' | 'service' | 'telegram-chat', action: 'create' | 'update' | 'delete', data: any) {
+  emitDataSync(type: 'appointment' | 'user' | 'master' | 'service' | 'telegram-chat', action: 'create' | 'update' | 'delete', data: unknown) {
     this.server.emit('data-sync', { type, action, data });
   }
 

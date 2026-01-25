@@ -313,8 +313,7 @@ export class TelegramService {
     try {
       const result = await this.getBot().telegram.getChatMembersCount(chatId);
       return result;
-    } catch (error: any) {
-      // Если метод не поддерживается или чат не найден, возвращаем 0
+    } catch (_error: unknown) {
       return 0;
     }
   }

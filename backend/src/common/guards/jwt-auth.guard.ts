@@ -29,23 +29,23 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
   }
 
-  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+  handleRequest(err: unknown, user: unknown, info: unknown, context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
 
     // Если пользователь уже установлен middleware, возвращаем его
     if (request.user) {
-      this.logger.debug(`JwtAuthGuard: Возвращаем пользователя из middleware: ${request.user.email}`);
+      this.logger.debug(`JwtAuthGuard: Возвращаем пользователя из middleware: ${(request.user as { email?: string })?.email}`);
       return request.user;
     }
 
     // Иначе используем стандартную логику Passport
     if (err || !user) {
       this.logger.warn('JwtAuthGuard: Passport аутентификация не прошла', {
-        error: err?.message,
-        info: info?.message,
+        error: (err as Error)?.message,
+        info: (info as { message?: string })?.message,
       });
     } else {
-      this.logger.debug(`JwtAuthGuard: Passport аутентификация успешна: ${user.email}`);
+      this.logger.debug(`JwtAuthGuard: Passport аутентификация успешна: ${(user as { email?: string })?.email}`);
     }
 
     return super.handleRequest(err, user, info, context);
