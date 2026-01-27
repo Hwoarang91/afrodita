@@ -165,7 +165,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           if (this.bot.telegram) {
             await this.bot.telegram.deleteWebhook({ drop_pending_updates: false });
           }
-        } catch (e) {
+        } catch (e: unknown) {
           // Игнорируем ошибки при принудительной остановке
         }
       }
@@ -653,8 +653,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
             setTimeout(async () => {
               try {
                 await ctx.reply(`🎉 Добро пожаловать!\n\n✅ Вам начислено ${bonusInfo.registrationBonus} бонусов за регистрацию!\n\nВаш баланс бонусов: ${user?.bonusPoints ?? 0} баллов.`);
-              } catch (err) {
-                this.logger.error(`Ошибка отправки сообщения о бонусах: ${err}`);
+              } catch (err: unknown) {
+                this.logger.error(`Ошибка отправки сообщения о бонусах: ${getErrorMessage(err)}`);
               }
             }, 2000);
           }
@@ -734,8 +734,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
               setTimeout(async () => {
                 try {
                   await ctx.reply(bonusMessage);
-                } catch (err) {
-                  this.logger.error(`Ошибка отправки сообщения о бонусах: ${err}`);
+                } catch (err: unknown) {
+                  this.logger.error(`Ошибка отправки сообщения о бонусах: ${getErrorMessage(err)}`);
                 }
               }, 2000);
             }
@@ -1046,7 +1046,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       // Также проверяем роль в базе данных (для обратной совместимости)
       const user = await this.usersService.findByTelegramId(telegramId);
       return user?.role === 'admin';
-    } catch (error) {
+    } catch (error: unknown) {
       return false;
     }
   }
@@ -1673,7 +1673,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       const message = 'Выберите услугу:';
 
       await this.sendPrivateCallbackReply(ctx, message, keyboard);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Ошибка при показе услуг: ${getErrorMessage(error)}`, getErrorStack(error));
       await this.sendPrivateCallbackReply(ctx, 'Произошла ошибка при загрузке услуг. Попробуйте позже.');
     }
@@ -1756,7 +1756,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
 
       await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Ошибка при показе подкатегорий: ${getErrorMessage(error)}`, getErrorStack(error));
       await this.sendPrivateCallbackReply(ctx, 'Произошла ошибка при загрузке подкатегорий. Попробуйте позже.');
     }
@@ -1867,7 +1867,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
     try {
       await ctx.editMessageText(message, keyboard);
-    } catch (error) {
+    } catch (error: unknown) {
       await ctx.reply(message, keyboard);
     }
     await ctx.answerCbQuery();
@@ -1949,7 +1949,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         `Выберите мастера:`;
 
       await this.sendPrivateCallbackReply(ctx, message, keyboard, { parse_mode: 'Markdown' });
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Ошибка при выборе услуги: ${getErrorMessage(error)}`, getErrorStack(error));
       await ctx.answerCbQuery('Ошибка при загрузке услуги');
     }
@@ -2051,7 +2051,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
     try {
       await ctx.editMessageText('Выберите дату:', Markup.inlineKeyboard(keyboard as never));
-    } catch (error) {
+    } catch (error: unknown) {
       // Если не можем отредактировать, отправляем новое сообщение
       await ctx.reply('Выберите дату:', Markup.inlineKeyboard(keyboard as never));
     }
@@ -2176,7 +2176,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         `Выберите время на ${formattedDate}:`,
         keyboard,
       );
-    } catch (error) {
+    } catch (error: unknown) {
       await ctx.reply(
         `Выберите время на ${formattedDate}:`,
         keyboard,
@@ -2219,12 +2219,16 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     let totalDuration = 0;
 
     if (session.selectedSubcategoryIds && session.selectedSubcategoryIds.length > 0) {
-      // Есть выбранные подкатегории
+      // Есть выбранные подкатегории — один запрос вместо N (устранение N+1)
+      const subServices = await this.servicesService.findByIds(session.selectedSubcategoryIds);
+      const byId = new Map(subServices.map((s) => [s.id, s]));
       for (const subId of session.selectedSubcategoryIds) {
-        const subService = await this.servicesService.findById(subId);
-        selectedServices.push(subService);
-        totalPrice += Number(subService.price);
-        totalDuration += subService.duration;
+        const sub = byId.get(subId);
+        if (sub) {
+          selectedServices.push(sub);
+          totalPrice += Number(sub.price);
+          totalDuration += sub.duration;
+        }
       }
     } else {
       // Нет подкатегорий, используем основную услугу
@@ -2323,7 +2327,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         parse_mode: 'Markdown',
         reply_markup: keyboard.reply_markup,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       await ctx.reply(message, {
         parse_mode: 'Markdown',
         reply_markup: keyboard.reply_markup,
@@ -2363,10 +2367,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       let servicesToBook: Service[] = [];
 
       if (session.selectedSubcategoryIds && session.selectedSubcategoryIds.length > 0) {
-        // Есть выбранные подкатегории - создаем запись для каждой
+        // Есть выбранные подкатегории — один запрос вместо N (устранение N+1)
+        const subServices = await this.servicesService.findByIds(session.selectedSubcategoryIds);
+        const byId = new Map(subServices.map((s) => [s.id, s]));
         for (const subId of session.selectedSubcategoryIds) {
-          const subService = await this.servicesService.findById(subId);
-          servicesToBook.push(subService);
+          const sub = byId.get(subId);
+          if (sub) servicesToBook.push(sub);
         }
       } else {
         // Нет подкатегорий - используем основную услугу
@@ -2497,7 +2503,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           parse_mode: 'Markdown',
           reply_markup: keyboard.reply_markup,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         await ctx.reply(successMessage, {
           parse_mode: 'Markdown',
           reply_markup: keyboard.reply_markup,
@@ -2552,7 +2558,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           parse_mode: 'Markdown',
           reply_markup: keyboard.reply_markup,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         await ctx.reply(successMessage, {
           parse_mode: 'Markdown',
           reply_markup: keyboard.reply_markup,
@@ -2884,7 +2890,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       
       try {
         await ctx.editMessageText('✅ Запись успешно отменена.');
-      } catch (error) {
+      } catch (error: unknown) {
         await ctx.reply('✅ Запись успешно отменена.');
       }
       
@@ -3610,7 +3616,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       let user: User | null = null;
       try {
         user = await this.userRepository.findOne({ where: { telegramId: userId.toString() } });
-      } catch (error) {
+      } catch (error: unknown) {
         // Пользователь может не быть в базе
       }
 
@@ -4108,7 +4114,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
             reply_markup: keyboard?.reply_markup as import('telegraf').Types.ExtraEditMessageText['reply_markup'],
           });
           await ctx.answerCbQuery();
-        } catch (error) {
+        } catch (error: unknown) {
           // Если не можем отредактировать, отправляем новое сообщение
           await ctx.reply(message, {
             ...options,
@@ -4317,7 +4323,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
               `💆 Услуга: ${(appointment.service as WithName)?.name || 'Услуга'}\n` +
               `👨‍💼 Мастер: ${(appointment.master as WithName)?.name || 'Мастер'}`,
             );
-          } catch (error) {
+          } catch (error: unknown) {
             this.logger.warn(`Не удалось отправить уведомление клиенту: ${getErrorMessage(error)}`);
           }
         }

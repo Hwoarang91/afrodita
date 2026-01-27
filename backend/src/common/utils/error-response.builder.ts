@@ -44,7 +44,7 @@ export function buildValidationErrorResponse(
   validationErrors: Array<{
     property: string;
     constraints?: Record<string, string>;
-    value?: any;
+    value?: unknown;
   }>,
 ): ErrorResponse {
   const details: ErrorDetail[] = validationErrors.map((err) => {

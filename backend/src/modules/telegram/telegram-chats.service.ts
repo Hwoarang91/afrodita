@@ -63,5 +63,13 @@ export class TelegramChatsService {
   async delete(chatId: string): Promise<void> {
     await this.telegramChatRepository.delete({ chatId });
   }
+
+  save(chat: TelegramChat): Promise<TelegramChat> {
+    return this.telegramChatRepository.save(chat);
+  }
+
+  create(data: Partial<TelegramChat>): TelegramChat {
+    return this.telegramChatRepository.create(data);
+  }
 }
 

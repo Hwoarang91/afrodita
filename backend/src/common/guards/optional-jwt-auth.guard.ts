@@ -1,5 +1,6 @@
 import { Injectable, ExecutionContext, Logger } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { getErrorMessage } from '../utils/error-message';
 
 /**
  * Опциональный JWT guard - не требует токен, но использует его, если он есть
@@ -28,39 +29,39 @@ export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
     try {
       const result = await super.canActivate(context);
       return result as boolean;
-    } catch (error) {
+    } catch (error: unknown) {
       // Если Passport выбрасывает ошибку (токен отсутствует или невалиден) - разрешаем доступ
       // Это позволяет эндпоинту работать без авторизации
       this.logger.debug('OptionalJwtAuthGuard: Ошибка при проверке токена - продолжаем без авторизации', {
-        error: (error as Error)?.message,
+        error: getErrorMessage(error),
       });
       return true; // Разрешаем доступ даже без токена
     }
   }
 
-  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+  handleRequest(err: unknown, user: unknown, info: unknown, context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
+    const u = (x: unknown) => (x as { email?: string; sub?: string })?.email || (x as { email?: string; sub?: string })?.sub;
 
     // Если пользователь уже установлен middleware, возвращаем его
     if (request.user) {
-      this.logger.debug(`OptionalJwtAuthGuard: Возвращаем пользователя из middleware: ${request.user.email || request.user.sub}`);
+      this.logger.debug(`OptionalJwtAuthGuard: Возвращаем пользователя из middleware: ${u(request.user)}`);
       return request.user;
     }
 
     // Если JWT есть и валиден - возвращаем user
     if (user && !err) {
-      this.logger.debug(`OptionalJwtAuthGuard: Passport аутентификация успешна: ${user.email || user.sub}`);
+      this.logger.debug(`OptionalJwtAuthGuard: Passport аутентификация успешна: ${u(user)}`);
       return user;
     }
 
     // Если JWT нет или невалиден - возвращаем null (не выбрасываем ошибку)
-    // Это позволяет эндпоинту работать без авторизации
     if (err || !user) {
       this.logger.debug('OptionalJwtAuthGuard: Токен не предоставлен или невалиден - продолжаем без авторизации', {
-        error: err?.message,
-        info: info?.message,
+        error: (err as Error)?.message,
+        info: (info as { message?: string })?.message,
       });
-      return null; // Возвращаем null вместо выброса ошибки
+      return null;
     }
 
     return null;

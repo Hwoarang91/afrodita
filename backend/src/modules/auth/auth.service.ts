@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException, Logger, HttpException, HttpStatus, OnModuleDestroy } from '@nestjs/common';
+import { Request } from 'express';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
 import { getErrorMessage, getErrorStack } from '../../common/utils/error-message';
@@ -37,6 +38,17 @@ export interface JwtPayload {
   telegramId?: string;
   role: UserRole;
   email?: string;
+}
+
+export interface AuthUserResponse {
+  id: string;
+  telegramId?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  username?: string | null;
+  email?: string | null;
+  role: string;
+  bonusPoints: number;
 }
 
 @Injectable()
@@ -348,7 +360,7 @@ export class AuthService implements OnModuleDestroy {
           validate(data.initData, botToken);
           this.logger.log(`[TELEGRAM AUTH] Validation successful`);
           return true;
-        } catch (error) {
+        } catch (error: unknown) {
           this.logger.log(`[TELEGRAM AUTH] Validation failed: ${getErrorMessage(error)}`);
           return false;
         }
@@ -432,7 +444,7 @@ export class AuthService implements OnModuleDestroy {
     lastName?: string,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<{ accessToken: string; token: string; refreshToken: string; user: any }> {
+  ): Promise<{ accessToken: string; token: string; refreshToken: string; user: AuthUserResponse }> {
     // Проверяем, есть ли уже администраторы
     const hasAdmins = await this.checkHasUsers();
     if (hasAdmins) {
@@ -662,8 +674,8 @@ export class AuthService implements OnModuleDestroy {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
-    expressRequest?: any, // Express request для сохранения сессии в request.session
-  ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null; requires2FA: boolean; passwordHint?: string }> {
+    expressRequest?: Request, // Express request для сохранения сессии в request.session
+  ): Promise<{ user: User | null; tokens: { accessToken: string; refreshToken: string } | null; requires2FA: boolean; passwordHint?: string }> {
     try {
       // КРИТИЧНО: Нормализуем номер телефона для поиска в хранилище
       const normalizedPhone = this.usersService.normalizePhone(phoneNumber);
@@ -724,8 +736,8 @@ export class AuthService implements OnModuleDestroy {
             const passwordResult = await client.invoke({
               _: 'account.getPassword',
             });
-            if (passwordResult._ === 'account.password' && (passwordResult as any).hint) {
-              passwordHint = (passwordResult as any).hint;
+            if (passwordResult._ === 'account.password' && (passwordResult as { hint?: string }).hint) {
+              passwordHint = (passwordResult as { hint?: string }).hint;
               this.logger.debug(`Password hint retrieved: ${passwordHint}`);
             }
           } catch (hintError: unknown) {
@@ -753,7 +765,7 @@ export class AuthService implements OnModuleDestroy {
           });
           this.logger.debug(`2FA session saved for normalized phone: ${normalizedPhone}. Store size: ${this.twoFactorStore.size}, expiresAt: ${new Date(Date.now() + 10 * 60 * 1000).toISOString()}, hint: ${passwordHint || 'none'}`);
           return {
-            user: null as any,
+            user: null,
             tokens: null,
             requires2FA: true,
             passwordHint,
@@ -958,7 +970,7 @@ export class AuthService implements OnModuleDestroy {
   /**
    * Проверяет статус QR токена
    */
-  async checkQrTokenStatus(tokenId: string, userId?: string, expressRequest?: any): Promise<{
+  async checkQrTokenStatus(tokenId: string, userId?: string, expressRequest?: Request): Promise<{
     status: 'pending' | 'accepted' | 'expired';
     user?: User;
     tokens?: { accessToken: string; refreshToken: string } | null;
@@ -983,8 +995,8 @@ export class AuthService implements OnModuleDestroy {
       if (stored.expiresAt < now) {
         stored.status = 'expired';
         this.qrTokenStore.delete(tokenId);
-        stored.client.disconnect().catch((err) => {
-          this.logger.error(`Error disconnecting client: ${err.message}`);
+        stored.client.disconnect().catch((err: unknown) => {
+          this.logger.error(`Error disconnecting client: ${getErrorMessage(err)}`);
         });
         return { 
           status: 'expired',
@@ -1145,8 +1157,8 @@ export class AuthService implements OnModuleDestroy {
         ) {
           stored.status = 'expired';
           this.qrTokenStore.delete(tokenId);
-          stored.client.disconnect().catch((err) => {
-            this.logger.error(`Error disconnecting client: ${err.message}`);
+          stored.client.disconnect().catch((err: unknown) => {
+            this.logger.error(`Error disconnecting client: ${getErrorMessage(err)}`);
           });
           const expiresAt = Math.floor(stored.expiresAt.getTime() / 1000);
           return { 
@@ -1184,8 +1196,8 @@ export class AuthService implements OnModuleDestroy {
       if (data.expiresAt < now) {
         this.phoneCodeHashStore.delete(phone);
         // Отключаем клиент
-        data.client.disconnect().catch((err) => {
-          this.logger.error(`Error disconnecting client: ${err.message}`);
+        data.client.disconnect().catch((err: unknown) => {
+          this.logger.error(`Error disconnecting client: ${getErrorMessage(err)}`);
         });
       }
     }
@@ -1200,7 +1212,7 @@ export class AuthService implements OnModuleDestroy {
     phoneCodeHash: string,
     ipAddress?: string,
     userAgent?: string,
-    expressRequest?: any, // Express request для сохранения сессии в request.session
+    expressRequest?: Request, // Express request для сохранения сессии в request.session
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
       // Нормализуем номер телефона для поиска в хранилище
@@ -1275,14 +1287,14 @@ export class AuthService implements OnModuleDestroy {
     stored: { client: Client; sessionId: string; phoneCodeHash: string; expiresAt: Date; passwordHint?: string },
     ipAddress?: string,
     userAgent?: string,
-    expressRequest?: any, // Express request для сохранения сессии в request.session
+    expressRequest?: Request, // Express request для сохранения сессии в request.session
   ): Promise<{ user: User; tokens: { accessToken: string; refreshToken: string } | null }> {
     try {
 
       if (stored.expiresAt < new Date()) {
         this.twoFactorStore.delete(normalizedPhone);
-        stored.client.disconnect().catch((err) => {
-          this.logger.error(`Error disconnecting client: ${err.message}`);
+        stored.client.disconnect().catch((err: unknown) => {
+          this.logger.error(`Error disconnecting client: ${getErrorMessage(err)}`);
         });
         const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,

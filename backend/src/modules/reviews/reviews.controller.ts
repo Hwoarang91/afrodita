@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
 import { AuthRequest } from '../../common/types/request.types';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam, ApiQuery, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
 import { ReviewsService } from './reviews.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -17,6 +17,8 @@ export class ReviewsController {
 
   @Post()
   @ApiOperation({ summary: 'Создание отзыва' })
+  @ApiNotFoundResponse({ description: 'Запись не найдена или не завершена' })
+  @ApiBody({ schema: { type: 'object', required: ['appointmentId', 'rating'], properties: { appointmentId: { type: 'string' }, rating: { type: 'number' }, comment: { type: 'string' } } } })
   async create(
     @Request() req: AuthRequest,
     @Body() body: { appointmentId: string; rating: number; comment?: string },
@@ -26,6 +28,12 @@ export class ReviewsController {
 
   @Get()
   @ApiOperation({ summary: 'Получение списка отзывов (с пагинацией)' })
+  @ApiOkResponse({ description: 'Список отзывов с пагинацией' })
+  @ApiQuery({ name: 'masterId', required: false, description: 'Фильтр по мастеру' })
+  @ApiQuery({ name: 'serviceId', required: false, description: 'Фильтр по услуге' })
+  @ApiQuery({ name: 'status', required: false, enum: ['approved', 'pending', 'rejected'] })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Номер страницы' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Записей на странице (макс. 100)' })
   async findAll(
     @Query('masterId') masterId?: string,
     @Query('serviceId') serviceId?: string,
@@ -47,6 +55,9 @@ export class ReviewsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Модерация отзыва (только для админов)' })
+  @ApiNotFoundResponse({ description: 'Отзыв не найден' })
+  @ApiParam({ name: 'id', description: 'ID отзыва' })
+  @ApiBody({ schema: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['approved', 'pending', 'rejected'] }, moderationComment: { type: 'string' } } } })
   async moderate(
     @Param('id') id: string,
     @Body() body: { status: ReviewStatus; moderationComment?: string },

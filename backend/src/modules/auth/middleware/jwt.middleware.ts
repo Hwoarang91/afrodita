@@ -1,9 +1,11 @@
 import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { JwtAuthService } from '../services/jwt.service';
+import { JwtUser } from '../../../common/types/request.types';
+import { getErrorMessage } from '../../../common/utils/error-message';
 
 export interface RequestWithUser extends Request {
-  user?: any;
+  user?: JwtUser;
 }
 
 @Injectable()
@@ -52,8 +54,8 @@ export class JwtMiddleware implements NestMiddleware {
       }
 
       next();
-    } catch (error) {
-      this.logger.error('JWT middleware error:', error);
+    } catch (error: unknown) {
+      this.logger.error('JWT middleware error:', getErrorMessage(error));
       next();
     }
   }

@@ -6,7 +6,6 @@ import { Appointment, AppointmentStatus } from '../entities/appointment.entity';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { FinancialService } from '../modules/financial/financial.service';
 import { SettingsService } from '../modules/settings/settings.service';
-import { Service } from '../entities/service.entity';
 import { Notification, NotificationType, NotificationStatus, NotificationChannel } from '../entities/notification.entity';
 import { User, UserRole } from '../entities/user.entity';
 import { TelegramUserSession } from '../entities/telegram-user-session.entity';
@@ -37,16 +36,16 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
       } else {
         this.logger.warn('⚠️ Cron задачи не найдены в SchedulerRegistry');
       }
-    } catch (error) {
-      this.logger.error('Ошибка при проверке регистрации cron задач:', error);
+    } catch (error: unknown) {
+      this.logger.error('Ошибка при проверке регистрации cron задач:', getErrorMessage(error));
     }
     
     // Принудительно запускаем проверку сразу после инициализации для тестирования
     // Это гарантирует, что cron задачи работают
     setTimeout(() => {
       this.logger.log('🔍 Запуск первой проверки напоминаний после инициализации...');
-      this.sendAppointmentReminders().catch(err => {
-        this.logger.error('Ошибка при первой проверке напоминаний:', err);
+      this.sendAppointmentReminders().catch((err: unknown) => {
+        this.logger.error('Ошибка при первой проверке напоминаний:', getErrorMessage(err));
       });
     }, 5000); // Запускаем через 5 секунд после инициализации
   }
@@ -54,8 +53,6 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
   constructor(
     @InjectRepository(Appointment)
     private appointmentRepository: Repository<Appointment>,
-    @InjectRepository(Service)
-    private serviceRepository: Repository<Service>,
     @InjectRepository(Notification)
     private notificationRepository: Repository<Notification>,
     @InjectRepository(User)
@@ -324,9 +321,8 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
       .getMany();
 
     for (const appointment of completedAppointments) {
-      const service = await this.serviceRepository.findOne({
-        where: { id: appointment.serviceId },
-      });
+      // service уже загружен через leftJoinAndSelect — избегаем N+1
+      const service = appointment.service;
 
       if (service) {
         const bonusPoints = await this.financialService.calculateBonusPoints(
@@ -376,7 +372,7 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
       const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const initializingSessions = await this.telegramSessionRepository.find({
         where: {
-          status: 'initializing' as any,
+          status: 'initializing',
           createdAt: LessThan(twentyFourHoursAgo),
         },
       });
@@ -384,7 +380,7 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
       if (initializingSessions.length > 0) {
         const updateResult = await this.telegramSessionRepository.update(
           { id: In(initializingSessions.map(s => s.id)) },
-          { status: 'invalid' as any, updatedAt: now },
+          { status: 'invalid', updatedAt: now },
         );
         this.logger.log(`[CRON] ✅ Переведено ${updateResult.affected || 0} сессий из initializing в invalid (старше 24 часов)`);
       }
@@ -394,11 +390,11 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
       const oldSessions = await this.telegramSessionRepository.find({
         where: [
           {
-            status: 'invalid' as any,
+            status: 'invalid',
             updatedAt: LessThan(thirtyDaysAgo),
           },
           {
-            status: 'revoked' as any,
+            status: 'revoked',
             updatedAt: LessThan(thirtyDaysAgo),
           },
         ],
@@ -412,7 +408,7 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
       }
 
       this.logger.log(`[CRON] ✅ Очистка Telegram сессий завершена`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`[CRON] ❌ Ошибка при очистке Telegram сессий: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }

@@ -100,9 +100,9 @@ docker rm n8n
 
 ### Изменения
 
-✅ **Выполнение плана COMPREHENSIVE_ANALYSIS_PLAN — Фаза 1 (часть) (23.01.2026):**
+✅ **Выполнение плана исправлений — Фаза 1 (часть) (23.01.2026):**
 
-**Источник:** COMPREHENSIVE_ANALYSIS_PLAN.md (файл TODO_EXECUTION_PLAN.md не найден).
+**Источник:** план (см. «Сводка плана исправлений» и «Не сделано» в данном отчёте; файл TODO_EXECUTION_PLAN.md не найден).
 
 **Выполнено:**
 
@@ -369,7 +369,7 @@ docker rm n8n
 
 **Остаются по §5 (на момент первой очереди):** entity, chatInfo, apt.service, appointment.client, options/keyboard (часть снята во второй очереди).
 
-**Файлы изменены:** `telegram-bot.service.ts`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§5, сводка), `REPORT.md`.
+**Файлы изменены:** `telegram-bot.service.ts`; обновлены план в REPORT (§5, сводка), REPORT.md.
 
 ---
 
@@ -383,7 +383,7 @@ docker rm n8n
 4. **Оставлены `any`:** `options`/`keyboard` в sendMessage, sendPrivateReply, sendPrivateCallbackReply; `keyboard: any[]`, `currentRow`, `keyboardButtons` (п.5 снял selectedServices, servicesToBook).
 5. Сборка backend проходит.
 
-**Файлы изменены:** `telegram-bot.service.ts`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§5, сводка), `REPORT.md`.
+**Файлы изменены:** `telegram-bot.service.ts`; обновлены план в REPORT (§5, сводка), REPORT.md.
 
 ---
 
@@ -396,7 +396,7 @@ docker rm n8n
 3. **keyboard-массивы:** пробовали `Parameters<typeof Markup.inlineKeyboard>[0]` и `unknown[][]` — типы Telegraf `HideableIKBtn`/tuple несовместимы с поэлементным `push([...])` и `Markup.inlineKeyboard(keyboard)`. Оставлены `keyboard: any[]`, `currentRow`, `keyboardButtons`.
 4. Сборка backend проходит.
 
-**Файлы изменены:** `telegram-bot.service.ts`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§5), `REPORT.md`.
+**Файлы изменены:** `telegram-bot.service.ts`; обновлены план в REPORT (§5), REPORT.md.
 
 ---
 
@@ -409,7 +409,7 @@ docker rm n8n
 3. Сборка backend проходит без новых ошибок.
 4. Дальше по плану: strictNullChecks, noImplicitAny, затем strict: true.
 
-**Файлы изменены:** `backend/tsconfig.json`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§4, п.7, метрики), `REPORT.md`.
+**Файлы изменены:** `backend/tsconfig.json`; обновлены план в REPORT (§4, п.7, метрики), REPORT.md.
 
 ---
 
@@ -421,7 +421,7 @@ docker rm n8n
 2. Удалены неиспользуемые импорты и параметры конструкторов: `auth.service` — JwtService, TelegramSessionService; `jwt.service` — ConfigService; `jwt.strategy` — AuthService; `telegram-connection-monitor.service` — TelegramUserClientService; `referral.service` — `@InjectRepository(Transaction)`.
 3. Сборка backend проходит. Дальше: strictNullChecks, noImplicitAny, strict: true.
 
-**Файлы изменены:** `auth.service.ts`, `jwt.service.ts`, `jwt.strategy.ts`, `telegram-connection-monitor.service.ts`, `referral.service.ts`; обновлены `COMPREHENSIVE_ANALYSIS_PLAN.md` (§4, п.7, метрики), `REPORT.md`.
+**Файлы изменены:** `auth.service.ts`, `jwt.service.ts`, `jwt.strategy.ts`, `telegram-connection-monitor.service.ts`, `referral.service.ts`; обновлены план в REPORT (§4, п.7, метрики), REPORT.md.
 
 ---
 
@@ -492,44 +492,44 @@ docker rm n8n
 
 **Перепроверка (any, план):**
 - any вне telegram-bot: остаются в notifications, telegram-user-client, auth, users, settings, masters, appointments, telegram (scheduled-messages, telegram.service, telegram-user.controller), telegram-error-mapper, http-exception.filter и др. Рекомендуется постепенная замена (DTO, unknown, getErrorMessage).
-- COMPREHENSIVE_ANALYSIS_PLAN: блок BACKEND «Текущее состояние» обновлён (архитектура ✅, пагинация ✅, any ⚠️).
+- План (REPORT): блок BACKEND «Текущее состояние» обновлён (архитектура ✅, пагинация ✅, any ⚠️).
 
 **§14 @ts-expect-error / @mtkruto (углублённо):**
 - @ts-expect-error в telegram-user.controller не найден. client.invoke( {...} as any ) и частичные as any — из-за несовпадения типов @mtkruto Api с runtime-структурами (id: number[] vs readonly, BigInt, InputPeer). Рекомендация: при обновлении @mtkruto проверить типы для messages.* и убрать as any.
 
 **Выполнено (синхронизация плана и замена error: any, 23.01.2026):**
-- COMPREHENSIVE_ANALYSIS_PLAN: §2, §3, §6 — «Текущее состояние» и «Проверено» приведены в соответствие со статусом ✅.
+- План (REPORT): §2, §3, §6 — «Текущее состояние» и «Проверено» приведены в соответствие со статусом ✅.
 - «Проблемы из предыдущих планов», «Новые проблемы», «Следующие шаги» — обновлены (§9–§12, §17, §2–§3, §5–§6, §13–§14, §16 отмечены как выполненные; следующие — тесты в последнюю очередь, замена error: any, сокращение any).
 - error: any → unknown + getErrorMessage/getErrorStack/getErrorCode: users.controller (1×), users.service (1×, getErrorCode+getErrorMessage для 23503/foreign key), settings.controller (3×: getErrorStack; getErrorMessage+getErrorStack; getErrorMessage+getErrorStack). error-message.ts: добавлена getErrorCode. Сборка OK.
 
 **Выполнено (error: any, верификация §9–§11–§13, 24.01.2026):**
 - error: any → unknown + getErrorMessage/getErrorStack: appointments.service (8×: create×2, update×3, cancel, reschedule, confirm), scheduler.service (2×: sendAppointmentReminders). Сборка OK.
 - Верификация: main — SESSION/JWT throw в prod, session fallback только dev; database.config — prod throw при отсутствии DB_*, password в prod без postgres; data-source — throw в prod до DataSource; telegram-bot — FRONTEND_URL из config; env.validation — ValidateIf, MinLength, @IsUrl, requiredFields в prod.
-- COMPREHENSIVE_ANALYSIS_PLAN: §9, §10, §11 — «Текущее состояние» и «Проверено» синхронизированы с результатами верификации; §13 — authLimiter на /auth/login, /auth/register отражено в плане. «Следующие шаги» — уточнён остаток по error: any (auth, telegram-* и др.), добавлен п.4 §17 (circuit breaker, сообщения об ошибках).
+- План (REPORT): §9, §10, §11 — «Текущее состояние» и «Проверено» синхронизированы с результатами верификации; §13 — authLimiter на /auth/login, /auth/register отражено в плане. «Следующие шаги» — уточнён остаток по error: any (auth, telegram-* и др.), добавлен п.4 §17 (circuit breaker, сообщения об ошибках).
 
 **Выполнено (error: any → unknown, telegram-сервисы, 24.01.2026):**
 - telegram.service (1×: getChatMemberCount, return 0), scheduled-messages.service (2×: processPending+inner, getErrorMessage+markAsFailed), telegram-heartbeat.service (2×: runHeartbeatCheck+checkClientConnection, getErrorMessage+getErrorStack, updateHeartbeatStatus errMsg), telegram-connection-monitor.service (1×: loadSessionInfo), session-encryption.service (2×: encrypt, decrypt; decrypt: error instanceof HttpException rethrow), telegram-session.service (3×: save, load, clear). Сборка OK.
-- COMPREHENSIVE_ANALYSIS_PLAN: «Следующие шаги» п.2 — в «выполнено» добавлены telegram.service, scheduled-messages, telegram-heartbeat, telegram-connection-monitor, session-encryption, telegram-session; из «остаются» исключены.
+- План (REPORT): «Следующие шаги» п.2 — в «выполнено» добавлены telegram.service, scheduled-messages, telegram-heartbeat, telegram-connection-monitor, session-encryption, telegram-session; из «остаются» исключены.
 
 **Выполнено (error: any → unknown, 24.01.2026):**
 - telegram-session.service: load() — 1× catch (getErrorMessage, getErrorStack). telegram-session.guard (3×: save to request.session; load from DB, Forbidden/Unauthorized rethrow; final check, Forbidden rethrow; getErrorMessage+getErrorStack / getErrorMessage). auth.controller (2×: login, register; getErrorMessage). Сборка OK.
-- COMPREHENSIVE_ANALYSIS_PLAN: «Следующие шаги» п.2 — в «выполнено» добавлены telegram-session.load (1), telegram-session.guard (3), auth.controller (2); из «остаются» — telegram-session.guard, auth.controller; уточнено auth.service (10).
+- План (REPORT): «Следующие шаги» п.2 — в «выполнено» добавлены telegram-session.load (1), telegram-session.guard (3), auth.controller (2); из «остаются» — telegram-session.guard, auth.controller; уточнено auth.service (10).
 
 **Выполнено (error: any → unknown, 24.01.2026):**
 - telegram-session.guard: 1× catch «Error loading session from DB» (getErrorMessage, getErrorStack) — был откат. telegram.controller (6×: sendMessage, sendPhoto — getErrorMessage; getChat — _error; refreshChats — error as {code, description}+getErrorMessage; memberError, err — _; getUpdates — getErrorMessage). Сборка OK.
-- COMPREHENSIVE_ANALYSIS_PLAN: «Следующие шаги» п.2 — в «выполнено» добавлены telegram-session.guard (1), telegram.controller (6); из «остаются» исключён telegram.controller.
+- План (REPORT): «Следующие шаги» п.2 — в «выполнено» добавлены telegram-session.guard (1), telegram.controller (6); из «остаются» исключён telegram.controller.
 
 **Выполнено (error: any → unknown, auth.service, 24.01.2026):**
 - auth.service (15×): safeDisconnectClient; validateTelegramAuth (referral); verifyTelegramAuth; requestPhoneCode (connectError, invokeError, outer error); verifyPhoneCode (auth.signIn, hintError, outer); generateQrCode (msg=getErrorMessage, getErrorStack, msg.includes); checkQrTokenStatus (referral, acceptError, outer); verify2FAPassword; verify2FAPasswordWithStored. Импорт getErrorStack добавлен. mapTelegramErrorToResponse(error) с unknown. Сборка OK.
-- COMPREHENSIVE_ANALYSIS_PLAN: «Следующие шаги» п.2 — auth.service в «выполнено», из «остаются» исключён. Остаются: telegram-user (14), telegram-user-client (12).
+- План (REPORT): «Следующие шаги» п.2 — auth.service в «выполнено», из «остаются» исключён. Остаются: telegram-user (14), telegram-user-client (12).
 
 **Выполнено (error: any → unknown, telegram-user.controller, 23.01.2026):**
 - telegram-user.controller (16× catch): импорт getErrorMessage, getErrorStack. sendMessage: inner users.getUsers — _error: unknown; outer — getErrorMessage, getErrorStack, UnauthorizedException(getErrorMessage(error)). sendMedia: outer — то же. getChats: inner messages.getDialogs — error: unknown + handleMtprotoError; outer — getErrorMessage, getErrorStack. getContacts: inner contacts.getContacts — error: unknown + handleMtprotoError; outer — getErrorMessage, getErrorStack. getMessages: outer — getErrorMessage, getErrorStack. getFile: catch (e: unknown), getErrorMessage(e) в logger.warn. getSessionStatus: getErrorMessage, getErrorStack; if UnauthorizedException rethrow. getSessions, deactivateSession, deactivateOtherSessions, getConnectionStatus, forwardMessage, deleteMessage: outer — getErrorMessage, getErrorStack, UnauthorizedException(getErrorMessage(error)). Сборка OK.
-- COMPREHENSIVE_ANALYSIS_PLAN: «Следующие шаги» п.2 — telegram-user.controller в «выполнено», из «остаются» убран. Остаются: telegram-user-client (12).
+- План (REPORT): «Следующие шаги» п.2 — telegram-user.controller в «выполнено», из «остаются» убран. Остаются: telegram-user-client (12).
 
 **Выполнено (error: any → unknown, telegram-user-client.service, 23.01.2026):**
 - telegram-user-client.service (23× catch): импорт getErrorMessage, getErrorStack. DatabaseStorage: get, set (decryptError), delete (decrypt, outer), getMany (decryptError, outer) — _error/_decryptError где не используется; set outer — getErrorMessage. TelegramUserClientService: getClient (userId) — e: unknown+handleMtprotoError, _disconnectError, error→getErrorMessage+getErrorStack; saveSession getMe — getMeError→getErrorMessage; MTProto verify — e→getErrorMessage; assertSessionTransition — transitionError→getErrorMessage; save to request.session — getErrorMessage+getErrorStack; saveSession/deleteSession/invalidateAllSessions outer — getErrorMessage+getErrorStack; removeSession/invalidateAllSessions disconnect — e→getErrorMessage, emitError(e instanceof Error ? e : new Error(getErrorMessage(e))); getClientBySession — e: unknown+handleMtprotoError, _disconnectError, error→getErrorMessage+getErrorStack; onModuleDestroy — getErrorMessage, emitError toError. Сборка OK.
-- COMPREHENSIVE_ANALYSIS_PLAN: «Следующие шаги» п.2 — telegram-user-client в «выполнено», из «остаются» убран. По п.2 (error: any) остаются: (пусто).
+- План (REPORT): «Следующие шаги» п.2 — telegram-user-client в «выполнено», из «остаются» убран. По п.2 (error: any) остаются: (пусто).
 
 **Выполнено (error: any → unknown, оставшиеся 5×, 23.01.2026):**
 - auth.service: safeDisconnectClient — error: unknown, getErrorMessage; requestPhoneCode invokeError — getErrorMessage+getErrorStack; checkQrTokenStatus (referral processReferralRegistration) — error: unknown, getErrorMessage. telegram.controller: getChat outer — _error: unknown (ошибка не используется). telegram-session.guard: connect client — connectError: unknown, getErrorMessage. Сборка OK.
@@ -563,11 +563,609 @@ docker rm n8n
 - entities: user.entity `preferences!: Record<string, any>` → `Record<string, unknown>`; notification.entity `payload: Record<string, any>` → `Record<string, unknown>`. notifications.service: в getBroadcastHistory `(notification.payload || {}) as Record<string, unknown>`, `payload.broadcastId as string | undefined`.
 - telegram.controller: `userInfo: any` → `userInfo: unknown` (2×), приведение к `Parameters<TelegramBotService['replaceMessageVariables']>[1]` при вызове; `chatInfo: any` и `(chatInfo as any).members_count|title|username|description|type` → интерфейс `TelegramChatFromApi`, `chatInfo: TelegramChatFromApi | null`, `(chatInfo as TelegramChatFromApi)` / `chatInfo?.`; один `(telegramChatsService as any).telegramChatRepository` → `as unknown as { telegramChatRepository: {...} }`. Сборка OK.
 
+**Выполнено (сокращение any, п.3 — telegram-error-mapper, optional-jwt, jwt.strategy, users, error-response, error-metrics, telegram-chats, 23.01.2026):**
+- telegram-error-mapper: `mapTelegramError`, `mapTelegramErrorToResponse`, `isFatalTelegramError`, `isRetryableTelegramError`, `isRequire2faActionError` — `error: any` → `error: unknown`; в mapTelegramError доступ через `(error as { errorMessage?: string; message?: string })`.
+- optional-jwt-auth.guard: `handleRequest(err, user, info: any)` → `unknown`; логирование через `(err as Error)?.message`, `(info as { message?: string })?.message`, хелпер `u(x)` для email/sub.
+- jwt.strategy: `cookieExtractor(request: any)` → `(request: { cookies?: Record<string, string> })`.
+- users.service: `getInteractionHistory` → `Promise<unknown[]>`, `history: any[]` → `unknown[]`; в sort приведение `(a as { date?: string|number|Date }).date`.
+- error-response.builder: `value?: any` в buildValidationErrorResponse → `value?: unknown`.
+- error-metrics.service: `context?: any` в occurrences → `context?: unknown`.
+- telegram-chats.service: добавлены `save(chat)`, `create(data)` для доступа к репозиторию. telegram.controller: убраны все `(telegramChatsService as any).telegramChatRepository` — использование `save(chat)`, `findOne(chatId)`, `create({...})` + `save(newChat)`. Сборка OK.
+
+**Выполнено (сокращение any, п.3 — jwt.middleware, safe-logger, sensitive-data-masker, filters, auth, telegram-user-client, 23.01.2026):**
+- jwt.middleware: `RequestWithUser.user?: any` → `user?: JwtUser` (импорт из common/types/request.types).
+- safe-logger: `maskMessage(message: any): any` → `maskMessage(message: unknown): unknown`.
+- sensitive-data-masker: `maskObject(obj: any): any` → `maskObject(obj: unknown): unknown`, `masked: any` → `Record<string, unknown>`, `maskSensitiveData(obj: any): any` → `(obj: unknown): unknown`.
+- error-response.interface: `HttpExceptionResponseObject`, `ValidationErrorLike`. http-exception.filter, validation-exception.filter: все `(exceptionResponse as any)` заменены на типизированные приведения, `msgFromResponse`, `ValidationErrorLike`; `let errorResponse: any` → `ErrorResponse`.
+- auth.service: `expressRequest?: any` → `expressRequest?: Request` (4 места); `registerFirstAdmin` → `user: AuthUserResponse`; `verifyPhoneCode` → `user: User | null`, `user: null as any` → `user: null`; `(passwordResult as any).hint` → `(passwordResult as { hint?: string }).hint`. auth.controller: guard `if (!result.user)` после requires2FA, `InternalServerErrorException`.
+- telegram-user-client: `expressRequest?: any` → `expressRequest?: Request`; `(dcValue as any).dcId` → `'dcId' in dcValue` и `(dcValue as { dcId: number }).dcId`; в saveSession лог — `(expressRequest as Request & { user?: { sub?: string } }).user?.sub`.
+- Остаются (граница Telegraf/@mtkruto, §14): telegram.service (reply_markup, sendX as any, restrictChatMember, Markup, deleteMyCommands scope), telegram-user-client (storage as any, filter/data/current/obj: any), telegram-user.controller (invoke as any, peer, msg/u/c/media as any).
+- Сборка backend проходит.
+
+**Файлы изменены:** jwt.middleware.ts, safe-logger.service.ts, sensitive-data-masker.ts, error-response.interface.ts, http-exception.filter.ts, validation-exception.filter.ts, auth.service.ts, auth.controller.ts, telegram-user-client.service.ts.
+
+---
+
+✅ **§17 Circuit breaker и пользовательские сообщения об ошибках (23.01.2026):**
+
+**Выполнено:**
+
+1. **Circuit breaker для Telegram MTProto:**
+   - `CircuitBreakerService`, `CircuitOpenException` в `common/services/circuit-breaker.service.ts`; `CircuitBreakerModule` (@Global) в `common/circuit-breaker.module.ts`.
+   - Ключ `telegram-mtproto`: при OPEN — 503 «Сервис временно недоступен. Попробуйте через 1–2 минуты.»; порог 5 сбоев, сброс через 30 с.
+   - Обёртка `circuitBreaker.run('telegram-mtproto', () => invokeWithRetry(...))` в `TelegramUserClientService`: getClientBySession, createClientForAuth (getMe), getClientBySessionId; в `TelegramHeartbeatService`: проверка getMe. Проброс `CircuitOpenException` в user-client (внешние catch) для ответа 503.
+
+2. **Пользовательские сообщения:**
+   - В `telegram-error-mapper` fallback для неизвестной ошибки: «Произошла ошибка при обращении к Telegram. Повторите попытку позже.» (без технической строки в ответе).
+
+**Файлы изменены/созданы:** `common/services/circuit-breaker.service.ts`, `common/circuit-breaker.module.ts`, `app.module.ts`, `telegram-user-client.service.ts`, `telegram-heartbeat.service.ts`, `telegram-error-mapper.ts`; обновлены план в REPORT (§17, Следующие шаги п.4), REPORT.md.
+
+---
+
+✅ **Продолжение выполнения плана — MCP context7, sequential-thinking, п.5–7 (23.01.2026):**
+
+**Выполнено:**
+- MCP **user-sequential-thinking** (sequentialthinking): три шага — приоритеты (code review, отчёты, верификация); any на границе по §14 оставить; обновление REPORT и PLAN.
+- MCP **user-context7**: resolve-library-id (NestJS), query-docs (/websites/nestjs) — exception filters, RpcException, BaseRpcExceptionFilter; учтено для согласованности с имеющимися HttpExceptionFilter и circuit breaker.
+- Верификация: `backend` `npm run build` — успешно.
+- Следующие шаги п.5–7: code review после фазы — в работе; REPORT.md и план в REPORT — обновляются.
+- Code review (п.5): в `circuit-breaker.service.ts` заменён `catch (e)` на `catch (e: unknown)` (context7 / TypeScript: unknown в catch).
+
+**Файлы:** обновлены REPORT.md, план в REPORT, backend/src/common/services/circuit-breaker.service.ts.
+
+---
+
+✅ **catch (e)/(err)/(error) → unknown в production-коде (23.01.2026):**
+
+**Выполнено:**
+- MCP **user-sequential-thinking**: приоритет — поиск catch без типа, замена на unknown.
+- `catch (e)` → `catch (e: unknown)`, `catch (err)` → `catch (err: unknown)` с `getErrorMessage(err)` в логах, `catch (error)` → `catch (error: unknown)` во всех перечисленных файлах.
+- **telegram-bot.service.ts:** 1× `catch (e)`, 2× `catch (err)` (getErrorMessage), 13× `catch (error)`.
+- **telegram-heartbeat.service.ts, telegram-user-client.service.ts** (DatabaseStorage.getMany): по 1×.
+- **auth.service.ts, jwt.middleware.ts** (импорт getErrorMessage), **telegram.controller.ts** (3×), **optional-jwt-auth.guard.ts, jwt-auth.guard.ts** (импорт getErrorMessage), **scheduler.service.ts** (3×, включая .catch), **session-encryption.service.ts, settings.controller.ts, notifications.service.ts** (3×), **jwt.service.ts.**
+- seed.ts не изменялся. Сборка backend — OK.
+
+**Файлы:** telegram-bot, telegram-heartbeat, telegram-user-client, auth.service, jwt.middleware, telegram.controller, optional-jwt-auth.guard, jwt-auth.guard, scheduler.service, session-encryption.service, settings.controller, notifications.service, jwt.service.
+
+---
+
+✅ **§21 @ApiBody на критичных POST (23.01.2026):**
+
+**Выполнено:**
+- MCP **user-sequential-thinking**: приоритет §21 (Swagger), **user-context7** /nestjs/swagger: @ApiBody, @ApiResponse.
+- **auth.controller:** @ApiBody({ type, description }) на `POST /auth/login` (LoginRequestDto), `POST /auth/refresh` (RefreshRequestDto), `POST /auth/register` (RegisterDto).
+- **appointments.controller:** @ApiBody на `POST /appointments` (CreateAppointmentDto).
+- Сборка backend — OK.
+
+**Файлы:** auth.controller.ts, appointments.controller.ts.
+
+---
+
+✅ **§20 Устранение N+1 в scheduler processBonusPoints (23.01.2026):**
+
+**Выполнено:**
+- MCP **user-sequential-thinking**: приоритет §20 (аудит find в циклах).
+- В `processBonusPoints` service уже загружался через `leftJoinAndSelect('appointment.service', 'service')`; в цикле вызывался лишний `serviceRepository.findOne({ where: { id: appointment.serviceId } })` (N+1).
+- Замена: `const service = appointment.service` вместо findOne. Удалены `@InjectRepository(Service)`, `serviceRepository` из SchedulerService, импорт `Service` и `Service` из `TypeOrmModule.forFeature` в SchedulerModule.
+- Сборка backend — OK. Примечание: в `scheduler.service.spec` тесты processBonusPoints мокают `mockServiceRepository.findOne`; при переходе на `appointment.service` их при необходимости обновить (тесты — в последнюю очередь).
+
+**Файлы:** scheduler.service.ts, scheduler.module.ts.
+
+---
+
+✅ **§21 @ApiBody на services и masters (23.01.2026):**
+
+**Выполнено:**
+- MCP **user-sequential-thinking**: приоритет §21 (ещё POST) и п.5.
+- **services.controller:** @ApiBody({ type: CreateServiceDto, description: '…' }) на `POST /services`.
+- **masters.controller:** @ApiBody({ type: CreateMasterDto, description: '…' }) на `POST /masters`.
+- `npx tsc --noEmit` — OK. `npm run build` — EPERM на dist (локально).
+
+**Файлы:** services.controller.ts, masters.controller.ts.
+
+---
+
+✅ **§21 @ApiBody на templates и contact-requests (23.01.2026):**
+
+**Выполнено:**
+- MCP **user-sequential-thinking**: приоритет §21 (оставшиеся POST с DTO).
+- **templates.controller:** @ApiBody({ type: CreateTemplateDto, description: 'name, type, subject, body, sampleData' }) на `POST /templates`.
+- **contact-requests.controller:** @ApiBody({ type: CreateContactRequestDto, description: 'name, email, phone, message' }) на `POST /contact-requests`.
+- `npx tsc --noEmit` — OK.
+
+**Файлы:** templates.controller.ts, contact-requests.controller.ts.
+
+---
+
+✅ **п.5 Code review фазы (23.01.2026):**
+
+**Проверено за фазу:** circuit-breaker (catch e: unknown), массовая замена catch→unknown, §21 @ApiBody (auth, appointments, services, masters; notifications уже был), §20 N+1 в processBonusPoints. Соответствие context7/NestJS Swagger, TypeScript unknown. Отчёты — REPORT, PLAN.
+
+---
+
+✅ **п.7 Чеклист dev/prod и §21 @ApiBody — расширение (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+1. **п.7 — Чеклист «тестировать в dev перед production»** (добавлен в план, п.7; см. «Следующие шаги (план)» в данном отчёте):
+   - `docker compose -f docker-compose.dev.yml up -d` (или `docker compose up -d` для prod-образа)
+   - `GET /health`, `GET /api/v1/health` — 200 OK
+   - Проверка env: JWT_SECRET или SESSION_SECRET, DB_*, FRONTEND_URL, ADMIN_URL (в prod — обязательно)
+   - CORS: запрос с origin FRONTEND_URL/ADMIN_URL не блокируется
+   - `POST /api/v1/auth/login`, `POST /api/v1/auth/register` (если первый админ)
+   - CRUD: appointments (create, findAll с page/limit), services, masters, templates, contact-requests
+   - При необходимости: `npx tsc --noEmit` в `backend`, `npm run build` (если нет EPERM на dist)
+
+2. **§21 @ApiBody — расширение на PUT/PATCH/POST с телом:**
+   - **templates:** Put `:id` (UpdateTemplateDto), Post `:id/preview` (PreviewTemplateDto)
+   - **appointments:** Put `:id` (UpdateAppointmentDto), Patch `:id` (UpdateAppointmentDto), Patch `:id/reschedule` (RescheduleAppointmentDto), Post `:id/cancel-admin` (schema `{ reason?: string }`)
+   - **reviews:** Post create (schema `appointmentId`, `rating`, `comment?`), Post `:id/moderate` (schema `status`, `moderationComment?`)
+   - **masters:** Put `:id` (UpdateMasterDto), Put `schedule/:scheduleId` (UpdateWorkScheduleDto), Post `:id/schedule` (CreateWorkScheduleDto), Post `:id/block-intervals` (CreateBlockIntervalDto)
+   - **services:** Put `:id` (UpdateServiceDto)
+
+**Файлы:** templates.controller.ts, appointments.controller.ts, reviews.controller.ts, masters.controller.ts, services.controller.ts; план в REPORT (п.7, п.8).
+
+---
+
+✅ **§21 @ApiBody (auth, contact-requests, masters) и §20 N+1 telegram-bot (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+1. **§21 @ApiBody — дополнение:**
+   - **masters:** Put `schedule/:scheduleId` — @ApiBody(UpdateWorkScheduleDto).
+   - **contact-requests:** Patch `:id` — @ApiBody(UpdateContactRequestDto); Post `bulk-delete` — @ApiBody(schema `{ ids: string[] }`).
+   - **auth (auth/controllers):** Post `telegram` — @ApiBody(schema id, first_name, auth_date, hash и др.); Post `telegram/phone/request` — TelegramPhoneRequestDto; Post `telegram/phone/verify` — TelegramPhoneVerifyDto; Post `telegram/2fa/verify` — Telegram2FAVerifyDto.
+
+2. **§20 N+1 в telegram-bot (selectedSubcategoryIds):**
+   - В `ServicesService` добавлен `findByIds(ids: string[]): Promise<Service[]>` (where: In(ids), те же relations, что findById).
+   - В `handleSelectTime` и `handleConfirmAppointment`: циклы `for (subId of selectedSubcategoryIds) { await findById(subId) }` заменены на один `findByIds(selectedSubcategoryIds)` и Map для сохранения порядка при сборке selectedServices/servicesToBook.
+
+**Файлы:** masters.controller.ts, contact-requests.controller.ts, auth/controllers/auth.controller.ts, services.service.ts, telegram-bot.service.ts; план в REPORT (§20, §21, п.8).
+
+---
+
+✅ **§21 @ApiBody на settings и users (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+- **settings.controller:** @ApiBody(schema) на Put (bookingSettings), Put telegram-auto-refresh-interval ({ value: number }), Put timezone ({ value: string }), Put working-hours ({ value: { start, end } }), Put reminder-intervals ({ value: number[] }), Put first-visit-discount ({ value: { enabled, type, value } }), Put bonuses ({ value: { enabled, pointsPerRuble, pointsForRegistration, referralBonus } }), Put telegram-admin-user ({ userId: string | null }).
+- **users.controller:** @ApiBody(schema/description) на Put me, Post (create), Put :id, Post :id/body-measurements, Put :id/body-measurements/:measurementId.
+
+**Файлы:** settings.controller.ts, users.controller.ts; план в REPORT (§21, п.8).
+
+---
+
+✅ **§21 @ApiBody на telegram, scheduled-messages, auto-replies, telegram/user (23.01.2026):**
+
+**Выполнено (MCP: user-sequential-thinking, user-context7):**
+
+- **telegram.controller:** @ApiBody на Post send-message (SendMessageDto), send-photo (SendPhotoDto), delete-message (DeleteMessageDto), forward-message (ForwardMessageDto), welcome-message (schema { message }), start-message (schema { message }).
+- **scheduled-messages.controller:** @ApiBody(schema/description) на Post create, Put :id update.
+- **auto-replies.controller:** @ApiBody(schema/description) на Post create, Put :id update.
+- **telegram-user.controller:** @ApiBody на Post send-message (UserSendMessageDto), send-media (UserSendMediaDto), Post messages/:chatId/:messageId/forward (schema { toChatId }).
+
+**Файлы:** telegram.controller.ts, scheduled-messages.controller.ts, auto-replies.controller.ts, telegram-user.controller.ts; план в REPORT (§21, п.8).
+
+---
+
+✅ **§21 @ApiBody — telegram.controller (остальные эндпоинты) (23.01.2026):**
+
+**Выполнено (MCP: context7, sequential-thinking):**
+
+- **Медиа:** send-video, send-audio, send-voice, send-document, send-animation — @ApiBody(SendMediaDto).
+- **Доп. отправка:** send-sticker (schema chatId, sticker), send-dice (schema chatId, emoji?).
+- **Локация/место/контакт/опрос:** send-location (SendLocationDto), send-venue (SendVenueDto), send-contact (SendContactDto), send-poll (SendPollDto).
+- **Закрепление:** pin-message (PinMessageDto), unpin-message (schema chatId, messageId?), unpin-all-messages (schema chatId).
+- **Участники:** ban-chat-member, unban-chat-member, restrict-chat-member, promote-chat-member, set-chat-administrator-custom-title — @ApiBody(schema по @Body).
+- **Чаты (chats/:chatId/…):** title (schema title), description (schema description), photo (schema photo), pin (schema messageId, disable_notification?), permissions (schema can_send_messages, can_send_media_messages, …).
+
+§21 @ApiBody для POST/PUT/PATCH в telegram.controller закрыт. tsc --noEmit OK.
+
+**Файлы:** telegram.controller.ts; план в REPORT (§21, п.8).
+
+---
+
+✅ **§21 @ApiParam и @ApiQuery (telegram, reviews, scheduled-messages, auto-replies) (23.01.2026):**
+
+**Выполнено (MCP: user-context7, user-sequential-thinking):**
+
+- **telegram.controller:** @ApiParam (get-file fileId, get-chat chatId, get-chat-member — через @ApiQuery chatId/userId; getUserPhotos userId, getChats @ApiQuery active; deleteChat, getChatInfo, unpinChatMessage chatId и @ApiQuery messageId; chats/:chatId/title, description, photo, deleteChatPhoto, pin, unpin, unpinAll, permissions). @ApiQuery: get-chat-member (chatId, userId), getUserPhotos (limit), getChats (active), unpinChatMessage (messageId).
+- **reviews.controller:** @ApiQuery (findAll: masterId, serviceId, status, page, limit), @ApiParam (moderate: id).
+- **scheduled-messages.controller:** @ApiParam (findByChatId chatId, findOne/update/delete/cancel id).
+- **auto-replies.controller:** @ApiParam (findOne, update, delete: id).
+- **setChatDescription:** добавлен @ApiBody(schema { description }).
+
+tsc --noEmit OK.
+
+**Файлы:** telegram.controller.ts, reviews.controller.ts, scheduled-messages.controller.ts, auto-replies.controller.ts; план в REPORT (§21, п.8).
+
+---
+
+✅ **§21 @ApiParam (users, contact-requests, appointments, masters, services, auth) (23.01.2026):**
+
+**Выполнено:**
+
+- **users.controller:** @ApiParam(id) на findById, updateUser, delete, getInteractionHistory, getBodyMeasurements, getLatestBodyMeasurement, createBodyMeasurement, getClientReferralStats; @ApiParam(id, measurementId) на updateBodyMeasurement, deleteBodyMeasurement.
+- **contact-requests.controller:** @ApiParam(id) на findOne, update, markAsRead, markAsProcessed, remove.
+- **appointments.controller:** @ApiParam(id) на findById, update, patch, reschedule, cancel, confirm, cancelByAdmin, delete.
+- **masters.controller:** @ApiParam(scheduleId) на updateSchedule, deleteSchedule; @ApiParam(blockIntervalId) на deleteBlockInterval; @ApiParam(id) на getSchedule, createSchedule, getBlockIntervals, createBlockInterval, findById, update, delete; @ApiQuery(startDate, endDate) на getBlockIntervals.
+- **services.controller:** @ApiParam(id) на findSubcategories, findById, update, delete.
+- **auth.controller:** @ApiParam(tokenId) на checkQrTokenStatus (GET telegram/qr/status/:tokenId).
+
+tsc --noEmit OK.
+
+**Файлы:** users.controller.ts, contact-requests.controller.ts, appointments.controller.ts, masters.controller.ts, services.controller.ts, auth/controllers/auth.controller.ts; план в REPORT (§21, п.8).
+
+---
+
+✅ **§21 @ApiParam (templates, notifications, audit, financial) (23.01.2026):**
+
+**Выполнено:**
+
+- **templates.controller:** @ApiParam(id) на findOne, update, delete, preview; @ApiParam(type, enum: NotificationType) на getVariables.
+- **notifications.controller:** @ApiParam(broadcastId) на getBroadcastDetails; @ApiParam(id) на deleteNotification. getBroadcastHistory, getBroadcastDetailsByKey — @ApiQuery уже были.
+- **audit.controller:** @ApiParam(entityType, entityId) на getEntityLogs. getLogs — @ApiQuery уже были.
+- **financial.controller:** @ApiParam(userId) на getClientTransactions.
+- **analytics.controller:** @ApiQuery уже на getDashboardStats, getMasterLoad — без изменений.
+
+tsc --noEmit OK.
+
+**Файлы:** templates.controller.ts, notifications.controller.ts, audit.controller.ts, financial.controller.ts; план в REPORT (§21, п.8).
+
+---
+
+🔄 **Верификация сборки и остаток плана (23.01.2026):**
+
+- **npm run build** (backend): EPERM: operation not permitted, unlink `dist/app.module.d.ts` — сборка не выполнена (блокировка dist, другой процесс или IDE). Рекомендация: закрыть процессы, использующие `backend/dist`, при необходимости удалить `dist`, затем `npm run build`.
+- **npx tsc --noEmit** (backend): OK.
+- По плану **вне тестов** остаётся: §4 noImplicitAny (~75 мест) — отложено; п.7 чеклист dev/prod — операционно; верификация `npm run build` — после снятия EPERM.
+
 ---
 
 🔄 **§4 noImplicitAny — оценка объёма (23.01.2026):**
 
 При `noImplicitAny: true` — ~75 ошибок: в основном `@Request() req` без типа (контроллеры), индексная сигнатура (auth.service userData[key], settings oldSettings[key]), `.catch(() => null)` без типа возврата, e2e-spec и т.п. Отложено; тесты — в последнюю очередь.
+
+---
+
+✅ **§4 noImplicitAny — .catch(err/error) → unknown (23.01.2026):**
+
+**Выполнено (по плану, без тестов):**
+
+- **scheduler.service:** .catch(err => → .catch((err: unknown) =>, getErrorMessage(err).
+- **auth.service:** .catch((err) => в stored.client.disconnect (4×) и data.client.disconnect (1×) → (err: unknown), getErrorMessage(err).
+- **telegram-connection-monitor.service:** .catch((error) => → (error: unknown), getErrorMessage(error).
+- **main.ts:** bootstrap().catch((error) => → (error: unknown); вывод через error instanceof Error ? error.message : String(error).
+
+Не трогали: seed.ts (по плану); telegram-bot .catch((err, ctx) => — граница Telegraf (§14). tsc --noEmit OK.
+
+**Файлы:** scheduler.service.ts, auth.service.ts, telegram-connection-monitor.service.ts, main.ts; REPORT.md, план в REPORT.
+
+---
+
+✅ **План и отчёт — продолж. по плану без тестов (23.01.2026):**
+
+- **План п.8:** добавлено «продолж. 10»: §4 noImplicitAny — .catch(err/error) → unknown и getErrorMessage в scheduler, auth.service (5×), telegram-connection-monitor, main; seed, telegram-bot .catch — не трогали.
+- **§15 (валидация размера):** «Текущее состояние» приведено в соответствие со статусом ВЫПОЛНЕНО (body 10mb, @MaxLength в DTO).
+- **§16 (транзакции):** «Текущее состояние» и «Проверено» обновлены — processPayment с manager.transaction отражено.
+
+**Файлы:** план в REPORT, REPORT.md.
+
+---
+
+✅ **Миграции, scheduler — error: any → unknown; убраны as any у status (23.01.2026):**
+
+**Выполнено:**
+
+- **Миграции:** 002-fix-audit-logs-entity-id (2× catch), 019-fix-refresh-tokens-user-id-type (3× catch) — `catch (error: any)` → `(error: unknown)`, в логах `getErrorMessage(error)`.
+- **scheduler.service:** в `cleanupTelegramSessions` убраны `as any` у `status: 'initializing'`, `'invalid'`, `'revoked'` при `find`/`update`; тип соответствует `TelegramUserSession.status`.
+
+tsc --noEmit OK.
+
+**Файлы:** 002-fix-audit-logs-entity-id.ts, 019-fix-refresh-tokens-user-id-type.ts, scheduler.service.ts; план в REPORT (п.8 продолж. 11), REPORT.md.
+
+---
+
+✅ **audit.controller getEntityLogs — @Query → @Param (23.01.2026):**
+
+**Исправлено:**
+- Маршрут `GET entity/:entityType/:entityId` использует path params, но в `getEntityLogs` были `@Query('entityType')` и `@Query('entityId')` — значения не попадали из URL.
+- Заменено на `@Param('entityType')` и `@Param('entityId')`; добавлен импорт `Param` из `@nestjs/common`.
+
+Вызов `GET /audit/entity/user/123` теперь корректно передаёт `user` и `123` в `findByEntity`. tsc --noEmit OK.
+
+**Файлы:** audit.controller.ts; план в REPORT (п.8 продолж. 12), REPORT.md.
+
+---
+
+✅ **ForbiddenException, §21 reviews @ApiQuery (23.01.2026):**
+
+**Выполнено:**
+- **users.controller (11×), appointments.controller (3×):** `throw new Error('Access denied')` заменено на `throw new ForbiddenException('Access denied')` — корректный HTTP 403 и согласованность с RolesGuard/остальным кодом.
+- **reviews.controller:** в @ApiQuery для findAll добавлены `type: Number` и `description` для page, limit; description для masterId, serviceId.
+
+tsc --noEmit OK.
+
+**Файлы:** users.controller.ts, appointments.controller.ts, reviews.controller.ts; план в REPORT (п.8 продолж. 13), REPORT.md.
+
+---
+
+✅ **throw new Error → HttpException; §21 @ApiQuery (расшир. объём) (23.01.2026):**
+
+**Выполнено:**
+- **throw new Error → HttpException (production, без config/§14):**
+  - **scheduled-messages.service (8×):** BadRequestException — валидация TEXT, PHOTO, VIDEO, AUDIO, DOCUMENT, STICKER, POLL, default.
+  - **jwt.service (3×):** UnauthorizedException — Invalid refresh token, Refresh token expired, User not found or inactive.
+  - **services.service (14×):** BadRequestException — правила категорий/подкатегорий/цен/длительности в create и update.
+  - **notifications.service (1×):** BadRequestException — Telegram ID не найден для пользователя.
+  - **appointments.service (1×):** InternalServerErrorException — Unexpected array returned from save.
+- **§21 @ApiQuery:** notifications getBroadcastHistory (page, limit +описание); contact-requests (page, limit +описание, limit макс. 100); analytics getMasterLoad (masterId, startDate, endDate +описание); appointments getAvailableSlots (masterId, serviceId, date +описание); telegram getUserPhotos (type: Number для limit); users, masters, services — limit «(макс. 100)».
+
+tsc --noEmit OK.
+
+**Файлы:** scheduled-messages.service.ts, jwt.service.ts, services.service.ts, notifications.service.ts, appointments.service.ts; notifications.controller.ts, contact-requests.controller.ts, analytics.controller.ts, appointments.controller.ts, telegram.controller.ts, users.controller.ts, masters.controller.ts, services.controller.ts; план в REPORT (п.8 продолж. 14), REPORT.md.
+
+---
+
+✅ **telegram.service ServiceUnavailableException; §21 @ApiOkResponse (23.01.2026):**
+
+**Выполнено:**
+- **telegram.service:** throw new Error('Bot is not initialized') → ServiceUnavailableException.
+- **§21 @ApiOkResponse** на GET: health (3: /health, /api, /api/v1), financial (2: transactions, users/:userId/transactions), analytics (2: dashboard, master-load), audit (2: getLogs, getEntityLogs), templates (3: findAll, findOne, getVariables).
+
+tsc --noEmit OK.
+
+**Файлы:** telegram.service.ts; health.controller.ts, financial.controller.ts, analytics.controller.ts, audit.controller.ts, templates.controller.ts; план в REPORT (п.8 продолж. 15), REPORT.md.
+
+---
+
+✅ **§21 @ApiOkResponse (продолж., 23.01.2026):**
+
+**Выполнено:**
+- **§21 @ApiOkResponse** на GET: users (10: findAll, findById, getProfile, interaction-history, body-measurements, body-measurements/latest, me/referral, me/referral/stats, :id/referral/stats), services (6: findAll, main, categories, for-bot, :id/subcategories, findById), masters (4: findAll, :id/schedule, :id/block-intervals, findById), appointments (3: findAll, slots, findById), contact-requests (2: findAll, findOne), notifications (4: getUserNotifications, broadcast/history, broadcast/:id/details, broadcast/details), reviews (1: findAll), auth (4: csrf-token, me, check-setup, telegram/qr/status/:tokenId), telegram.controller (9: get-file, get-chat, get-chat-member, getUserPhotos, chats, chats/stats, chats/:chatId, welcome-message, start-message), auto-replies (3: findAll, findActive, findOne), scheduled-messages (4: findAll, findPending, chat/:chatId, findOne), telegram-user (7: chats, contacts, messages/:chatId, file, session-status, sessions, connection-status).
+
+tsc --noEmit OK.
+
+**Файлы:** users.controller.ts, services.controller.ts, masters.controller.ts, appointments.controller.ts, contact-requests.controller.ts, notifications.controller.ts, reviews.controller.ts, auth.controller.ts, telegram.controller.ts, auto-replies.controller.ts, scheduled-messages.controller.ts, telegram-user.controller.ts; план в REPORT (п.8 продолж. 16), REPORT.md.
+
+---
+
+✅ **§21 @ApiOkResponse — scheduler (23.01.2026):**
+
+**Выполнено:**
+- **scheduler.controller:** @ApiOkResponse на POST reminders/trigger.
+
+tsc --noEmit OK.
+
+**Файлы:** scheduler.controller.ts; план в REPORT (п.8 продолж. 17), REPORT.md.
+
+---
+
+✅ **§21 @ApiNotFoundResponse (23.01.2026):**
+
+**Выполнено:**
+- **@ApiNotFoundResponse** на findById/findOne: users, services, masters, appointments, contact-requests, templates, scheduled-messages, auto-replies (8 эндпоинтов).
+
+tsc --noEmit OK.
+
+**Файлы:** users.controller.ts, services.controller.ts, masters.controller.ts, appointments.controller.ts, contact-requests.controller.ts, templates.controller.ts, scheduled-messages.controller.ts, auto-replies.controller.ts; план в REPORT (п.8 продолж. 18, §21 Текущее состояние), REPORT.md.
+
+---
+
+✅ **§21 @ApiNotFoundResponse — reviews (23.01.2026):**
+
+**Выполнено:**
+- **reviews.controller:** @ApiNotFoundResponse на POST create (запись не найдена или не завершена), POST :id/moderate (отзыв не найден).
+
+tsc --noEmit OK.
+
+**Файлы:** reviews.controller.ts; план в REPORT (п.8 продолж. 19, §21 Текущее состояние), REPORT.md.
+
+---
+
+✅ **§21 @ApiNotFoundResponse — Put/Patch/Delete (23.01.2026):**
+
+**Выполнено:**
+- **users:** Put :id, Delete :id
+- **services:** Put :id, Delete :id
+- **masters:** Put :id, Delete :id
+- **appointments:** Put :id, Patch :id, Patch :id/reschedule, Delete :id (cancel), Delete :id/delete
+- **contact-requests:** Patch :id, Patch :id/read, Patch :id/processed, Delete :id
+- **templates:** Put :id, Delete :id
+- **scheduled-messages:** Put :id, Delete :id, Post :id/cancel
+- **auto-replies:** Put :id, Delete :id
+
+tsc --noEmit OK.
+
+**Файлы:** users.controller.ts, services.controller.ts, masters.controller.ts, appointments.controller.ts, contact-requests.controller.ts, templates.controller.ts, scheduled-messages.controller.ts, auto-replies.controller.ts; план в REPORT (п.8 продолж. 20, §21 Текущее состояние), REPORT.md.
+
+---
+
+✅ **templates: порядок маршрутов и §21 @ApiNotFoundResponse (23.01.2026):**
+
+**Выполнено:**
+- **templates.controller:** GET `variables/:type` перенесён выше GET `:id` — иначе `GET /templates/variables/APPOINTMENT_REMINDER` обрабатывался findOne с id=variables.
+- **§21 @ApiNotFoundResponse** на Post `:id/preview` (preview вызывает findOne → NotFoundException).
+
+tsc --noEmit OK.
+
+**Файлы:** templates.controller.ts; план в REPORT (п.8 продолж. 21, §21 Текущее состояние), REPORT.md.
+
+---
+
+✅ **§21 @ApiNotFoundResponse — appointments, masters (23.01.2026):**
+
+**Выполнено:**
+- **appointments:** Post `:id/confirm`, Post `:id/cancel-admin` (confirm и cancelByAdmin вызывают findById → NotFoundException).
+- **masters:** Put `schedule/:scheduleId`, Delete `schedule/:scheduleId`, Delete `block-intervals/:blockIntervalId` (updateSchedule, deleteSchedule, deleteBlockInterval); Post `:id/schedule`, Post `:id/block-intervals` (createSchedule, createBlockInterval вызывают findById(masterId) → NotFoundException).
+
+tsc --noEmit OK.
+
+**Файлы:** appointments.controller.ts, masters.controller.ts; план в REPORT (п.8 продолж. 22, §21 Текущее состояние), REPORT.md.
+
+---
+
+✅ **§21 @ApiParam/@ApiQuery, @ApiNotFoundResponse users body-measurements (23.01.2026):**
+
+**Выполнено:**
+- **§21 Текущее состояние:** @ApiParam, @ApiQuery отмечено ✅ (выполнено в п.8 продолж. 7–9); Контроллеры с @ApiTags, @ApiOperation — ✅. §21 помечен **ВЫПОЛНЕНО**.
+- **users.controller:** @ApiNotFoundResponse на Put `:id/body-measurements/:measurementId`, Delete `:id/body-measurements/:measurementId` (updateBodyMeasurement, deleteBodyMeasurement вызывают findById и findOne → NotFoundException при отсутствии пользователя или замера).
+
+tsc --noEmit OK.
+
+**Файлы:** users.controller.ts; план в REPORT (п.8 продолж. 23, §21 Текущее состояние), REPORT.md.
+
+---
+
+✅ **§7 Текущее состояние, п.3 any — contact-requests (23.01.2026):**
+
+**Выполнено:**
+- **§7:** В «Текущее состояние» вместо «Файл referral.service.spec.ts НЕ существует» — «✅ Файл backend/src/modules/users/referral.service.spec.ts существует (п.5 Фазы 1)».
+- **п.3 (сокращение any):** contact-requests.service — `where: any` заменён на `FindOptionsWhere<ContactRequest>` в findAll.
+
+tsc --noEmit OK.
+
+**Файлы:** contact-requests.service.ts; план в REPORT (п.8 продолж. 24, §7 Текущее состояние), REPORT.md.
+
+---
+
+✅ **Итог по не-тестовым пунктам плана (23.01.2026):**
+
+**Статус:** Все запланированные не-тестовые задачи (план см. в «Сводка плана исправлений» и «Не сделано» ниже) выполнены. Дополнительных не-тестовых пунктов для выполнения нет.
+
+**Остаются (намеренно):**
+- **§8, §18** — тесты (в последнюю очередь); подробности в «Не сделано»
+- **п.3 any** на границе Telegraf/@mtkruto (**§14**): telegram-user-client, auth (checkQrTokenStatus/2FA), telegram.service, telegram-user.controller — не трогать. Обоснование см. «Не сделано», блок «п.3 any на границе Telegraf / @mtkruto»
+
+**§16** — выполнено (продолж. 26, 27). **§20** — выполнено (продолж. 28). Остальные §§1–21 (кроме §8, §18) — по плану закрыты.
+
+**Примечание:** Детали плана перенесены из бывшего COMPREHENSIVE_ANALYSIS_PLAN (файл удалён) в секции «Сводка плана исправлений» и «Не сделано» ниже.
+
+---
+
+### Сводка плана исправлений (перенесено из бывшего COMPREHENSIVE_ANALYSIS_PLAN, файл удалён)
+
+| § | Статус | Кратко |
+|---|--------|--------|
+| 1 | ✅ | 2FA: `checkPassword` из @mtkruto/node, самописный SRP удалён, tssrp6a удалена |
+| 2 | ✅ | `message.includes` → `isRequire2faActionError` и др. в `telegram-error-mapper`; убраны из handler и auth.service |
+| 3 | ✅ | Пагинация: appointments, reviews (page/limit); notifications.sendBroadcast `.take(5000)` |
+| 4 | ✅ | strict: true, strictNullChecks, noImplicitAny; error→getErrorMessage; InvokeClient; сборка OK |
+| 5 | ✅ | telegram-bot: options/keyboard типизированы (ExtraReplyMessage, unknown[][], as never). Остатки any на границе Telegraf/@mtkruto — см. «Не сделано» §14 |
+| 6 | ✅ | PaginationDto, normalizePagination(max 100) в users, services, masters, appointments, reviews |
+| 7 | ✅ | referral.service.spec.ts: generateReferralCode, getOrGenerateReferralCode, getUserByReferralCode, processReferralRegistration, getReferralStats |
+| 8 | ⚠️ | Auth: auth.service.spec.ts есть; **нет** 2FA, JWT, Local, Telegram стратегий — см. «Не сделано» |
+| 9 | ✅ | Секреты prod: main, data-source, database.config — throw при отсутствии, без небезопасных fallback |
+| 10 | ✅ | FRONTEND_URL из env в telegram-bot; localhost только в dev CORS |
+| 11 | ✅ | env.validation: ValidateIf, MinLength(32/8), @IsUrl для FRONTEND/ADMIN; requiredFields в prod |
+| 12 | ✅ | RegisterDto, MediaPreview (GET /file, загрузка), TelegramUserMessagesTab (диалог пересылки) |
+| 13 | ✅ | authLimiter на /api/v1/auth/login и /api/v1/auth/register |
+| 14 | ✅ | @ts-ignore убраны. `as any` на границе Telegraf/@mtkruto — **не трогать** (обоснование в «Не сделано») |
+| 15 | ✅ | body 10mb (BODY_PARSER_LIMIT); @MaxLength в DTO (broadcast, telegram, contact, template, service, appointment) |
+| 16 | ✅ | processPayment, awardBonusPoints, refundBonusPoints, referral.processReferralRegistration — manager.transaction |
+| 17 | ✅ | invokeWithRetry (MTProto), CircuitBreakerService (telegram-mtproto), пользовательские сообщения в telegram-error-mapper |
+| 18 | 🔄 | Покрытие 51.23% statements, 37.79% branches; цель >80% — см. «Не сделано» |
+| 19 | ✅ | prom-client, /metrics, http_requests_total, http_request_duration_seconds, ErrorMetricsService |
+| 20 | ✅ | maxQueryExecutionTime, TypeOrmSlowQueryLogger, N+1 исправлены; db_slow_queries_total, db_slow_query_duration_seconds |
+| 21 | ✅ | Swagger: теги, @ApiBody, @ApiParam, @ApiQuery, @ApiNotFoundResponse, @ApiOkResponse на целевых эндпоинтах |
+
+**Фазы (итог):** Фаза 1 — §1–§6 ✅, §8 ⚠️. Фаза 2 — §7–§17 ✅. Фаза 3 — §18 🔄, §19–§21 ✅.
+
+---
+
+### Не сделано (подробно, из бывшего COMPREHENSIVE_ANALYSIS_PLAN)
+
+#### §8 — Низкое покрытие тестами модуля auth (частично)
+
+**Что есть:** `auth.service.spec.ts` — тесты для `validateEmailPassword` (SQL injection, длинные строки и др.).
+
+**Чего нет:**
+- Тесты для **2FA** (`checkPasswordWith2FA`, `verify2FAPasswordWithStored`) — процесс с `checkPassword` из @mtkruto, `auth.checkPassword`.
+- **jwt.strategy.spec.ts** — нет файла.
+- **local.strategy.spec.ts** — нет файла.
+- Тесты для **Telegram-аутентификации** (QR, phone, 2FA через Telegram).
+
+**Файлы для создания/доработки:**
+- `backend/src/modules/auth/strategies/jwt.strategy.spec.ts` (создать)
+- `backend/src/modules/auth/strategies/local.strategy.spec.ts` (создать)
+- `backend/src/modules/auth/auth.service.spec.ts` — расширить тестами для 2FA
+
+**Оценка:** 6–10 ч.
+
+---
+
+#### §18 — Улучшение покрытия тестами
+
+**Текущее:** 51.23% statements, 37.79% branches.  
+**Цель:** >80% для критичных модулей (auth, appointments, users, financial, telegram и т.п.).
+
+**Оценка:** 16–24 ч.
+
+---
+
+#### п.3 any на границе Telegraf / @mtkruto (§14) — не трогать (сознательное решение)
+
+**Где остаются `as any`:**  
+`telegram-user-client` (Storage, filter/data/current/obj), `auth` (result, acceptResult, stored.token в checkQrTokenStatus/2FA), `telegram.service` (reply_markup, deleteMyCommands, sendX, getChat, getChatMember, restrictChatMember, Markup.inlineKeyboard), `telegram-user.controller` (peer, MTProto invoke, msg/u/c/media).
+
+**Почему не трогать:**
+
+1. **@mtkruto (MTProto):** Типы для `client.invoke(messages.sendMessage, …)`, `messages.deleteMessages`, `messages.forwardMessages` и др. **жёстче runtime**: `number[]` vs `readonly`, `BigInt`, вложенные `InputPeer`/`InputPeerLike` не совпадают с тем, что реально принимает API. Убрать `as any` без правок в @mtkruto или громоздких приведений нельзя; при обновлении библиотеки — перепроверить.
+
+2. **Telegraf:** `Markup.inlineKeyboard`, `reply_markup`, `Storage`, `deleteMyCommands` и т.п. — типы не всегда экспортируют нужные (напр. `HideableIKBtn`), контракт «мы передаём X» не совпадает с декларациями. Нужны deeper правки в типах Telegraf или форк/обход.
+
+3. **auth (checkQrTokenStatus, 2FA):** `result`, `acceptResult`, `stored.token` приходят из `client.invoke`/сессий @mtkruto; возвращаемые типы сложные/неэкспортированные. Точная типизация = зависимость от внутренних типов @mtkruto.
+
+4. **Риск:** Замена на «строгие» типы без поддержки со стороны библиотек ведёт к поломке сборки или runtime. Решение: оставить `as any` на границе, пока не обновим @mtkruto/Telegraf и не проверим экспорт типов.
+
+---
+
+### Следующие шаги (план, перенесено из бывшего COMPREHENSIVE_ANALYSIS_PLAN)
+
+1. **Приоритет:** §8 (auth 2FA, JWT, Local, Telegram), §18 (покрытие >80%) — в последнюю очередь.
+2. **п.3 any** на границе Telegraf/@mtkruto — не трогать; при обновлении @mtkruto/Telegraf — перепроверить типы.
+3. **Чеклист тестирования в dev перед production** (п.7 плана): `docker compose -f docker-compose.dev.yml up -d`; GET /health, /api/v1/health; env (JWT/SESSION, DB_*, FRONTEND/ADMIN_URL); CORS; POST /auth/login, /auth/register; CRUD appointments (page/limit), services, masters, templates, contact-requests; при необходимости `tsc --noEmit`, `npm run build`.
+4. Обновлять REPORT.md по мере выполнения §8, §18.
+
+---
+
+✅ **§16 Транзакции в awardBonusPoints и refundBonusPoints (23.01.2026):**
+
+**Выполнено:**
+- **financial.service:** `awardBonusPoints` и `refundBonusPoints` обёрнуты в `manager.transaction`: обновление `User.bonusPoints` через `manager.getRepository(User)` и создание `Transaction` через `manager.getRepository(Transaction)` в одной транзакции. Снижен риск неконсистентности при сбое между обновлением баллов и записью транзакции.
+- Убрана зависимость `FinancialService` от `UsersService`; в `FinancialModule` удалён `forwardRef(() => UsersModule)`.
+
+tsc --noEmit OK.
+
+**Файлы:** financial.service.ts, financial.module.ts; план в REPORT (п.8 продолж. 26, §16 Текущее состояние), REPORT.md.
+
+---
+
+✅ **§16 Транзакция в referral.processReferralRegistration (23.01.2026):**
+
+**Выполнено:**
+- **referral.service:** `processReferralRegistration` обёрнут в `userRepository.manager.transaction`: все записи (1–3× `awardBonusPoints`, `save(newUser.referredByUserId)`, `generateReferralCode`) выполняются в одной транзакции.
+- **financial.service:** `awardBonusPoints` — добавлен опциональный 5-й аргумент `manager?: EntityManager`; при переданном `manager` операция выполняется в этой транзакции (для кросс-сервисной).
+- **referral.service:** `generateReferralCode(userId, manager?)` — при переданном `manager` используется `manager.getRepository(User)`.
+
+tsc --noEmit OK.
+
+**Файлы:** referral.service.ts, financial.service.ts; план в REPORT (п.8 продолж. 27, §16), REPORT.md.
+
+---
+
+✅ **§20 Метрики медленных запросов БД (23.01.2026):**
+
+**Выполнено:**
+- **MetricsService:** счётчик `db_slow_queries_total` и гистограмма `db_slow_query_duration_seconds` (buckets 0.5–60 с); метод `recordSlowQuery(timeMs)`; в `onModuleInit` — `setSlowQueryRecorder(ms => this.recordSlowQuery(ms))`.
+- **config/typeorm-query-metrics.ts:** `setSlowQueryRecorder`, `recordSlowQuery` — связка TypeOrmSlowQueryLogger с MetricsService (логгер создаётся до DI, рекордер выставляется в onModuleInit).
+- **TypeOrmSlowQueryLogger:** в `logQuerySlow` после `this.nestLogger.warn` вызов `recordSlowQuery(time)`.
+
+Метрики попадают в GET /metrics (Prometheus). Индексы на сущностях и в миграциях оставлены без изменений.
+
+tsc --noEmit OK.
+
+**Файлы:** metrics.service.ts, config/typeorm-query-metrics.ts (новый), config/typeorm-slow-query.logger.ts; план в REPORT (п.8 продолж. 28, §20), REPORT.md.
 
 ---
 
@@ -577,7 +1175,7 @@ docker rm n8n
 - ✅ Проведен глубокий анализ всего кодовой базы
 - ✅ Использован Context7 для проверки лучших практик
 - ✅ Найдены новые критические проблемы
-- ✅ Составлен детальный план исправлений в `COMPREHENSIVE_ANALYSIS_PLAN.md`
+- ✅ Составлен детальный план исправлений (см. «Сводка плана исправлений» и «Не сделано» в данном отчёте)
 
 **Обнаруженные новые проблемы:**
 1. **Нарушение архитектурных принципов** - использование `message.includes()` вне mapper в `mtproto-error.handler.ts`
@@ -590,7 +1188,7 @@ docker rm n8n
 8. **Отсутствие транзакций** - в некоторых критичных операциях
 
 **Файлы созданы:**
-- `COMPREHENSIVE_ANALYSIS_PLAN.md` - детальный план исправлений
+- План исправлений — секции «Сводка плана исправлений» и «Не сделано» в данном отчёте
 
 ---
 

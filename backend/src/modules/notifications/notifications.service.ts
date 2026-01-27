@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification, NotificationType, NotificationChannel, NotificationStatus } from '../../entities/notification.entity';
@@ -172,7 +172,7 @@ export class NotificationsService {
             reply_markup: options?.replyMarkup,
           });
         } else {
-          throw new Error('Telegram ID не найден для пользователя');
+          throw new BadRequestException('Telegram ID не найден для пользователя');
         }
       } else if (channel === NotificationChannel.SMS) {
         // Заглушка для SMS
@@ -184,7 +184,7 @@ export class NotificationsService {
 
       saved.status = NotificationStatus.SENT;
       saved.sentAt = new Date();
-    } catch (error) {
+    } catch (error: unknown) {
       saved.status = NotificationStatus.FAILED;
       saved.error = getErrorMessage(error);
     }
@@ -342,14 +342,14 @@ export class NotificationsService {
             saved.error = 'Канал недоступен для пользователя';
             results.failed++;
           }
-        } catch (error) {
+        } catch (error: unknown) {
           saved.status = NotificationStatus.FAILED;
           saved.error = getErrorMessage(error);
           results.failed++;
         }
 
         await this.notificationRepository.save(saved);
-      } catch (error) {
+      } catch (error: unknown) {
         results.failed++;
       }
     }

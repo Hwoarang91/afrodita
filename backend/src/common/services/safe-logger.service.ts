@@ -16,7 +16,7 @@ export class SafeLoggerService implements NestLoggerService {
   /**
    * Маскирует чувствительные данные в сообщении перед логированием
    */
-  private maskMessage(message: any): any {
+  private maskMessage(message: unknown): unknown {
     if (typeof message === 'string') {
       return SensitiveDataMasker.maskLogString(message);
     }

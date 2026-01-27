@@ -171,7 +171,7 @@ export class SessionEncryptionService {
     try {
       const result = this.decrypt(encryptedData);
       return result === '{}' ? null : result;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.debug(`decryptSafe: returning null due to error`);
       return null;
     }

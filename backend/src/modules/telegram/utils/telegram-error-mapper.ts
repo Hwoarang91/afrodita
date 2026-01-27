@@ -37,8 +37,9 @@ export interface TelegramErrorMapping {
  * @param error - Telegram ошибка (может быть Error, string, или объект с message)
  * @returns ErrorResponse с правильным errorCode и message
  */
-export function mapTelegramError(error: any): TelegramErrorMapping {
-  const message = error?.errorMessage || error?.message || String(error || '').trim();
+export function mapTelegramError(error: unknown): TelegramErrorMapping {
+  const e = error as { errorMessage?: string; message?: string } | null | undefined;
+  const message = e?.errorMessage || e?.message || String(error ?? '').trim();
   const upperMessage = message.toUpperCase();
   
   // ============================================================================
@@ -309,14 +310,13 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
   }
 
   // ============================================================================
-  // 🟢 FALLBACK - неизвестная ошибка
+  // 🟢 FALLBACK - неизвестная ошибка (§17: пользовательское сообщение без технических деталей)
   // ============================================================================
   
-  // Логируем неизвестную ошибку для анализа
   return {
     statusCode: 500,
     errorCode: ErrorCode.INTERNAL_SERVER_ERROR,
-    message: `Неизвестная ошибка Telegram: ${message}`,
+    message: 'Произошла ошибка при обращении к Telegram. Повторите попытку позже.',
   };
 }
 
@@ -327,7 +327,7 @@ export function mapTelegramError(error: any): TelegramErrorMapping {
  * @param error - Telegram ошибка
  * @returns Стандартизированный ErrorResponse
  */
-export function mapTelegramErrorToResponse(error: any) {
+export function mapTelegramErrorToResponse(error: unknown) {
   const mapping = mapTelegramError(error);
   return buildErrorResponse(
     mapping.statusCode,
@@ -344,7 +344,7 @@ export function mapTelegramErrorToResponse(error: any) {
  * @param error - Telegram ошибка
  * @returns true если ошибка фатальная
  */
-export function isFatalTelegramError(error: any): boolean {
+export function isFatalTelegramError(error: unknown): boolean {
   const mapping = mapTelegramError(error);
   return mapping.errorCode === ErrorCode.SESSION_INVALID;
 }
@@ -355,7 +355,7 @@ export function isFatalTelegramError(error: any): boolean {
  * @param error - Telegram ошибка
  * @returns true если ошибка retryable
  */
-export function isRetryableTelegramError(error: any): boolean {
+export function isRetryableTelegramError(error: unknown): boolean {
   const mapping = mapTelegramError(error);
   return [
     ErrorCode.FLOOD_WAIT,
@@ -374,7 +374,7 @@ export function isRetryableTelegramError(error: any): boolean {
  * @param error - Telegram ошибка
  * @returns true если нужен REQUIRE_2FA
  */
-export function isRequire2faActionError(error: any): boolean {
+export function isRequire2faActionError(error: unknown): boolean {
   const mapping = mapTelegramError(error);
   return [
     ErrorCode.INVALID_2FA_PASSWORD,

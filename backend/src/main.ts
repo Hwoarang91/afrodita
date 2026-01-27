@@ -322,9 +322,9 @@ async function bootstrap() {
   }
 }
 
-bootstrap().catch((error) => {
+bootstrap().catch((error: unknown) => {
   const logger = new Logger('Bootstrap');
-  logger.error('Критическая ошибка при запуске приложения:', error);
+  logger.error('Критическая ошибка при запуске приложения:', error instanceof Error ? error.message : String(error));
   process.exit(1);
 });
 

@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  InternalServerErrorException,
   Inject,
   forwardRef,
   Logger,
@@ -140,7 +141,7 @@ export class AppointmentsService {
 
     const savedAppointment = await this.appointmentRepository.save(appointment);
     if (Array.isArray(savedAppointment)) {
-      throw new Error('Unexpected array returned from save');
+      throw new InternalServerErrorException('Unexpected array returned from save');
     }
 
     // Отправка уведомления только если запись подтверждена

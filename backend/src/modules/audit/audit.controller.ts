@@ -1,5 +1,5 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiParam, ApiOkResponse } from '@nestjs/swagger';
 import { AuditService } from './audit.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -17,6 +17,7 @@ export class AuditController {
 
   @Get('logs')
   @ApiOperation({ summary: 'Получение логов действий админов (только для админов)' })
+  @ApiOkResponse({ description: 'Список логов с пагинацией' })
   @ApiQuery({ name: 'userId', required: false, description: 'Фильтр по пользователю' })
   @ApiQuery({ name: 'action', required: false, enum: AuditAction, description: 'Фильтр по действию' })
   @ApiQuery({ name: 'entityType', required: false, description: 'Фильтр по типу сущности' })
@@ -50,9 +51,12 @@ export class AuditController {
 
   @Get('entity/:entityType/:entityId')
   @ApiOperation({ summary: 'Получение логов для конкретной сущности (только для админов)' })
+  @ApiOkResponse({ description: 'Список логов сущности' })
+  @ApiParam({ name: 'entityType', description: 'Тип сущности' })
+  @ApiParam({ name: 'entityId', description: 'ID сущности' })
   async getEntityLogs(
-    @Query('entityType') entityType: string,
-    @Query('entityId') entityId: string,
+    @Param('entityType') entityType: string,
+    @Param('entityId') entityId: string,
   ) {
     return await this.auditService.findByEntity(entityType, entityId);
   }

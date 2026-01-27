@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Inject, Optional, fo
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
+import { CircuitBreakerService } from '../../../common/services/circuit-breaker.service';
 import { TelegramUserClientService } from './telegram-user-client.service';
 import { TelegramConnectionMonitorService } from './telegram-connection-monitor.service';
 import { Client } from '@mtkruto/node';
@@ -29,6 +30,7 @@ export class TelegramHeartbeatService implements OnModuleInit, OnModuleDestroy {
     private readonly telegramUserClientService: TelegramUserClientService,
     private readonly configService: ConfigService,
     private readonly schedulerRegistry: SchedulerRegistry,
+    private readonly circuitBreaker: CircuitBreakerService,
     @Optional() @Inject(forwardRef(() => TelegramConnectionMonitorService))
     private readonly connectionMonitorService?: TelegramConnectionMonitorService,
   ) {
@@ -121,7 +123,7 @@ export class TelegramHeartbeatService implements OnModuleInit, OnModuleDestroy {
         clearInterval(interval);
         this.schedulerRegistry.deleteInterval('telegram-heartbeat');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Интервал может не существовать - это нормально
     }
     this.logger.log('TelegramHeartbeatService stopped');
@@ -201,10 +203,12 @@ export class TelegramHeartbeatService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Выполняем легковесный запрос для проверки соединения (с retry при FLOOD_WAIT)
-      const checkPromise = invokeWithRetry(client as InvokeClient, {
-        _: 'users.getFullUser',
-        id: { _: 'inputUserSelf' },
-      });
+      const checkPromise = this.circuitBreaker.run('telegram-mtproto', () =>
+        invokeWithRetry(client as InvokeClient, {
+          _: 'users.getFullUser',
+          id: { _: 'inputUserSelf' },
+        }),
+      );
 
       // Оборачиваем в Promise.race для таймаута
       const timeoutPromise = new Promise<never>((_, reject) => {

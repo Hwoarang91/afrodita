@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, Inject, forwardRef, Optional } from '@nestjs/common';
+import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,6 +15,7 @@ import { handleMtprotoError, MtprotoErrorAction } from '../utils/mtproto-error.h
 import { invokeWithRetry, type InvokeClient } from '../utils/mtproto-retry.utils';
 import { assertSessionTransition } from '../utils/session-state-machine';
 import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
+import { CircuitBreakerService, CircuitOpenException } from '../../../common/services/circuit-breaker.service';
 
 /**
  * Кастомный Storage адаптер для MTKruto, который сохраняет сессии в БД с шифрованием
@@ -321,7 +323,7 @@ class DatabaseStorage implements Partial<Storage> {
       for (let i = 0; i < Math.min(limit, sorted.length); i++) {
         yield sorted[i];
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Возвращаем пустой генератор при ошибке
       return;
     }
@@ -341,6 +343,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
     private userRepository: Repository<User>,
     private encryptionService: SessionEncryptionService,
     private telegramSessionService: TelegramSessionService,
+    private circuitBreaker: CircuitBreakerService,
     @Optional() @Inject(forwardRef(() => TelegramHeartbeatService))
     private heartbeatService?: TelegramHeartbeatService,
     @Optional() @Inject(forwardRef(() => TelegramClientEventEmitter))
@@ -506,9 +509,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
       try {
         this.logger.debug(`Validating session ${session.id} with getMe()...`);
         const startTime = Date.now();
-        await invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
-          onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser'),
-        });
+        await this.circuitBreaker.run('telegram-mtproto', () =>
+          invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
+            onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser'),
+          }),
+        );
         const duration = Date.now() - startTime;
         this.logger.log(`✅ Session ${session.id} validated successfully`);
         // Эмитим событие успешного invoke (Task 2.1)
@@ -563,6 +568,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
 
       return client;
     } catch (error: unknown) {
+      if (error instanceof CircuitOpenException) throw error;
       this.logger.error(`Error getting client for user ${userId}: ${getErrorMessage(error)}`, getErrorStack(error));
       return null;
     }
@@ -638,7 +644,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
     phoneNumber: string,
     ipAddress?: string,
     userAgent?: string,
-    expressRequest?: any, // Express request для сохранения сессии в request.session
+    expressRequest?: Request, // Express request для сохранения сессии в request.session
   ): Promise<void> {
     try {
       this.logger.log(`Starting saveSession for user ${userId}, sessionId: ${sessionId}, phone: ${phoneNumber}`);
@@ -694,14 +700,17 @@ export class TelegramUserClientService implements OnModuleDestroy {
       this.logger.debug(`Performing getMe() check for session ${sessionId} to ensure auth_key is final`);
       try {
         const startTime = Date.now();
-        await invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
-          onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, userId, 'users.getFullUser'),
-        });
+        await this.circuitBreaker.run('telegram-mtproto', () =>
+          invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
+            onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, userId, 'users.getFullUser'),
+          }),
+        );
         const duration = Date.now() - startTime;
         this.logger.log(`✅ getMe() successful - auth_key is valid and registered for session ${sessionId}`);
         // Эмитим событие успешного invoke (Task 2.1)
         this.eventEmitter?.emitInvoke(sessionId, 'users.getFullUser', userId, duration);
       } catch (getMeError: unknown) {
+        if (getMeError instanceof CircuitOpenException) throw getMeError;
         const msg = getErrorMessage(getMeError);
         this.logger.error(`❌ getMe() failed for session ${sessionId}: ${msg}`);
         // Эмитим событие ошибки (Task 2.1)
@@ -725,8 +734,8 @@ export class TelegramUserClientService implements OnModuleDestroy {
         
         // Получаем DC ID из сессии
         const dcValue = await client.storage.get(['dc']);
-        if (dcValue && typeof dcValue === 'object' && 'dcId' in (dcValue as any)) {
-          dcId = (dcValue as any).dcId;
+        if (dcValue && typeof dcValue === 'object' && 'dcId' in dcValue) {
+          dcId = (dcValue as { dcId: number }).dcId;
         }
         
         this.logger.debug(`MTProto state check: hasAuthKey=${hasAuthKey}, dcId=${dcId}`);
@@ -861,7 +870,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
         // КРИТИЧНО: При авторизации Telegram (2FA/phone/QR) всегда используем userId из параметра
         // Это гарантирует, что сессия сохраняется для правильного пользователя (найденного/созданного по телефону)
         // JWT userId может быть админом, который авторизует Telegram для другого пользователя
-        this.logger.log(`[saveSession] Saving session to request.session: userId=${userId}, sessionId=${sessionId}, phoneNumber=${phoneNumber}, JWT userId=${expressRequest.user?.sub || 'N/A'}`);
+        this.logger.log(`[saveSession] Saving session to request.session: userId=${userId}, sessionId=${sessionId}, phoneNumber=${phoneNumber}, JWT userId=${(expressRequest as Request & { user?: { sub?: string } }).user?.sub || 'N/A'}`);
         try {
           this.telegramSessionService.save(expressRequest, {
             userId: userId, // КРИТИЧНО: Используем userId из параметра (пользователь по телефону), не из JWT
@@ -1166,9 +1175,11 @@ export class TelegramUserClientService implements OnModuleDestroy {
       try {
         this.logger.debug(`Validating session ${sessionId} with getMe()...`);
         const startTime = Date.now();
-        await invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
-          onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser'),
-        });
+        await this.circuitBreaker.run('telegram-mtproto', () =>
+          invokeWithRetry(client as InvokeClient, { _: 'users.getFullUser', id: { _: 'inputUserSelf' } }, {
+            onRetry: (waitTime) => this.eventEmitter?.emitFloodWait(sessionId, waitTime, session.userId, 'users.getFullUser'),
+          }),
+        );
         const duration = Date.now() - startTime;
         this.logger.log(`✅ Session ${sessionId} validated successfully`);
         // Эмитим событие успешного invoke (Task 2.1)
@@ -1203,6 +1214,7 @@ export class TelegramUserClientService implements OnModuleDestroy {
       }
       return client;
     } catch (error: unknown) {
+      if (error instanceof CircuitOpenException) throw error;
       this.logger.error(`Error getting client for session ${sessionId}: ${getErrorMessage(error)}`, getErrorStack(error));
       return null;
     }

@@ -193,7 +193,7 @@ export class UsersService {
     }
   }
 
-  async getInteractionHistory(userId: string): Promise<any[]> {
+  async getInteractionHistory(userId: string): Promise<unknown[]> {
     // Получаем все записи
     const appointments = await this.appointmentRepository.find({
       where: { clientId: userId },
@@ -215,7 +215,7 @@ export class UsersService {
     });
 
     // Объединяем все события в единый массив
-    const history: any[] = [];
+    const history: unknown[] = [];
 
     // Добавляем записи
     appointments.forEach((apt) => {
@@ -334,7 +334,7 @@ export class UsersService {
     });
 
     // Сортируем по дате (от новых к старым)
-    history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    history.sort((a, b) => new Date((b as { date?: string | number | Date }).date ?? 0).getTime() - new Date((a as { date?: string | number | Date }).date ?? 0).getTime());
 
     return history;
   }

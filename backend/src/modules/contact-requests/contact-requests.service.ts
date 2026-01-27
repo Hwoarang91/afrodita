@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, FindOptionsWhere } from 'typeorm';
 import { ContactRequest } from '../../entities/contact-request.entity';
 import { CreateContactRequestDto } from './dto/create-contact-request.dto';
 import { UpdateContactRequestDto } from './dto/update-contact-request.dto';
@@ -22,7 +22,7 @@ export class ContactRequestsService {
     limit: number = 20,
     status?: 'new' | 'processed',
   ): Promise<{ data: ContactRequest[]; total: number }> {
-    const where: any = {};
+    const where: FindOptionsWhere<ContactRequest> = {};
     if (status === 'new') {
       where.isRead = false;
     } else if (status === 'processed') {

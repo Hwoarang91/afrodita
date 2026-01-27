@@ -10,9 +10,10 @@ import {
   Query,
   UseGuards,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AuthRequest } from '../../common/types/request.types';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiBody, ApiParam, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
 import { AppointmentsService } from './appointments.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -34,12 +35,14 @@ export class AppointmentsController {
 
   @Post()
   @ApiOperation({ summary: 'Создание новой записи' })
+  @ApiBody({ type: CreateAppointmentDto, description: 'Данные для создания записи: мастер, услуга, дата/время, клиент' })
   async create(@Body() dto: CreateAppointmentDto, @Request() req: AuthRequest) {
     return await this.appointmentsService.create(dto, req.user!.sub!);
   }
 
   @Get()
   @ApiOperation({ summary: 'Получение списка записей (с пагинацией)' })
+  @ApiOkResponse({ description: 'Список записей с пагинацией' })
   @ApiQuery({ name: 'status', required: false, enum: AppointmentStatus })
   @ApiQuery({ name: 'date', required: false, description: 'Фильтр по дате (YYYY-MM-DD)' })
   @ApiQuery({ name: 'startDate', required: false, description: 'Начало диапазона дат (YYYY-MM-DD)' })
@@ -65,9 +68,10 @@ export class AppointmentsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Получение доступных слотов' })
-  @ApiQuery({ name: 'masterId', required: true })
-  @ApiQuery({ name: 'serviceId', required: true })
-  @ApiQuery({ name: 'date', required: true })
+  @ApiOkResponse({ description: 'Массив слотов (ISO-строки)' })
+  @ApiQuery({ name: 'masterId', required: true, description: 'ID мастера' })
+  @ApiQuery({ name: 'serviceId', required: true, description: 'ID услуги' })
+  @ApiQuery({ name: 'date', required: true, description: 'Дата (YYYY-MM-DD)' })
   async getAvailableSlots(
     @Query('masterId') masterId: string,
     @Query('serviceId') serviceId: string,
@@ -84,6 +88,9 @@ export class AppointmentsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Получение записи по ID' })
+  @ApiOkResponse({ description: 'Запись' })
+  @ApiNotFoundResponse({ description: 'Запись не найдена' })
+  @ApiParam({ name: 'id', description: 'ID записи' })
   async findById(@Param('id') id: string, @Request() req: AuthRequest) {
     // Для админов не проверяем userId
     const userId = req?.user?.role === 'admin' ? undefined : req?.user?.sub;
@@ -92,6 +99,9 @@ export class AppointmentsController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Обновление записи' })
+  @ApiParam({ name: 'id', description: 'ID записи' })
+  @ApiBody({ type: UpdateAppointmentDto, description: 'Частичное или полное обновление записи' })
+  @ApiNotFoundResponse({ description: 'Запись не найдена' })
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateAppointmentDto,
@@ -104,6 +114,8 @@ export class AppointmentsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Частичное обновление записи (например, статуса)' })
+  @ApiParam({ name: 'id', description: 'ID записи' })
+  @ApiBody({ type: UpdateAppointmentDto, description: 'Поля для частичного обновления' })
   async patch(
     @Param('id') id: string,
     @Body() dto: UpdateAppointmentDto,
@@ -116,6 +128,9 @@ export class AppointmentsController {
 
   @Patch(':id/reschedule')
   @ApiOperation({ summary: 'Перенос записи на другое время' })
+  @ApiParam({ name: 'id', description: 'ID записи' })
+  @ApiBody({ type: RescheduleAppointmentDto, description: 'startTime (ISO), reason (опционально)' })
+  @ApiNotFoundResponse({ description: 'Запись не найдена' })
   async reschedule(
     @Param('id') id: string,
     @Body() dto: RescheduleAppointmentDto,
@@ -131,6 +146,7 @@ export class AppointmentsController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Отмена записи' })
+  @ApiParam({ name: 'id', description: 'ID записи' })
   async cancel(
     @Param('id') id: string,
     @Body('reason') reason: string,
@@ -141,10 +157,12 @@ export class AppointmentsController {
 
   @Post(':id/confirm')
   @ApiOperation({ summary: 'Подтверждение записи (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID записи' })
+  @ApiNotFoundResponse({ description: 'Запись не найдена' })
   async confirm(@Param('id') id: string, @Request() req: AuthRequest) {
     // Только админы могут подтверждать записи
     if (req?.user?.role !== 'admin') {
-      throw new Error('Access denied');
+      throw new ForbiddenException('Access denied');
     }
     const appointment = await this.appointmentsService.confirm(id);
     
@@ -162,6 +180,9 @@ export class AppointmentsController {
 
   @Post(':id/cancel-admin')
   @ApiOperation({ summary: 'Отмена записи админом с причиной (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID записи' })
+  @ApiBody({ schema: { type: 'object', properties: { reason: { type: 'string' } } } })
+  @ApiNotFoundResponse({ description: 'Запись не найдена' })
   async cancelByAdmin(
     @Param('id') id: string,
     @Body() body: { reason?: string },
@@ -169,7 +190,7 @@ export class AppointmentsController {
   ) {
     // Только админы могут отменять записи
     if (req?.user?.role !== 'admin') {
-      throw new Error('Access denied');
+      throw new ForbiddenException('Access denied');
     }
     const appointment = await this.appointmentsService.cancelByAdmin(id, body.reason);
     
@@ -188,10 +209,12 @@ export class AppointmentsController {
 
   @Delete(':id/delete')
   @ApiOperation({ summary: 'Удаление записи (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID записи' })
+  @ApiNotFoundResponse({ description: 'Запись не найдена' })
   async delete(@Param('id') id: string, @Request() req: AuthRequest) {
     // Только админы могут удалять записи
     if (req?.user?.role !== 'admin') {
-      throw new Error('Access denied');
+      throw new ForbiddenException('Access denied');
     }
     return await this.appointmentsService.delete(id);
   }

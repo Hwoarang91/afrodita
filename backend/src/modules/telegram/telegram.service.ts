@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { TelegramBotService } from './telegram-bot.service';
 import { Markup } from 'telegraf';
 
@@ -67,7 +67,7 @@ export class TelegramService {
   private getBot() {
     const bot = this.botService.getBot();
     if (!bot) {
-      throw new Error('Bot is not initialized');
+      throw new ServiceUnavailableException('Bot is not initialized');
     }
     return bot;
   }

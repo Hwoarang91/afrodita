@@ -13,6 +13,26 @@ export interface ErrorDetail {
 }
 
 /**
+ * Объект, возвращаемый exception.getResponse() для HttpException/BadRequestException
+ * (когда это объект, а не строка). message может быть string | ValidationError[] | object.
+ */
+export interface HttpExceptionResponseObject {
+  message?: unknown;
+  statusCode?: number;
+  errorCode?: string;
+  details?: ErrorDetail[];
+  retryAfter?: number;
+  success?: boolean;
+}
+
+/** Элемент массива ValidationError из ValidationPipe / buildValidationErrorResponse */
+export interface ValidationErrorLike {
+  property: string;
+  constraints?: Record<string, string>;
+  value?: unknown;
+}
+
+/**
  * Базовый интерфейс для всех ошибок API
  */
 export interface ErrorResponse {

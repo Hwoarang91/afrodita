@@ -1,11 +1,12 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 
 @ApiTags('health')
 @Controller()
 export class HealthController {
   @Get('/health')
   @ApiOperation({ summary: 'Health check endpoint' })
+  @ApiOkResponse({ description: 'Сервис доступен' })
   check() {
     return {
       status: 'ok',
@@ -16,6 +17,7 @@ export class HealthController {
 
   @Get('/api')
   @ApiOperation({ summary: 'API root endpoint' })
+  @ApiOkResponse({ description: 'Корневой эндпоинт API' })
   apiRoot() {
     return {
       message: 'Afrodita Massage Salon API',
@@ -32,6 +34,7 @@ export class HealthController {
 
   @Get('/api/v1')
   @ApiOperation({ summary: 'API v1 root endpoint' })
+  @ApiOkResponse({ description: 'Корневой эндпоинт API v1' })
   apiV1Root() {
     return {
       message: 'Afrodita Massage Salon API v1',

@@ -1,5 +1,6 @@
 import { Injectable, ExecutionContext, Logger, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { getErrorMessage } from '../utils/error-message';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -19,9 +20,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     try {
       const result = await super.canActivate(context);
       return result as boolean;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.warn('JwtAuthGuard: Passport canActivate failed', {
-        error: (error as Error)?.message,
+        error: getErrorMessage(error),
       });
       // КРИТИЧНО: Выбрасываем UnauthorizedException вместо возврата false
       // Это гарантирует правильный статус код 401 вместо 403

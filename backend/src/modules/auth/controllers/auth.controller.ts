@@ -9,10 +9,11 @@ import {
   Request,
   Response,
   UnauthorizedException,
+  InternalServerErrorException,
   Logger,
   Param,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiParam, ApiOkResponse } from '@nestjs/swagger';
 import { Request as ExpressRequest } from 'express';
 import { AuthRequest } from '../../../common/types/request.types';
 import { Response as ExpressResponse } from 'express';
@@ -50,6 +51,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Авторизация по email и паролю' })
+  @ApiBody({ type: LoginRequestDto, description: 'Email, пароль и опция rememberMe' })
   @ApiResponse({
     status: 200,
     description: 'Успешная авторизация',
@@ -119,6 +121,7 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Обновление токенов' })
+  @ApiBody({ type: RefreshRequestDto, description: 'Refresh token (опционально, если передан в cookies)' })
   @ApiResponse({
     status: 200,
     description: 'Токены обновлены',
@@ -255,6 +258,7 @@ export class AuthController {
 
   @Get('csrf-token')
   @ApiOperation({ summary: 'Получение CSRF токена' })
+  @ApiOkResponse({ description: 'Объект { csrfToken }' })
   async getCsrfToken(@Response({ passthrough: true }) res: ExpressResponse): Promise<{ csrfToken: string }> {
     const csrfToken = this.csrfService.generateCsrfToken();
     this.setCsrfCookie(res, csrfToken);
@@ -266,6 +270,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Получение текущего пользователя' })
+  @ApiOkResponse({ description: 'Данные текущего пользователя' })
   async getMe(@Request() req: AuthRequest) {
     if (!req.user) {
       this.logger.warn('getMe: req.user не установлен');
@@ -286,7 +291,7 @@ export class AuthController {
 
   @Get('check-setup')
   @ApiOperation({ summary: 'Проверка наличия администраторов в системе' })
-  @ApiResponse({ status: 200, description: 'Статус настройки системы' })
+  @ApiOkResponse({ description: 'Статус настройки (hasUsers, needsSetup)' })
   async checkSetup() {
     const hasUsers = await this.authService.checkHasUsers();
     return { hasUsers, needsSetup: !hasUsers };
@@ -295,6 +300,7 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Регистрация первого администратора' })
+  @ApiBody({ type: RegisterDto, description: 'Email, пароль, имя, фамилия' })
   @ApiResponse({ status: 201, description: 'Администратор успешно зарегистрирован' })
   @ApiResponse({ status: 400, description: 'Администратор уже существует' })
   async register(
@@ -378,6 +384,7 @@ export class AuthController {
   @Post('telegram')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Авторизация через Telegram Mini App' })
+  @ApiBody({ schema: { type: 'object', required: ['id', 'auth_date', 'hash'], properties: { id: { type: 'string' }, first_name: { type: 'string' }, last_name: { type: 'string' }, username: { type: 'string' }, photo_url: { type: 'string' }, auth_date: { type: 'number' }, hash: { type: 'string' } } } })
   @ApiResponse({
     status: 200,
     description: 'Успешная авторизация через Telegram Mini App',
@@ -443,6 +450,7 @@ export class AuthController {
   @Post('telegram/phone/request')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Запрос кода подтверждения для авторизации по номеру телефона' })
+  @ApiBody({ type: TelegramPhoneRequestDto })
   @ApiResponse({
     status: 200,
     description: 'Код отправлен',
@@ -471,6 +479,7 @@ export class AuthController {
   @Post('telegram/phone/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Проверка кода подтверждения и авторизация по номеру телефона' })
+  @ApiBody({ type: TelegramPhoneVerifyDto })
   @ApiResponse({
     status: 200,
     description: 'Успешная авторизация',
@@ -500,6 +509,10 @@ export class AuthController {
           requires2FA: true,
           passwordHint: result.passwordHint,
         };
+      }
+
+      if (!result.user) {
+        throw new InternalServerErrorException('Unexpected: user is null after verifyPhoneCode');
       }
 
       // НЕ устанавливаем cookies - авторизация Telegram не должна авторизовывать в дашборде
@@ -556,11 +569,8 @@ export class AuthController {
   @UseGuards(OptionalJwtAuthGuard) // Опциональный guard - если токен есть, req.user будет доступен
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Проверка статуса QR токена' })
-  @ApiResponse({
-    status: 200,
-    description: 'Статус токена',
-    type: TelegramQrStatusResponseDto,
-  })
+  @ApiOkResponse({ description: 'Статус токена', type: TelegramQrStatusResponseDto })
+  @ApiParam({ name: 'tokenId', description: 'ID QR токена' })
   @ApiResponse({ status: 401, description: 'QR токен не найден или истек' })
   async checkQrTokenStatus(
     @Param('tokenId') tokenId: string,
@@ -619,6 +629,7 @@ export class AuthController {
   @Post('telegram/2fa/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Проверка 2FA пароля и завершение авторизации' })
+  @ApiBody({ type: Telegram2FAVerifyDto })
   @ApiResponse({
     status: 200,
     description: 'Успешная авторизация с 2FA',

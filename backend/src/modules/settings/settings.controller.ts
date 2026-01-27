@@ -1,7 +1,7 @@
 import { Controller, Get, Put, Body, UseGuards, Request, Logger, BadRequestException } from '@nestjs/common';
 import { AuthRequest } from '../../common/types/request.types';
 import { getErrorMessage, getErrorStack } from '../../common/utils/error-message';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { SettingsService } from './settings.service';
 import { AuditService } from '../audit/audit.service';
 import { UsersService } from '../users/users.service';
@@ -36,6 +36,7 @@ export class SettingsController {
 
   @Put()
   @ApiOperation({ summary: 'Обновление настроек' })
+  @ApiBody({ schema: { type: 'object', properties: { bookingSettings: { type: 'object', description: 'manualConfirmation, minAdvanceBooking, maxAdvanceBooking, cancellationDeadline' } } } })
   async updateSettings(
     @Request() req: AuthRequest,
     @Body() body: { bookingSettings?: Record<string, unknown> },
@@ -89,6 +90,7 @@ export class SettingsController {
 
   @Put('telegram-auto-refresh-interval')
   @ApiOperation({ summary: 'Установить интервал автоматического обновления чатов' })
+  @ApiBody({ schema: { type: 'object', required: ['value'], properties: { value: { type: 'number' } } } })
   async setAutoRefreshInterval(@Request() req: AuthRequest, @Body() body: { value: number }) {
     await this.settingsService.set('telegramAutoRefreshInterval', body.value);
     
@@ -113,6 +115,7 @@ export class SettingsController {
 
   @Put('timezone')
   @ApiOperation({ summary: 'Установить часовой пояс' })
+  @ApiBody({ schema: { type: 'object', required: ['value'], properties: { value: { type: 'string' } } } })
   async setTimezone(@Request() req: AuthRequest, @Body() body: { value: string }) {
     await this.settingsService.set('timezone', body.value);
     
@@ -137,6 +140,7 @@ export class SettingsController {
 
   @Put('working-hours')
   @ApiOperation({ summary: 'Установить рабочие часы' })
+  @ApiBody({ schema: { type: 'object', required: ['value'], properties: { value: { type: 'object', properties: { start: { type: 'string' }, end: { type: 'string' } } } } } })
   async setWorkingHours(@Request() req: AuthRequest, @Body() body: { value: { start: string; end: string } }) {
     await this.settingsService.set('workingHours', body.value);
     
@@ -161,6 +165,7 @@ export class SettingsController {
 
   @Put('reminder-intervals')
   @ApiOperation({ summary: 'Установить интервалы напоминаний' })
+  @ApiBody({ schema: { type: 'object', required: ['value'], properties: { value: { type: 'array', items: { type: 'number' } } } } })
   async setReminderIntervals(@Request() req: AuthRequest, @Body() body: { value: number[] }) {
     this.logger.debug('Получен запрос на обновление интервалов напоминаний');
     
@@ -188,6 +193,7 @@ export class SettingsController {
 
   @Put('first-visit-discount')
   @ApiOperation({ summary: 'Установить настройки скидки на первый визит' })
+  @ApiBody({ schema: { type: 'object', required: ['value'], properties: { value: { type: 'object', properties: { enabled: { type: 'boolean' }, type: { type: 'string', enum: ['percent', 'fixed'] }, value: { type: 'number' } } } } } })
   async setFirstVisitDiscount(@Request() req: AuthRequest, @Body() body: { value: { enabled: boolean; type: 'percent' | 'fixed'; value: number } }) {
     const result = await this.settingsService.setFirstVisitDiscountSettings(body.value);
     
@@ -250,7 +256,7 @@ export class SettingsController {
           telegramId: user.telegramId,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       // Если пользователь не найден, возвращаем null
       await this.settingsService.setTelegramAdminUserId(null);
       return { value: null };
@@ -274,6 +280,7 @@ export class SettingsController {
 
   @Put('bonuses')
   @ApiOperation({ summary: 'Установить настройки бонусов' })
+  @ApiBody({ schema: { type: 'object', required: ['value'], properties: { value: { type: 'object', properties: { enabled: { type: 'boolean' }, pointsPerRuble: { type: 'number' }, pointsForRegistration: { type: 'number' }, referralBonus: { type: 'number' } } } } } })
   async setBonusSettings(@Request() req: AuthRequest, @Body() body: { value: { enabled: boolean; pointsPerRuble: number; pointsForRegistration: number; referralBonus: number } }) {
     // Маппим referralBonus из запроса на pointsForReferral в сервисе
     const result = await this.settingsService.setBonusSettings({
@@ -307,6 +314,7 @@ export class SettingsController {
 
   @Put('telegram-admin-user')
   @ApiOperation({ summary: 'Установить администратора Telegram бота и веб-приложения' })
+  @ApiBody({ schema: { type: 'object', required: ['userId'], properties: { userId: { type: 'string', nullable: true } } } })
   async setTelegramAdminUser(@Request() req: AuthRequest, @Body() body: { userId: string | null }) {
     try {
       let user: User | null = null;

@@ -7,10 +7,19 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { ErrorResponse, ErrorCode } from '../interfaces/error-response.interface';
+import { ErrorResponse, ErrorCode, HttpExceptionResponseObject, ValidationErrorLike } from '../interfaces/error-response.interface';
 import { buildErrorResponse, buildValidationErrorResponse } from '../utils/error-response.builder';
 import { maskSensitiveData } from '../utils/sensitive-data-masker';
 import { ErrorMetricsService } from '../utils/error-metrics.service';
+
+function msgFromResponse(res: unknown, fallback: string): string {
+  if (typeof res === 'string') return res;
+  if (typeof res === 'object' && res !== null && 'message' in res) {
+    const m = (res as { message?: unknown }).message;
+    return typeof m === 'string' ? m : fallback;
+  }
+  return fallback;
+}
 
 /**
  * Глобальный exception filter для всех HttpException
@@ -44,23 +53,20 @@ export class HttpExceptionFilter implements ExceptionFilter {
       typeof exceptionResponse === 'object' &&
       exceptionResponse !== null &&
       'message' in exceptionResponse &&
-      Array.isArray((exceptionResponse as any).message)
+      Array.isArray((exceptionResponse as HttpExceptionResponseObject).message)
     ) {
+      const arr = (exceptionResponse as HttpExceptionResponseObject).message as ValidationErrorLike[];
       this.logger.error(
         '[HttpExceptionFilter] КРИТИЧЕСКАЯ ЗАЩИТА: Обнаружен массив ValidationError[] в BadRequestException! ' +
         'Преобразуем в ErrorResponse для предотвращения React error #31.',
         {
-          validationErrorsCount: (exceptionResponse as any).message.length,
-          firstError: (exceptionResponse as any).message[0] ? {
-            property: (exceptionResponse as any).message[0].property,
-            constraints: Object.keys((exceptionResponse as any).message[0].constraints || {}),
-          } : null,
+          validationErrorsCount: arr.length,
+          firstError: arr[0] ? { property: arr[0].property, constraints: Object.keys(arr[0].constraints || {}) } : null,
         },
       );
 
       // Преобразуем ValidationError[] в стандартизированный ErrorResponse
-      const validationErrors = (exceptionResponse as any).message;
-      const errorResponse = buildValidationErrorResponse(validationErrors);
+      const errorResponse = buildValidationErrorResponse(arr);
 
       // Регистрируем ошибку в метриках
       if (this.errorMetricsService) {
@@ -78,28 +84,27 @@ export class HttpExceptionFilter implements ExceptionFilter {
     // КРИТИЧНО: ВТОРАЯ ЗАЩИТА - проверяем на ValidationError OBJECT в message
     // Если где-то бросили BadRequestException с объектом {property, constraints, value}
     // то exceptionResponse.message будет объектом (не массивом)
+    const msgObj = typeof exceptionResponse === 'object' && exceptionResponse !== null && 'message' in exceptionResponse
+      ? (exceptionResponse as HttpExceptionResponseObject).message
+      : undefined;
     if (
       typeof exceptionResponse === 'object' &&
       exceptionResponse !== null &&
       'message' in exceptionResponse &&
-      typeof (exceptionResponse as any).message === 'object' &&
-      (exceptionResponse as any).message !== null &&
-      !Array.isArray((exceptionResponse as any).message) &&
-      'property' in (exceptionResponse as any).message &&
-      'constraints' in (exceptionResponse as any).message
+      typeof msgObj === 'object' && msgObj !== null &&
+      !Array.isArray(msgObj) &&
+      'property' in msgObj &&
+      'constraints' in msgObj
     ) {
+      const ve = msgObj as ValidationErrorLike;
       this.logger.error(
         '[HttpExceptionFilter] КРИТИЧЕСКАЯ ЗАЩИТА: Обнаружен объект ValidationError в BadRequestException! ' +
         'Это вызывает React error #31. Преобразуем в ErrorResponse.',
-        {
-          validationErrorProperty: (exceptionResponse as any).message.property,
-          constraints: Object.keys((exceptionResponse as any).message.constraints || {}),
-        },
+        { validationErrorProperty: ve.property, constraints: Object.keys(ve.constraints || {}) },
       );
 
       // Преобразуем одиночный ValidationError в стандартизированный ErrorResponse
-      const validationErrors = [(exceptionResponse as any).message];
-      const errorResponse = buildValidationErrorResponse(validationErrors);
+      const errorResponse = buildValidationErrorResponse([ve]);
 
       // Регистрируем ошибку в метриках
       if (this.errorMetricsService) {
@@ -142,25 +147,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
       'success' in exceptionResponse &&
       'errorCode' in exceptionResponse &&
       'message' in exceptionResponse &&
-      typeof (exceptionResponse as any).message === 'string' && // КРИТИЧНО: message должен быть строкой
-      (exceptionResponse as any).success === false // Дополнительная проверка на соответствие контракту
+      typeof (exceptionResponse as HttpExceptionResponseObject).message === 'string' && // КРИТИЧНО: message должен быть строкой
+      (exceptionResponse as HttpExceptionResponseObject).success === false // Дополнительная проверка на соответствие контракту
     ) {
+      const o = exceptionResponse as HttpExceptionResponseObject;
       // Уже стандартизирован и соответствует контракту, возвращаем как есть
       // НО: создаем новый объект для гарантии чистоты (защита от прототипного загрязнения)
       const cleanErrorResponse: ErrorResponse = {
         success: false,
-        statusCode: (exceptionResponse as any).statusCode || status,
-        errorCode: (exceptionResponse as any).errorCode,
-        message: (exceptionResponse as any).message, // Гарантированно строка
+        statusCode: o.statusCode || status,
+        errorCode: o.errorCode || ErrorCode.INTERNAL_SERVER_ERROR,
+        message: o.message as string, // Гарантированно строка (проверено выше)
       };
 
-      if ((exceptionResponse as any).details) {
-        cleanErrorResponse.details = (exceptionResponse as any).details;
-      }
-
-      if ((exceptionResponse as any).retryAfter !== undefined) {
-        cleanErrorResponse.retryAfter = (exceptionResponse as any).retryAfter;
-      }
+      if (o.details) cleanErrorResponse.details = o.details;
+      if (o.retryAfter !== undefined) cleanErrorResponse.retryAfter = o.retryAfter;
 
       response.status(status).json(cleanErrorResponse);
       return;
@@ -168,27 +169,26 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // КРИТИЧНО: ЗАЩИТА ОТ message: object (не Array, не String)
     // Если сюда пришел BadRequestException с message как объектом ValidationError
+    const msgObj2 = typeof exceptionResponse === 'object' && exceptionResponse !== null && 'message' in exceptionResponse
+      ? (exceptionResponse as HttpExceptionResponseObject).message
+      : undefined;
     if (
       typeof exceptionResponse === 'object' &&
       exceptionResponse !== null &&
       'message' in exceptionResponse &&
-      typeof (exceptionResponse as any).message === 'object' &&
-      !Array.isArray((exceptionResponse as any).message) &&
-      'property' in (exceptionResponse as any).message &&
-      'constraints' in (exceptionResponse as any).message
+      typeof msgObj2 === 'object' && msgObj2 !== null &&
+      !Array.isArray(msgObj2) &&
+      'property' in msgObj2 &&
+      'constraints' in msgObj2
     ) {
+      const ve2 = msgObj2 as ValidationErrorLike;
       this.logger.error(
         '[HttpExceptionFilter] КРИТИЧЕСКАЯ ЗАЩИТА: Обнаружен объект ValidationError в message! ' +
         'Это пропущено ValidationExceptionFilter. Преобразуем в ErrorResponse.',
-        {
-          validationErrorProperty: (exceptionResponse as any).message.property,
-          constraints: Object.keys((exceptionResponse as any).message.constraints || {}),
-        },
+        { validationErrorProperty: ve2.property, constraints: Object.keys(ve2.constraints || {}) },
       );
 
-      // Преобразуем одиночный ValidationError в стандартизированный ErrorResponse
-      const validationErrors = [(exceptionResponse as any).message];
-      const errorResponse = buildValidationErrorResponse(validationErrors);
+      const errorResponse = buildValidationErrorResponse([ve2]);
 
       response.status(status).json(errorResponse);
       return;
@@ -199,17 +199,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
       typeof exceptionResponse === 'object' &&
       exceptionResponse !== null &&
       'message' in exceptionResponse &&
-      Array.isArray((exceptionResponse as any).message)
+      Array.isArray((exceptionResponse as HttpExceptionResponseObject).message)
     ) {
       this.logger.error(
         '[HttpExceptionFilter] Обнаружен массив ValidationError! ' +
         'Это должно было быть обработано ValidationExceptionFilter. ' +
         'Преобразуем в ErrorResponse для предотвращения React error #31.',
       );
-      
-      // Преобразуем ValidationError[] в стандартизированный ErrorResponse
-      const validationErrors = (exceptionResponse as any).message;
-      const errorResponse = buildValidationErrorResponse(validationErrors);
+      const arr2 = (exceptionResponse as HttpExceptionResponseObject).message as ValidationErrorLike[];
+      const errorResponse = buildValidationErrorResponse(arr2);
       response.status(status).json(errorResponse);
       return;
     }
@@ -221,49 +219,36 @@ export class HttpExceptionFilter implements ExceptionFilter {
     // Определяем errorCode на основе статуса и сообщения
     if (status === HttpStatus.UNAUTHORIZED) {
       errorCode = ErrorCode.UNAUTHORIZED;
-      message = typeof exceptionResponse === 'string' 
-        ? exceptionResponse 
-        : (exceptionResponse as any)?.message || 'Требуется авторизация';
+      message = msgFromResponse(exceptionResponse, 'Требуется авторизация');
     } else if (status === HttpStatus.FORBIDDEN) {
       errorCode = ErrorCode.UNAUTHORIZED; // Используем UNAUTHORIZED для 403 тоже
-      message = typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : (exceptionResponse as any)?.message || 'Доступ запрещен';
+      message = msgFromResponse(exceptionResponse, 'Доступ запрещен');
     } else if (status === HttpStatus.NOT_FOUND) {
       errorCode = ErrorCode.NOT_FOUND;
-      message = typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : (exceptionResponse as any)?.message || 'Ресурс не найден';
+      message = msgFromResponse(exceptionResponse, 'Ресурс не найден');
     } else if (status === HttpStatus.TOO_MANY_REQUESTS) {
       errorCode = ErrorCode.TOO_MANY_REQUESTS;
-      message = typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : (exceptionResponse as any)?.message || 'Слишком много запросов';
+      message = msgFromResponse(exceptionResponse, 'Слишком много запросов');
     } else if (status === HttpStatus.BAD_REQUEST) {
       errorCode = ErrorCode.VALIDATION_ERROR;
       
       // КРИТИЧНО: Проверяем, не является ли message массивом ValidationError
       if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-        const responseObj = exceptionResponse as any;
+        const responseObj = exceptionResponse as HttpExceptionResponseObject;
         
         // Если message - массив ValidationError, преобразуем в ErrorResponse
         if (Array.isArray(responseObj.message)) {
+          const arr3 = responseObj.message as ValidationErrorLike[];
           this.logger.error(
             '[HttpExceptionFilter] Обнаружен массив ValidationError в BAD_REQUEST! ' +
             'Это должно было быть обработано ValidationExceptionFilter. ' +
             'Преобразуем в ErrorResponse для предотвращения React error #31.',
             {
-              validationErrorsCount: responseObj.message.length,
-              firstError: responseObj.message[0] ? {
-                property: responseObj.message[0].property,
-                constraints: Object.keys(responseObj.message[0].constraints || {}),
-              } : null,
+              validationErrorsCount: arr3.length,
+              firstError: arr3[0] ? { property: arr3[0].property, constraints: Object.keys(arr3[0].constraints || {}) } : null,
             },
           );
-          
-          // Преобразуем ValidationError[] в стандартизированный ErrorResponse
-          const validationErrors = responseObj.message;
-          const errorResponse = buildValidationErrorResponse(validationErrors);
+          const errorResponse = buildValidationErrorResponse(arr3);
           
           // Регистрируем ошибку в метриках
           if (this.errorMetricsService) {
@@ -298,9 +283,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     } else {
       // Для остальных статусов используем общий код
-      message = typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : (exceptionResponse as any)?.message || exception.message || 'Внутренняя ошибка сервера';
+      message = msgFromResponse(exceptionResponse, exception.message || 'Внутренняя ошибка сервера');
     }
 
     // Создаем стандартизированный ErrorResponse

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -115,19 +115,19 @@ export class JwtAuthService {
     if (!refreshTokenEntity) {
       this.logger.warn(`Refresh token не найден или неактивен. Hash preview: ${refreshTokenHash.substring(0, 16)}...`);
       this.logger.debug(`Searching for token with hash: ${refreshTokenHash}`);
-      throw new Error('Invalid refresh token');
+      throw new UnauthorizedException('Invalid refresh token');
     }
 
     if (refreshTokenEntity.expiresAt < new Date()) {
       this.logger.warn('Refresh token истек');
-      throw new Error('Refresh token expired');
+      throw new UnauthorizedException('Refresh token expired');
     }
 
     // Проверяем пользователя
     const user = refreshTokenEntity.user;
     if (!user || !user.isActive) {
       this.logger.warn('Пользователь не найден или неактивен');
-      throw new Error('User not found or inactive');
+      throw new UnauthorizedException('User not found or inactive');
     }
 
     // Инвалидируем текущий refresh token (rotation)
@@ -199,7 +199,7 @@ export class JwtAuthService {
       });
 
       return user || null;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.debug('Access token validation failed:', getErrorMessage(error));
       return null;
     }

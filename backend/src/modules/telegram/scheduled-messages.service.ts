@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
 import { ScheduledMessage, ScheduledMessageStatus, ScheduledMessageType } from '../../entities/scheduled-message.entity';
@@ -217,7 +217,7 @@ export class ScheduledMessagesService {
     switch (message.type) {
       case ScheduledMessageType.TEXT:
         if (!message.message) {
-          throw new Error('Текст сообщения не указан');
+          throw new BadRequestException('Текст сообщения не указан');
         }
         await this.telegramService.sendMessage(chatId, message.message, {
           parse_mode: 'HTML',
@@ -226,7 +226,7 @@ export class ScheduledMessagesService {
 
       case ScheduledMessageType.PHOTO:
         if (!message.mediaUrl) {
-          throw new Error('URL фото не указан');
+          throw new BadRequestException('URL фото не указан');
         }
         await this.telegramService.sendPhoto(chatId, message.mediaUrl, {
           caption: message.caption || undefined,
@@ -236,7 +236,7 @@ export class ScheduledMessagesService {
 
       case ScheduledMessageType.VIDEO:
         if (!message.mediaUrl) {
-          throw new Error('URL видео не указан');
+          throw new BadRequestException('URL видео не указан');
         }
         await this.telegramService.sendVideo(chatId, message.mediaUrl, {
           caption: message.caption || undefined,
@@ -246,7 +246,7 @@ export class ScheduledMessagesService {
 
       case ScheduledMessageType.AUDIO:
         if (!message.mediaUrl) {
-          throw new Error('URL аудио не указан');
+          throw new BadRequestException('URL аудио не указан');
         }
         await this.telegramService.sendAudio(chatId, message.mediaUrl, {
           caption: message.caption || undefined,
@@ -256,7 +256,7 @@ export class ScheduledMessagesService {
 
       case ScheduledMessageType.DOCUMENT:
         if (!message.mediaUrl) {
-          throw new Error('URL документа не указан');
+          throw new BadRequestException('URL документа не указан');
         }
         await this.telegramService.sendDocument(chatId, message.mediaUrl, {
           caption: message.caption || undefined,
@@ -266,14 +266,14 @@ export class ScheduledMessagesService {
 
       case ScheduledMessageType.STICKER:
         if (!message.mediaUrl) {
-          throw new Error('File ID стикера не указан');
+          throw new BadRequestException('File ID стикера не указан');
         }
         await this.telegramService.sendSticker(chatId, message.mediaUrl);
         break;
 
       case ScheduledMessageType.POLL:
         if (!message.message || !message.pollOptions || message.pollOptions.length < 2) {
-          throw new Error('Вопрос опроса или варианты ответов не указаны');
+          throw new BadRequestException('Вопрос опроса или варианты ответов не указаны');
         }
         await this.telegramService.sendPoll(chatId, message.message, message.pollOptions, {
           is_anonymous: false,
@@ -281,7 +281,7 @@ export class ScheduledMessagesService {
         break;
 
       default:
-        throw new Error(`Неподдерживаемый тип сообщения: ${message.type}`);
+        throw new BadRequestException(`Неподдерживаемый тип сообщения: ${message.type}`);
     }
   }
 }

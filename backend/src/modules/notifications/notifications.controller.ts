@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Delete, Body, UseGuards, Request, Query, Param } from '@nestjs/common';
 import { AuthRequest } from '../../common/types/request.types';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiQuery, ApiParam, ApiOkResponse } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -27,6 +27,7 @@ export class NotificationsController {
 
   @Get()
   @ApiOperation({ summary: 'Получение уведомлений пользователя' })
+  @ApiOkResponse({ description: 'Список уведомлений пользователя' })
   async getUserNotifications(@Request() req: AuthRequest) {
     return await this.notificationRepository.find({
       where: { userId: req.user!.sub! },
@@ -73,8 +74,9 @@ export class NotificationsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'История рассылок (только для админов)' })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ description: 'История рассылок с пагинацией' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Номер страницы' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Записей на странице' })
   async getBroadcastHistory(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -89,6 +91,8 @@ export class NotificationsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Детали рассылки (только для админов)' })
+  @ApiOkResponse({ description: 'Детали рассылки' })
+  @ApiParam({ name: 'broadcastId', description: 'ID рассылки' })
   async getBroadcastDetails(@Param('broadcastId') broadcastId: string) {
     return await this.notificationsService.getBroadcastDetails(broadcastId);
   }
@@ -97,6 +101,7 @@ export class NotificationsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Детали рассылки по ключу (только для админов)' })
+  @ApiOkResponse({ description: 'Детали рассылки' })
   @ApiQuery({ name: 'title', required: true, type: String })
   @ApiQuery({ name: 'message', required: true, type: String })
   @ApiQuery({ name: 'channel', required: true, type: String })
@@ -136,6 +141,7 @@ export class NotificationsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Удаление уведомления (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID уведомления' })
   async deleteNotification(@Param('id') id: string, @Request() req: AuthRequest) {
     await this.notificationsService.deleteNotification(id);
     await this.auditService.log(req.user!.sub!, AuditAction.NOTIFICATION_DELETED, {

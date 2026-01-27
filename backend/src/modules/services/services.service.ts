@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Service } from '../../entities/service.entity';
@@ -24,35 +24,35 @@ export class ServicesService {
     // Валидация: если это категория, цена и время должны быть 0 или не указаны
     if (isCategory) {
       if (dto.price && dto.price > 0) {
-        throw new Error('Категория не может иметь цену');
+        throw new BadRequestException('Категория не может иметь цену');
       }
       if (dto.duration && dto.duration > 0) {
-        throw new Error('Категория не может иметь длительность');
+        throw new BadRequestException('Категория не может иметь длительность');
       }
       // Категория не может быть подкатегорией
       if (dto.parentServiceId) {
-        throw new Error('Категория не может быть подкатегорией');
+        throw new BadRequestException('Категория не может быть подкатегорией');
       }
     }
 
     // Валидация: allowMultipleSubcategories может быть true только для категорий
     if (dto.allowMultipleSubcategories && !isCategory) {
-      throw new Error('allowMultipleSubcategories может быть true только для категорий');
+      throw new BadRequestException('allowMultipleSubcategories может быть true только для категорий');
     }
 
     // Если это подкатегория, isCategory должен быть false
     if (dto.parentServiceId && isCategory) {
-      throw new Error('Подкатегория не может быть категорией');
+      throw new BadRequestException('Подкатегория не может быть категорией');
     }
 
     // Если это подкатегория, цена и время обязательны
     if (dto.parentServiceId && (!dto.price || dto.price <= 0 || !dto.duration || dto.duration <= 0)) {
-      throw new Error('Подкатегория должна иметь цену и длительность');
+      throw new BadRequestException('Подкатегория должна иметь цену и длительность');
     }
 
     // Если это самостоятельная услуга, цена и время обязательны
     if (!isCategory && !dto.parentServiceId && (!dto.price || dto.price <= 0 || !dto.duration || dto.duration <= 0)) {
-      throw new Error('Самостоятельная услуга должна иметь цену и длительность');
+      throw new BadRequestException('Самостоятельная услуга должна иметь цену и длительность');
     }
 
     const service = this.serviceRepository.create({
@@ -209,6 +209,15 @@ export class ServicesService {
     return service;
   }
 
+  /** Загрузка нескольких услуг по id (для устранения N+1 в циклах). Порядок в массиве не гарантируется. */
+  async findByIds(ids: string[]): Promise<Service[]> {
+    if (!ids || ids.length === 0) return [];
+    return this.serviceRepository.find({
+      where: { id: In(ids) },
+      relations: ['masters', 'subcategories', 'parentService'],
+    });
+  }
+
   async update(id: string, dto: UpdateServiceDto): Promise<Service> {
     // Очищаем кэш перед обновлением
     this.cacheService.clearByPattern('^services:');
@@ -220,25 +229,25 @@ export class ServicesService {
     // Валидация: если это категория, цена и время должны быть 0
     if (newIsCategory) {
       if (dto.price !== undefined && dto.price > 0) {
-        throw new Error('Категория не может иметь цену');
+        throw new BadRequestException('Категория не может иметь цену');
       }
       if (dto.duration !== undefined && dto.duration > 0) {
-        throw new Error('Категория не может иметь длительность');
+        throw new BadRequestException('Категория не может иметь длительность');
       }
       // Категория не может быть подкатегорией
       if (newParentServiceId) {
-        throw new Error('Категория не может быть подкатегорией');
+        throw new BadRequestException('Категория не может быть подкатегорией');
       }
     }
 
     // Валидация: allowMultipleSubcategories может быть true только для категорий
     if (dto.allowMultipleSubcategories && !newIsCategory) {
-      throw new Error('allowMultipleSubcategories может быть true только для категорий');
+      throw new BadRequestException('allowMultipleSubcategories может быть true только для категорий');
     }
 
     // Если это подкатегория, isCategory должен быть false
     if (newParentServiceId && newIsCategory) {
-      throw new Error('Подкатегория не может быть категорией');
+      throw new BadRequestException('Подкатегория не может быть категорией');
     }
 
     // Если устанавливаем parentServiceId, сбрасываем isCategory и allowMultipleSubcategories
@@ -259,7 +268,7 @@ export class ServicesService {
       const finalPrice = dto.price !== undefined ? dto.price : service.price;
       const finalDuration = dto.duration !== undefined ? dto.duration : service.duration;
       if (!finalPrice || finalPrice <= 0 || !finalDuration || finalDuration <= 0) {
-        throw new Error('Подкатегория должна иметь цену и длительность');
+        throw new BadRequestException('Подкатегория должна иметь цену и длительность');
       }
     }
 
@@ -268,7 +277,7 @@ export class ServicesService {
       const finalPrice = dto.price !== undefined ? dto.price : service.price;
       const finalDuration = dto.duration !== undefined ? dto.duration : service.duration;
       if (!finalPrice || finalPrice <= 0 || !finalDuration || finalDuration <= 0) {
-        throw new Error('Самостоятельная услуга должна иметь цену и длительность');
+        throw new BadRequestException('Самостоятельная услуга должна иметь цену и длительность');
       }
     }
 

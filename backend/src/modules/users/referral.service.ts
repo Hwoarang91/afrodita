@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { User } from '../../entities/user.entity';
 import { SettingsService } from '../settings/settings.service';
 import { FinancialService } from '../financial/financial.service';
@@ -18,32 +18,24 @@ export class ReferralService {
   ) {}
 
   /**
-   * Генерирует уникальный реферальный код для пользователя
+   * Генерирует уникальный реферальный код для пользователя.
+   * @param manager — при передаче все операции выполняются в этой транзакции (для processReferralRegistration)
    */
-  async generateReferralCode(userId: string): Promise<string> {
+  async generateReferralCode(userId: string, manager?: EntityManager): Promise<string> {
+    const userRepo = manager ? manager.getRepository(User) : this.userRepository;
     let referralCode = '';
     let exists = true;
 
-    // Генерируем код до тех пор, пока он не будет уникальным
     while (exists) {
-      // Генерируем код из 8 символов (буквы и цифры)
       referralCode = randomBytes(4).toString('hex').toUpperCase();
-      
-      const existingUser = await this.userRepository.findOne({
-        where: { referralCode },
-      });
-      
+      const existingUser = await userRepo.findOne({ where: { referralCode } });
       exists = !!existingUser;
     }
 
-    // Сохраняем код в профиле пользователя
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('Пользователь не найден');
-    }
-
+    const user = await userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Пользователь не найден');
     user.referralCode = referralCode;
-    await this.userRepository.save(user);
+    await userRepo.save(user);
 
     this.logger.log(`Сгенерирован реферальный код ${referralCode} для пользователя ${userId}`);
     return referralCode;
@@ -76,87 +68,74 @@ export class ReferralService {
   }
 
   /**
-   * Обрабатывает регистрацию нового пользователя по реферальному коду
-   * Начисляет бонусы новому пользователю и пригласившему
+   * Обрабатывает регистрацию нового пользователя по реферальному коду.
+   * Начисляет бонусы новому пользователю и пригласившему. Все записи в БД выполняются в одной транзакции.
    */
   async processReferralRegistration(
     newUserId: string,
     referralCode?: string,
   ): Promise<{ registrationBonus: number; referralBonus?: number; referrerBonus?: number }> {
     const bonusSettings = await this.settingsService.getBonusSettings();
-    
     if (!bonusSettings.enabled) {
       this.logger.debug('Бонусная система отключена');
       return { registrationBonus: 0 };
     }
 
-    const newUser = await this.userRepository.findOne({ where: { id: newUserId } });
-    if (!newUser) {
-      throw new NotFoundException('Пользователь не найден');
-    }
+    return await this.userRepository.manager.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
+      const newUser = await userRepo.findOne({ where: { id: newUserId } });
+      if (!newUser) throw new NotFoundException('Пользователь не найден');
 
-    let registrationBonus = 0;
-    let referralBonus = 0;
-    let referrerBonus = 0;
+      let registrationBonus = 0;
+      let referralBonus = 0;
+      let referrerBonus = 0;
 
-    // 1. Начисляем бонус за регистрацию
-    if (bonusSettings.pointsForRegistration > 0) {
-      registrationBonus = bonusSettings.pointsForRegistration;
-      await this.financialService.awardBonusPoints(
-        newUserId,
-        null, // appointmentId нет при регистрации
-        registrationBonus,
-      );
-      this.logger.log(`Начислено ${registrationBonus} бонусов за регистрацию пользователю ${newUserId}`);
-    }
-
-    // 2. Обрабатываем реферальный код
-    if (referralCode) {
-      const referrer = await this.getUserByReferralCode(referralCode);
-      
-      if (referrer && referrer.id !== newUserId) {
-        // Проверяем, что пользователь не приглашает сам себя
-        newUser.referredByUserId = referrer.id;
-        await this.userRepository.save(newUser);
-
-        // Начисляем бонус новому пользователю за регистрацию по реферальному коду
-        if (bonusSettings.pointsForReferral > 0) {
-          referralBonus = bonusSettings.pointsForReferral;
-          await this.financialService.awardBonusPoints(
-            newUserId,
-            null,
-            referralBonus,
-          );
-          this.logger.log(`Начислено ${referralBonus} бонусов новому пользователю ${newUserId} за регистрацию по реферальному коду`);
-        }
-
-        // Начисляем бонус пригласившему пользователю
-        // Используем тот же pointsForReferral для пригласившего
-        if (bonusSettings.pointsForReferral > 0) {
-          referrerBonus = bonusSettings.pointsForReferral;
-          await this.financialService.awardBonusPoints(
-            referrer.id,
-            null,
-            referrerBonus,
-            `Бонусы за приглашение друга (реферал: ${newUser.firstName} ${newUser.lastName || ''})`,
-          );
-          this.logger.log(`Начислено ${referrerBonus} бонусов пользователю ${referrer.id} за приглашение друга`);
-        }
-      } else if (referrer && referrer.id === newUserId) {
-        this.logger.warn(`Пользователь ${newUserId} попытался использовать свой собственный реферальный код`);
-      } else {
-        this.logger.warn(`Реферальный код ${referralCode} не найден`);
+      // 1. Бонус за регистрацию
+      if (bonusSettings.pointsForRegistration > 0) {
+        registrationBonus = bonusSettings.pointsForRegistration;
+        await this.financialService.awardBonusPoints(newUserId, null, registrationBonus, undefined, manager);
+        this.logger.log(`Начислено ${registrationBonus} бонусов за регистрацию пользователю ${newUserId}`);
       }
-    }
 
-    // 3. Генерируем реферальный код для нового пользователя
-    await this.generateReferralCode(newUserId);
+      // 2. Реферальный код
+      if (referralCode) {
+        const referrer = await userRepo.findOne({ where: { referralCode: referralCode.toUpperCase() } });
+        if (referrer && referrer.id !== newUserId) {
+          newUser.referredByUserId = referrer.id;
+          await userRepo.save(newUser);
 
-    return {
-      registrationBonus,
-      referralBonus: referralBonus > 0 ? referralBonus : undefined,
-      referrerBonus: referrerBonus > 0 ? referrerBonus : undefined,
-    };
+          if (bonusSettings.pointsForReferral > 0) {
+            referralBonus = bonusSettings.pointsForReferral;
+            await this.financialService.awardBonusPoints(newUserId, null, referralBonus, undefined, manager);
+            this.logger.log(`Начислено ${referralBonus} бонусов новому пользователю ${newUserId} за регистрацию по реферальному коду`);
+          }
+          if (bonusSettings.pointsForReferral > 0) {
+            referrerBonus = bonusSettings.pointsForReferral;
+            await this.financialService.awardBonusPoints(
+              referrer.id,
+              null,
+              referrerBonus,
+              `Бонусы за приглашение друга (реферал: ${newUser.firstName} ${newUser.lastName || ''})`,
+              manager,
+            );
+            this.logger.log(`Начислено ${referrerBonus} бонусов пользователю ${referrer.id} за приглашение друга`);
+          }
+        } else if (referrer && referrer.id === newUserId) {
+          this.logger.warn(`Пользователь ${newUserId} попытался использовать свой собственный реферальный код`);
+        } else {
+          this.logger.warn(`Реферальный код ${referralCode} не найден`);
+        }
+      }
+
+      // 3. Реферальный код для нового пользователя
+      await this.generateReferralCode(newUserId, manager);
+
+      return {
+        registrationBonus,
+        referralBonus: referralBonus > 0 ? referralBonus : undefined,
+        referrerBonus: referrerBonus > 0 ? referrerBonus : undefined,
+      };
+    });
   }
 
   /**

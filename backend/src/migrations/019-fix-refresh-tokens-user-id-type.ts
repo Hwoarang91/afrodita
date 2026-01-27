@@ -1,4 +1,5 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
+import { getErrorMessage } from '../common/utils/error-message';
 
 export class FixRefreshTokensUserIdType1703123456789 implements MigrationInterface {
   name = 'FixRefreshTokensUserIdType1703123456789';
@@ -41,8 +42,8 @@ export class FixRefreshTokensUserIdType1703123456789 implements MigrationInterfa
         AND user_id::text !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
       `);
       console.log('Удалены невалидные записи из refresh_tokens');
-    } catch (error: any) {
-      console.log('Ошибка при удалении невалидных записей (возможно, таблица пустая):', error.message);
+    } catch (error: unknown) {
+      console.log('Ошибка при удалении невалидных записей (возможно, таблица пустая):', getErrorMessage(error));
     }
     
     // Изменяем тип колонки user_id с character varying на uuid
@@ -52,8 +53,8 @@ export class FixRefreshTokensUserIdType1703123456789 implements MigrationInterfa
         ALTER COLUMN user_id TYPE uuid USING user_id::uuid;
       `);
       console.log('Тип колонки user_id успешно изменен с character varying на uuid');
-    } catch (error: any) {
-      console.error('Ошибка при изменении типа колонки user_id:', error.message);
+    } catch (error: unknown) {
+      console.error('Ошибка при изменении типа колонки user_id:', getErrorMessage(error));
       throw error;
     }
   }
@@ -95,8 +96,8 @@ export class FixRefreshTokensUserIdType1703123456789 implements MigrationInterfa
         ALTER COLUMN user_id TYPE character varying USING user_id::text;
       `);
       console.log('Тип колонки user_id успешно изменен обратно с uuid на character varying');
-    } catch (error: any) {
-      console.error('Ошибка при откате типа колонки user_id:', error.message);
+    } catch (error: unknown) {
+      console.error('Ошибка при откате типа колонки user_id:', getErrorMessage(error));
       throw error;
     }
   }

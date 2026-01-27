@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ErrorMetricsService } from './common/utils/error-metrics.service';
+import { CircuitBreakerModule } from './common/circuit-breaker.module';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -27,6 +28,7 @@ import { validate } from './config/env.validation';
 @Module({
   providers: [ErrorMetricsService],
   imports: [
+    CircuitBreakerModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../.env'], // Ищем .env в корне проекта

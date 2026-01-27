@@ -64,7 +64,7 @@ export class SensitiveDataMasker {
    * Маскирует объект с чувствительными полями
    * Автоматически находит и маскирует phoneNumber, sessionString, encryptedSessionData
    */
-  static maskObject(obj: any): any {
+  static maskObject(obj: unknown): unknown {
     if (!obj || typeof obj !== 'object') {
       return obj;
     }
@@ -75,7 +75,7 @@ export class SensitiveDataMasker {
     }
 
     // Создаем копию объекта
-    const masked: any = {};
+    const masked: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(obj)) {
       const lowerKey = key.toLowerCase();
@@ -141,6 +141,6 @@ export class SensitiveDataMasker {
  * Экспорт функции для обратной совместимости
  * Используется в validation-exception.filter.ts и http-exception.filter.ts
  */
-export function maskSensitiveData(obj: any): any {
+export function maskSensitiveData(obj: unknown): unknown {
   return SensitiveDataMasker.maskObject(obj);
 }

@@ -3,7 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SchedulerService } from './scheduler.service';
 import { SchedulerController } from './scheduler.controller';
 import { Appointment } from '../entities/appointment.entity';
-import { Service } from '../entities/service.entity';
 import { Notification } from '../entities/notification.entity';
 import { User } from '../entities/user.entity';
 import { TelegramUserSession } from '../entities/telegram-user-session.entity';
@@ -14,7 +13,7 @@ import { TelegramModule } from '../modules/telegram/telegram.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Appointment, Service, Notification, User, TelegramUserSession]),
+    TypeOrmModule.forFeature([Appointment, Notification, User, TelegramUserSession]),
     NotificationsModule,
     FinancialModule,
     SettingsModule,

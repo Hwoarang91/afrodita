@@ -148,8 +148,8 @@ export class TelegramConnectionMonitorService implements OnModuleInit, OnModuleD
           Object.assign(newStatus, updates);
           this.connectionStatuses.set(sessionId, newStatus);
         })
-        .catch((error) => {
-          this.logger.warn(`Failed to load session info for ${sessionId}: ${error.message}`);
+        .catch((error: unknown) => {
+          this.logger.warn(`Failed to load session info for ${sessionId}: ${getErrorMessage(error)}`);
           // Создаем минимальный статус без информации из БД
           const newStatus: ConnectionStatus = {
             sessionId,

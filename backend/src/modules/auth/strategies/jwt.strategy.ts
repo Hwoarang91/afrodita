@@ -15,10 +15,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private userRepository: Repository<User>,
   ) {
     // Кастомный экстрактор для cookies
-    const cookieExtractor = (request: any) => {
+    const cookieExtractor = (request: { cookies?: Record<string, string> }) => {
       let token = null;
-      if (request && request.cookies) {
-        token = request.cookies['access_token'] || null;
+      if (request?.cookies) {
+        token = request.cookies['access_token'] ?? null;
       }
       return token;
     };

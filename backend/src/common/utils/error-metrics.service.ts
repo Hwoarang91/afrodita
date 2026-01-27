@@ -17,7 +17,7 @@ interface ErrorMetrics {
   count: number;
   firstOccurrence: Date;
   lastOccurrence: Date;
-  occurrences: Array<{ timestamp: number; context?: any }>; // История вхождений для анализа трендов
+  occurrences: Array<{ timestamp: number; context?: unknown }>; // История вхождений для анализа трендов
   baselineCount?: number; // Базовый уровень для сравнения (для FLOOD_WAIT)
 }
 

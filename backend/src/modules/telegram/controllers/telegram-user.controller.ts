@@ -15,7 +15,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { AuthRequest } from '../../../common/types/request.types';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam, ApiQuery, ApiBody, ApiOkResponse } from '@nestjs/swagger';
 import { TelegramUserClientService } from '../services/telegram-user-client.service';
 import { TelegramConnectionMonitorService } from '../services/telegram-connection-monitor.service';
 import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard';
@@ -40,6 +40,7 @@ export class TelegramUserController {
   @Post('send-message')
   @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Отправка текстового сообщения от лица авторизованного пользователя' })
+  @ApiBody({ type: UserSendMessageDto })
   @ApiResponse({ status: 200, description: 'Сообщение отправлено' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   @ApiResponse({ status: 403, description: 'Telegram сессия не готова (initializing)' })
@@ -138,6 +139,7 @@ export class TelegramUserController {
   @Post('send-media')
   @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Отправка медиа от лица авторизованного пользователя' })
+  @ApiBody({ type: UserSendMediaDto })
   @ApiResponse({ status: 200, description: 'Медиа отправлено' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   @ApiResponse({ status: 403, description: 'Telegram сессия не готова (initializing)' })
@@ -238,7 +240,7 @@ export class TelegramUserController {
   @Get('chats')
   @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Получение списка чатов авторизованного пользователя' })
-  @ApiResponse({ status: 200, description: 'Список чатов получен' })
+  @ApiOkResponse({ description: 'Список чатов' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async getChats(@Request() req: AuthRequest, @Query('type') type?: 'private' | 'group' | 'all') {
     try {
@@ -398,7 +400,7 @@ export class TelegramUserController {
   @Get('contacts')
   @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Получение списка контактов авторизованного пользователя' })
-  @ApiResponse({ status: 200, description: 'Список контактов получен' })
+  @ApiOkResponse({ description: 'Список контактов' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async getContacts(@Request() req: AuthRequest) {
     try {
@@ -478,7 +480,7 @@ export class TelegramUserController {
   @Get('messages/:chatId')
   @UseGuards(TelegramSessionGuard) // КРИТИЧНО: Требует активной Telegram сессии
   @ApiOperation({ summary: 'Получение истории сообщений из чата' })
-  @ApiResponse({ status: 200, description: 'История сообщений получена' })
+  @ApiOkResponse({ description: 'История сообщений' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async getMessages(
     @Param('chatId') chatId: string,
@@ -732,11 +734,11 @@ export class TelegramUserController {
   @Get('file')
   @UseGuards(TelegramSessionGuard)
   @ApiOperation({ summary: 'Получение файла (фото) по MTProto inputFileLocation для превью в MediaPreview' })
+  @ApiOkResponse({ description: 'Бинарное содержимое файла (image/jpeg)' })
   @ApiQuery({ name: 'volumeId', required: true, description: 'volume_id из size.location' })
   @ApiQuery({ name: 'localId', required: true, description: 'local_id из size.location' })
   @ApiQuery({ name: 'secret', required: true, description: 'secret из size.location' })
   @ApiQuery({ name: 'fileReference', required: false, description: 'file_reference из photo (base64)' })
-  @ApiResponse({ status: 200, description: 'Бинарное содержимое файла (image/jpeg)' })
   @ApiResponse({ status: 400, description: 'Не указаны volumeId, localId или secret' })
   @ApiResponse({ status: 401, description: 'Нет активной Telegram сессии' })
   async getFile(
@@ -792,11 +794,7 @@ export class TelegramUserController {
     summary: 'Получение статуса Telegram сессии',
     description: 'Возвращает информацию о наличии и статусе Telegram сессии. Всегда возвращает 200 если JWT валиден. Не требует активной Telegram сессии - используется для проверки готовности сессии перед запросами к Telegram API.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Статус сессии успешно получен',
-    type: TelegramSessionStatusDto,
-  })
+  @ApiOkResponse({ description: 'Статус сессии', type: TelegramSessionStatusDto })
   @ApiResponse({ status: 401, description: 'JWT токен невалиден или отсутствует' })
   async getSessionStatus(@Request() req: AuthRequest): Promise<TelegramSessionStatusDto> {
     try {
@@ -883,27 +881,7 @@ export class TelegramUserController {
     summary: 'Получение списка сессий пользователя',
     description: 'Возвращает список всех Telegram сессий текущего авторизованного пользователя (включая initializing, active, invalid) с информацией о IP адресе, устройстве и датах использования. НЕ требует активной сессии - используется для проверки статуса.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Список сессий успешно получен',
-    type: [SessionInfoDto],
-    schema: {
-      example: {
-        success: true,
-        sessions: [
-          {
-            id: '550e8400-e29b-41d4-a716-446655440000',
-            phoneNumber: '+79001234567',
-            ipAddress: '192.168.1.1',
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            isActive: true,
-            lastUsedAt: '2025-12-15T22:00:00.000Z',
-            createdAt: '2025-12-15T20:00:00.000Z',
-          },
-        ],
-      },
-    },
-  })
+  @ApiOkResponse({ description: 'Список сессий пользователя', type: SessionInfoDto, isArray: true })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован' })
   async getSessions(@Request() req: AuthRequest): Promise<{ success: boolean; currentSessionId: string | null; sessions: SessionInfoDto[] }> {
     try {
@@ -1055,10 +1033,7 @@ export class TelegramUserController {
     summary: 'Получение статуса соединения Telegram сессии',
     description: 'Возвращает детальную информацию о статусе соединения активной Telegram сессии, включая последнюю активность и статус heartbeat.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Статус соединения успешно получен',
-  })
+  @ApiOkResponse({ description: 'Статус соединения' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async getConnectionStatus(@Request() req: AuthRequest) {
     try {
@@ -1124,6 +1099,7 @@ export class TelegramUserController {
   @ApiOperation({ summary: 'Переслать сообщение в другой чат' })
   @ApiParam({ name: 'chatId', description: 'ID чата-источника' })
   @ApiParam({ name: 'messageId', description: 'ID сообщения для пересылки' })
+  @ApiBody({ schema: { type: 'object', required: ['toChatId'], properties: { toChatId: { type: 'string' } } } })
   @ApiResponse({ status: 200, description: 'Сообщение успешно переслано' })
   @ApiResponse({ status: 401, description: 'Пользователь не авторизован или нет активной сессии' })
   async forwardMessage(

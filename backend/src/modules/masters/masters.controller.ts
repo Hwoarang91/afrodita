@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, Request } from '@nestjs/common';
 import { AuthRequest } from '../../common/types/request.types';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiBody, ApiParam, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
 import { MastersService } from './masters.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateMasterDto } from './dto/create-master.dto';
@@ -20,8 +20,9 @@ export class MastersController {
 
   @Get()
   @ApiOperation({ summary: 'Получение списка мастеров' })
+  @ApiOkResponse({ description: 'Список мастеров с пагинацией' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Номер страницы' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Количество записей на странице' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Количество записей на странице (макс. 100)' })
   @ApiQuery({ name: 'search', required: false, type: String, description: 'Поиск по имени или специализации' })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean, description: 'Фильтр по активности' })
   async findAll(
@@ -44,6 +45,7 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Создание мастера (только для админов)' })
+  @ApiBody({ type: CreateMasterDto, description: 'Данные мастера: userId, name, bio, photoUrl и др.' })
   async create(@Request() req: AuthRequest, @Body() dto: CreateMasterDto) {
     const master = await this.mastersService.create(dto);
     
@@ -71,6 +73,9 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Обновление расписания (только для админов)' })
+  @ApiParam({ name: 'scheduleId', description: 'ID расписания' })
+  @ApiBody({ type: UpdateWorkScheduleDto })
+  @ApiNotFoundResponse({ description: 'Расписание не найдено' })
   async updateSchedule(@Param('scheduleId') scheduleId: string, @Body() dto: UpdateWorkScheduleDto) {
     return await this.mastersService.updateSchedule(scheduleId, dto);
   }
@@ -81,6 +86,7 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Удаление расписания (только для админов)' })
+  @ApiParam({ name: 'scheduleId', description: 'ID расписания' })
   async deleteSchedule(@Param('scheduleId') scheduleId: string) {
     await this.mastersService.deleteSchedule(scheduleId);
     return { message: 'Schedule deleted successfully' };
@@ -96,6 +102,8 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Удаление заблокированного интервала (только для админов)' })
+  @ApiParam({ name: 'blockIntervalId', description: 'ID заблокированного интервала' })
+  @ApiNotFoundResponse({ description: 'Заблокированный интервал не найден' })
   async deleteBlockInterval(@Param('blockIntervalId') blockIntervalId: string) {
     await this.mastersService.deleteBlockInterval(blockIntervalId);
     return { message: 'Block interval deleted successfully' };
@@ -107,6 +115,8 @@ export class MastersController {
 
   @Get(':id/schedule')
   @ApiOperation({ summary: 'Получение расписания мастера' })
+  @ApiOkResponse({ description: 'Расписание мастера' })
+  @ApiParam({ name: 'id', description: 'ID мастера' })
   async getSchedule(@Param('id') id: string) {
     return await this.mastersService.getSchedule(id);
   }
@@ -117,14 +127,18 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Создание расписания для мастера (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID мастера' })
+  @ApiBody({ type: CreateWorkScheduleDto })
   async createSchedule(@Param('id') id: string, @Body() dto: CreateWorkScheduleDto) {
     return await this.mastersService.createSchedule(id, dto);
   }
 
   @Get(':id/block-intervals')
   @ApiOperation({ summary: 'Получение заблокированных интервалов мастера' })
-  @ApiQuery({ name: 'startDate', required: false })
-  @ApiQuery({ name: 'endDate', required: false })
+  @ApiOkResponse({ description: 'Список заблокированных интервалов' })
+  @ApiParam({ name: 'id', description: 'ID мастера' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Начало периода (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Конец периода (YYYY-MM-DD)' })
   async getBlockIntervals(
     @Param('id') id: string,
     @Query('startDate') startDate?: string,
@@ -141,12 +155,18 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Создание заблокированного интервала (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID мастера' })
+  @ApiBody({ type: CreateBlockIntervalDto })
+  @ApiNotFoundResponse({ description: 'Мастер не найден' })
   async createBlockInterval(@Param('id') id: string, @Body() dto: CreateBlockIntervalDto) {
     return await this.mastersService.createBlockInterval(id, dto);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Получение мастера по ID' })
+  @ApiOkResponse({ description: 'Мастер' })
+  @ApiNotFoundResponse({ description: 'Мастер не найден' })
+  @ApiParam({ name: 'id', description: 'ID мастера' })
   async findById(@Param('id') id: string) {
     return await this.mastersService.findById(id);
   }
@@ -157,6 +177,9 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Обновление мастера (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID мастера' })
+  @ApiBody({ type: UpdateMasterDto, description: 'Частичное обновление: name, bio, photoUrl и др.' })
+  @ApiNotFoundResponse({ description: 'Мастер не найден' })
   async update(@Request() req: AuthRequest, @Param('id') id: string, @Body() dto: UpdateMasterDto) {
     const oldMaster = await this.mastersService.findById(id);
     const master = await this.mastersService.update(id, dto);
@@ -192,6 +215,8 @@ export class MastersController {
   // @Roles(UserRole.ADMIN)
   // @ApiBearerAuth()
   @ApiOperation({ summary: 'Удаление мастера (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID мастера' })
+  @ApiNotFoundResponse({ description: 'Мастер не найден' })
   async delete(@Request() req: AuthRequest, @Param('id') id: string) {
     const master = await this.mastersService.findById(id);
     await this.mastersService.delete(id);

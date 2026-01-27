@@ -8,7 +8,7 @@ import {
 import { Response } from 'express';
 import { buildValidationErrorResponse } from '../utils/error-response.builder';
 import { maskSensitiveData } from '../utils/sensitive-data-masker';
-import { ErrorResponse } from '../interfaces/error-response.interface';
+import { ErrorResponse, HttpExceptionResponseObject, ValidationErrorLike } from '../interfaces/error-response.interface';
 
 /**
  * Exception filter для обработки ошибок валидации
@@ -41,7 +41,7 @@ export class ValidationExceptionFilter implements ExceptionFilter {
         exceptionResponseType: typeof exceptionResponse,
         isArray: Array.isArray(exceptionResponse),
         hasMessage: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse,
-        messageIsArray: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse && Array.isArray((exceptionResponse as any).message),
+        messageIsArray: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse && Array.isArray((exceptionResponse as HttpExceptionResponseObject).message),
       },
     );
 
@@ -70,27 +70,23 @@ export class ValidationExceptionFilter implements ExceptionFilter {
       'success' in exceptionResponse &&
       'errorCode' in exceptionResponse &&
       'message' in exceptionResponse &&
-      typeof (exceptionResponse as any).message === 'string' // КРИТИЧНО: message должен быть строкой
+      typeof (exceptionResponse as HttpExceptionResponseObject).message === 'string' // КРИТИЧНО: message должен быть строкой
     ) {
       // Уже стандартизированный ErrorResponse от exceptionFactory
       this.logger.debug('[ValidationExceptionFilter] Получен готовый ErrorResponse от exceptionFactory');
 
       // КРИТИЧНО: Создаем новый объект для защиты от прототипного загрязнения
       // НИКОГДА не возвращаем exceptionResponse напрямую
+      const o = exceptionResponse as HttpExceptionResponseObject;
       const safeResponse: ErrorResponse = {
         success: false,
-        statusCode: (exceptionResponse as any).statusCode || status,
-        errorCode: (exceptionResponse as any).errorCode,
-        message: (exceptionResponse as any).message, // Гарантированно строка
+        statusCode: o.statusCode || status,
+        errorCode: (o.errorCode as string) || 'VALIDATION_ERROR',
+        message: o.message as string, // Гарантированно строка (проверено выше)
       };
 
-      if ((exceptionResponse as any).details) {
-        safeResponse.details = (exceptionResponse as any).details;
-      }
-
-      if ((exceptionResponse as any).retryAfter !== undefined) {
-        safeResponse.retryAfter = (exceptionResponse as any).retryAfter;
-      }
+      if (o.details) safeResponse.details = o.details;
+      if (o.retryAfter !== undefined) safeResponse.retryAfter = o.retryAfter;
 
       response.status(status).json(safeResponse);
       return;
@@ -98,7 +94,7 @@ export class ValidationExceptionFilter implements ExceptionFilter {
 
     // Если это ошибка ValidationPipe (массив ValidationError) - fallback для старых версий
     if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-      const responseObj = exceptionResponse as any;
+      const responseObj = exceptionResponse as HttpExceptionResponseObject;
       
       // КРИТИЧНО: ValidationPipe создает BadRequestException с message как массив ValidationError[]
       // Структура: { statusCode: 400, message: ValidationError[], error: "Bad Request" }
@@ -106,7 +102,7 @@ export class ValidationExceptionFilter implements ExceptionFilter {
         this.logger.error(
           `[ValidationExceptionFilter] ValidationPipe errors detected (fallback): ${responseObj.message.length} errors`,
           {
-            errors: responseObj.message.map((err: any) => ({
+            errors: responseObj.message.map((err: ValidationErrorLike) => ({
               property: err.property,
               constraints: Object.keys(err.constraints || {}),
             })),
@@ -114,7 +110,7 @@ export class ValidationExceptionFilter implements ExceptionFilter {
         );
         
         // Преобразуем ValidationError[] в стандартизированный ErrorResponse
-        const errorResponse = buildValidationErrorResponse(responseObj.message);
+        const errorResponse = buildValidationErrorResponse(responseObj.message as ValidationErrorLike[]);
         
         // КРИТИЧНО: Возвращаем стандартизированный формат
         // message всегда строка, details - массив ErrorDetail
@@ -143,7 +139,7 @@ export class ValidationExceptionFilter implements ExceptionFilter {
         isArray: Array.isArray(exceptionResponse),
         hasMessage: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse,
         messageType: exceptionResponse && typeof exceptionResponse === 'object' && 'message' in exceptionResponse
-          ? typeof (exceptionResponse as any).message
+          ? typeof (exceptionResponse as HttpExceptionResponseObject).message
           : 'N/A',
       },
     );
@@ -152,14 +148,14 @@ export class ValidationExceptionFilter implements ExceptionFilter {
     // Если exceptionResponse.message - массив, используем buildValidationErrorResponse
     // Если exceptionResponse.message - строка, создаем ErrorResponse с этой строкой
     // Если exceptionResponse - строка, создаем ErrorResponse с этой строкой
-    let errorResponse: any;
+    let errorResponse: ErrorResponse;
     
     if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-      const responseObj = exceptionResponse as any;
+      const responseObj = exceptionResponse as HttpExceptionResponseObject;
       
       if (responseObj.message && Array.isArray(responseObj.message)) {
         // Если message - массив, преобразуем через buildValidationErrorResponse
-        errorResponse = buildValidationErrorResponse(responseObj.message);
+        errorResponse = buildValidationErrorResponse(responseObj.message as ValidationErrorLike[]);
       } else if (typeof responseObj.message === 'string') {
         // Если message - строка, создаем ErrorResponse
         errorResponse = {

@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiOkResponse } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 
 @ApiTags('analytics')
@@ -9,6 +9,7 @@ export class AnalyticsController {
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Получение статистики для дашборда' })
+  @ApiOkResponse({ description: 'Статистика дашборда' })
   @ApiQuery({ name: 'startDate', required: false, description: 'Начало периода (YYYY-MM-DD)' })
   @ApiQuery({ name: 'endDate', required: false, description: 'Конец периода (YYYY-MM-DD)' })
   async getDashboardStats(
@@ -23,9 +24,10 @@ export class AnalyticsController {
 
   @Get('master-load')
   @ApiOperation({ summary: 'Загрузка мастера' })
-  @ApiQuery({ name: 'masterId', required: true })
-  @ApiQuery({ name: 'startDate', required: true })
-  @ApiQuery({ name: 'endDate', required: true })
+  @ApiOkResponse({ description: 'Загрузка мастера по датам' })
+  @ApiQuery({ name: 'masterId', required: true, description: 'ID мастера' })
+  @ApiQuery({ name: 'startDate', required: true, description: 'Начало периода (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: true, description: 'Конец периода (YYYY-MM-DD)' })
   async getMasterLoad(
     @Query('masterId') masterId: string,
     @Query('startDate') startDate: string,
