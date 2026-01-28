@@ -13,6 +13,7 @@ interface Service {
   price: number;
   duration: number;
   isActive: boolean;
+  imageUrl?: string;
 }
 
 interface SubcategoryListProps {
@@ -31,7 +32,16 @@ export const SubcategoryList = memo(({
       {subcategories.map((sub) => (
         <Card key={sub.id} className="bg-muted/30">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
+              {sub.imageUrl && (
+                <div className="flex-shrink-0">
+                  <img
+                    src={sub.imageUrl}
+                    alt={sub.name}
+                    className="w-16 h-16 object-cover rounded-lg border border-border"
+                  />
+                </div>
+              )}
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <FolderOpen className="h-4 w-4 text-muted-foreground" />

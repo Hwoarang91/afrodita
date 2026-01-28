@@ -27,6 +27,7 @@ interface Service {
   subcategories?: Service[];
   allowMultipleSubcategories?: boolean;
   masters?: Array<{ id: string; name: string }>;
+  imageUrl?: string;
 }
 
 export default function ServicesPage() {

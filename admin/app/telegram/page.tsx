@@ -331,6 +331,7 @@ export default function TelegramPage() {
               <AutoRepliesManagement />
             </div>
           )}
+      </div>
     </div>
   );
 }

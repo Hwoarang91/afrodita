@@ -22,16 +22,16 @@ export default function Services() {
     retry: 1,
   });
 
-  // Получаем уникальные категории
-  const categories = useMemo(() => {
-    if (!services) return [];
+  // Получаем уникальные категории и сортируем их
+  const sortedCategories = useMemo(() => {
+    if (!services) return ['Все'];
     const cats = new Set<string>();
     services.forEach(service => {
-      if (service.category) {
-        cats.add(service.category);
+      if (service.category && service.category.trim()) {
+        cats.add(service.category.trim());
       }
     });
-    return ['Все', ...Array.from(cats)];
+    return ['Все', ...Array.from(cats).sort()];
   }, [services]);
 
   // Фильтруем услуги по категории
@@ -105,7 +105,7 @@ export default function Services() {
       <main className="pb-32">
         {/* Category Filters */}
         <div className="flex gap-3 px-4 py-2 overflow-x-auto no-scrollbar">
-          {categories.map((category) => (
+          {sortedCategories.map((category) => (
             <button
               key={category}
               onClick={() => {
@@ -174,7 +174,9 @@ export default function Services() {
                 <span className="text-lg font-bold leading-tight">Продолжить</span>
               </div>
               <div className="flex items-center gap-3 text-white">
-                <span className="text-xl font-bold">{Number(totalPrice).toLocaleString('ru-RU')} ₽</span>
+                <span className="text-xl font-bold">
+                  {Number(totalPrice).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽
+                </span>
                 <span className="material-symbols-outlined">arrow_forward</span>
               </div>
             </button>

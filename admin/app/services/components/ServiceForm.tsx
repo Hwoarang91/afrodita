@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -120,6 +120,7 @@ export function ServiceForm({
   
   const masters = Array.isArray(mastersData) ? mastersData : (mastersData?.data || []);
 
+  // Загружаем категории для подкатегорий (isCategory = true)
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
     queryKey: ['services-categories'],
     queryFn: async () => {
@@ -137,6 +138,40 @@ export function ServiceForm({
   });
 
   const categories = Array.isArray(categoriesData) ? categoriesData : [];
+
+  // Загружаем список уникальных категорий (строковое поле category) для основных услуг
+  const { data: allServicesForCategories } = useQuery({
+    queryKey: ['services-all-for-categories'],
+    queryFn: async () => {
+      try {
+        const { data } = await apiClient.get('/services', {
+          params: {
+            page: 1,
+            limit: 1000,
+          },
+        });
+        return Array.isArray(data?.data) ? data.data : [];
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Ошибка при загрузке услуг для категорий:', error);
+        }
+        return [];
+      }
+    },
+    enabled: serviceType === 'main',
+  });
+
+  // Получаем уникальные категории из всех услуг
+  const uniqueCategories = useMemo(() => {
+    if (!allServicesForCategories) return [];
+    const cats = new Set<string>();
+    allServicesForCategories.forEach((s: Service) => {
+      if (s.category && s.category.trim()) {
+        cats.add(s.category.trim());
+      }
+    });
+    return Array.from(cats).sort();
+  }, [allServicesForCategories]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -219,6 +254,9 @@ export function ServiceForm({
       masterIds: formData.masterIds,
       isCategory: serviceType === 'category',
       imageUrl,
+      ...(serviceType === 'main' && {
+        category: formData.category?.trim() || null,
+      }),
       ...(serviceType !== 'category' && {
         price: formData.price,
         duration: formData.duration,
@@ -372,6 +410,43 @@ export function ServiceForm({
           required
         />
       </div>
+
+      {serviceType === 'main' && (
+        <div className="space-y-2">
+          <Label htmlFor="category">Категория</Label>
+          <div className="flex gap-2">
+            <select
+              id="category"
+              value={formData.category && uniqueCategories.includes(formData.category) ? formData.category : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormData({ ...formData, category: value });
+              }}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">Без категории</option>
+              {uniqueCategories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+            <Input
+              type="text"
+              placeholder="Или введите новую категорию"
+              value={formData.category && !uniqueCategories.includes(formData.category) ? formData.category : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormData({ ...formData, category: value });
+              }}
+              className="flex-1"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Выберите существующую категорию или введите новую. Категория используется для фильтрации услуг в веб-приложении.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="image">Изображение услуги</Label>

@@ -17,6 +17,8 @@ interface Service {
   isCategory?: boolean;
   subcategories?: Service[];
   allowMultipleSubcategories?: boolean;
+  imageUrl?: string;
+  category?: string;
 }
 
 interface ServiceCardProps {
@@ -46,7 +48,16 @@ export const ServiceCard = memo(({
     <div className="space-y-2">
       <Card className="hover:shadow-lg transition-all border-l-4 border-l-primary">
         <CardContent className="p-6">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex gap-4 mb-4">
+            {service.imageUrl && (
+              <div className="flex-shrink-0">
+                <img
+                  src={service.imageUrl}
+                  alt={service.name}
+                  className="w-24 h-24 object-cover rounded-lg border border-border"
+                />
+              </div>
+            )}
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 {service.isCategory ? (
@@ -73,6 +84,14 @@ export const ServiceCard = memo(({
             </div>
           </div>
           <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{service.description}</p>
+          
+          {service.category && !service.isCategory && (
+            <div className="mb-2">
+              <Badge variant="outline" className="text-xs">
+                Категория: {service.category}
+              </Badge>
+            </div>
+          )}
           
           {!service.isCategory && (
             <div className="flex justify-between items-center mb-4">

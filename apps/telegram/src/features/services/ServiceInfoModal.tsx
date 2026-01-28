@@ -49,7 +49,10 @@ export default function ServiceInfoModal({ service, open, onOpenChange }: Servic
           </div>
           <div className="text-right">
             <p className="text-2xl font-extrabold text-primary">
-              {Number(service.price).toLocaleString('ru-RU')} ₽
+              {typeof service.price === 'string' 
+                ? parseFloat(service.price).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                : Number(service.price).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+              } ₽
             </p>
           </div>
         </div>

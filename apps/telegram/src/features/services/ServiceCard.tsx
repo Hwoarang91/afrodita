@@ -10,7 +10,6 @@ interface ServiceCardProps {
 }
 
 export default function ServiceCard({ service, isSelected, onToggle, onInfoClick }: ServiceCardProps) {
-  const categoryName = service.category || 'Релакс';
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleInfoClick = (e: React.MouseEvent) => {
@@ -42,9 +41,11 @@ export default function ServiceCard({ service, isSelected, onToggle, onInfoClick
                 Выбрано
               </span>
             )}
-            <p className="text-pink-500 dark:text-pink-400 text-xs font-semibold uppercase tracking-wide">
-              {categoryName}
-            </p>
+            {service.category && (
+              <p className="text-pink-500 dark:text-pink-400 text-xs font-semibold uppercase tracking-wide">
+                {service.category}
+              </p>
+            )}
           </div>
           <p className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight">{service.name}</p>
           {service.description && (
@@ -59,7 +60,12 @@ export default function ServiceCard({ service, isSelected, onToggle, onInfoClick
               <span className="material-symbols-outlined text-sm">schedule</span>
               <span className="text-xs font-medium">{service.duration} мин</span>
             </div>
-            <p className="text-primary text-xl font-extrabold">{Number(service.price).toLocaleString('ru-RU')} ₽</p>
+            <p className="text-primary text-xl font-extrabold">
+              {typeof service.price === 'string' 
+                ? parseFloat(service.price).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                : Number(service.price).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+              } ₽
+            </p>
           </div>
           <button
             onClick={handleInfoClick}
