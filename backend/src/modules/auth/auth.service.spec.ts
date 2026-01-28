@@ -1,14 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { User, UserRole } from '../../entities/user.entity';
-import { Session } from '../../entities/session.entity';
-import { AuthLog, AuthAction } from '../../entities/auth-log.entity';
+import { AuthLog } from '../../entities/auth-log.entity';
 import { UsersService } from '../users/users.service';
+import { ReferralService } from '../users/referral.service';
+import { JwtAuthService } from './services/jwt.service';
+import { TelegramUserClientService } from '../telegram-user-api/services/telegram-user-client.service';
 import * as bcrypt from 'bcrypt';
 
 jest.mock('bcrypt', () => ({
@@ -19,8 +20,6 @@ jest.mock('bcrypt', () => ({
 describe('AuthService', () => {
   let service: AuthService;
   let userRepository: Repository<User>;
-  let sessionRepository: Repository<Session>;
-  let jwtService: JwtService;
   let usersService: UsersService;
 
   const mockQueryBuilder = {
@@ -36,21 +35,9 @@ describe('AuthService', () => {
     createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
   };
 
-  const mockSessionRepository = {
-    create: jest.fn(),
-    save: jest.fn(),
-    findOne: jest.fn(),
-    delete: jest.fn(),
-  };
-
   const mockAuthLogRepository = {
     create: jest.fn(),
     save: jest.fn(),
-  };
-
-  const mockJwtService = {
-    sign: jest.fn(),
-    verify: jest.fn(),
   };
 
   const mockConfigService = {
@@ -65,6 +52,22 @@ describe('AuthService', () => {
     update: jest.fn(),
   };
 
+  const mockReferralService = {
+    processReferralRegistration: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const mockJwtAuthService = {
+    generateTokenPair: jest.fn(),
+    refreshTokens: jest.fn(),
+    logout: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const mockTelegramUserClientService = {
+    getSessionById: jest.fn(),
+    updateSession: jest.fn(),
+    saveSession: jest.fn().mockResolvedValue(undefined),
+  };
+
   let module: TestingModule;
 
   beforeEach(async () => {
@@ -76,16 +79,8 @@ describe('AuthService', () => {
           useValue: mockUserRepository,
         },
         {
-          provide: getRepositoryToken(Session),
-          useValue: mockSessionRepository,
-        },
-        {
           provide: getRepositoryToken(AuthLog),
           useValue: mockAuthLogRepository,
-        },
-        {
-          provide: JwtService,
-          useValue: mockJwtService,
         },
         {
           provide: ConfigService,
@@ -95,13 +90,23 @@ describe('AuthService', () => {
           provide: UsersService,
           useValue: mockUsersService,
         },
+        {
+          provide: ReferralService,
+          useValue: mockReferralService,
+        },
+        {
+          provide: JwtAuthService,
+          useValue: mockJwtAuthService,
+        },
+        {
+          provide: TelegramUserClientService,
+          useValue: mockTelegramUserClientService,
+        },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
     userRepository = module.get<Repository<User>>(getRepositoryToken(User));
-    sessionRepository = module.get<Repository<Session>>(getRepositoryToken(Session));
-    jwtService = module.get<JwtService>(JwtService);
     usersService = module.get<UsersService>(UsersService);
   });
 
@@ -195,27 +200,15 @@ describe('AuthService', () => {
   // Вместо него используется JwtAuthService.generateTokenPair()
 
   describe('logout', () => {
-    it('должен деактивировать сессию', async () => {
-      const refreshToken = 'refresh-token';
-      const mockSession: Session = {
-        id: 'session-1',
-        userId: 'user-1',
-        refreshToken,
-        isActive: true,
-        user: {} as User,
-      } as Session;
-
-      mockSessionRepository.findOne.mockResolvedValue(mockSession);
-      mockSessionRepository.save.mockResolvedValue({
-        ...mockSession,
-        isActive: false,
-      });
+    it('должен вызвать jwtAuthService.logout и logAuthAction', async () => {
+      const userId = 'user-1';
       mockAuthLogRepository.create.mockReturnValue({});
       mockAuthLogRepository.save.mockResolvedValue({});
 
-      await service.logout(refreshToken);
+      await service.logout(userId, '127.0.0.1', 'Mozilla/5.0');
 
-      expect(mockSessionRepository.save).toHaveBeenCalled();
+      expect(mockJwtAuthService.logout).toHaveBeenCalledWith(userId);
+      expect(mockAuthLogRepository.save).toHaveBeenCalled();
     });
   });
 
@@ -316,54 +309,30 @@ describe('AuthService', () => {
   });
 
   describe('refreshToken', () => {
-    it('должен обновить токены', async () => {
+    it('должен обновить токены через JwtAuthService', async () => {
       const refreshToken = 'old-refresh-token';
-      const mockUser: User = {
-        id: 'user-1',
-        role: UserRole.CLIENT,
-      } as User;
+      const tokenPair = {
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+        accessTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      };
+      mockJwtAuthService.refreshTokens.mockResolvedValue(tokenPair);
 
-      const mockSession: Session = {
-        id: 'session-1',
-        userId: 'user-1',
+      const result = await service.refreshToken(refreshToken, '127.0.0.1', 'Mozilla/5.0');
+
+      expect(result).toEqual(tokenPair);
+      expect(mockJwtAuthService.refreshTokens).toHaveBeenCalledWith(
         refreshToken,
-        isActive: true,
-        expiresAt: new Date(Date.now() + 86400000),
-        user: mockUser,
-      } as Session;
-
-      mockSessionRepository.findOne.mockResolvedValue(mockSession);
-      mockSessionRepository.save.mockResolvedValue(mockSession);
-      mockJwtService.sign.mockReturnValue('new-token');
-      mockConfigService.get.mockReturnValue('7d');
-      mockAuthLogRepository.create.mockReturnValue({});
-      mockAuthLogRepository.save.mockResolvedValue({});
-
-      const result = await service.refreshToken(refreshToken);
-
-      expect(result).toHaveProperty('accessToken');
-      expect(result).toHaveProperty('refreshToken');
-      expect(mockJwtService.sign).toHaveBeenCalled();
+        '127.0.0.1',
+        'Mozilla/5.0',
+      );
     });
 
-    it('должен выбросить ошибку если сессия не найдена', async () => {
-      mockSessionRepository.findOne.mockResolvedValue(null);
+    it('должен пробросить ошибку если refresh не удался', async () => {
+      mockJwtAuthService.refreshTokens.mockRejectedValue(new UnauthorizedException('Invalid refresh token'));
 
       await expect(service.refreshToken('invalid-token')).rejects.toThrow(UnauthorizedException);
-    });
-
-    it('должен выбросить ошибку если сессия истекла', async () => {
-      const mockSession: Session = {
-        id: 'session-1',
-        refreshToken: 'old-token',
-        isActive: true,
-        expiresAt: new Date(Date.now() - 86400000),
-        user: {} as User,
-      } as Session;
-
-      mockSessionRepository.findOne.mockResolvedValue(mockSession);
-
-      await expect(service.refreshToken('old-token')).rejects.toThrow(UnauthorizedException);
     });
   });
 
@@ -695,31 +664,15 @@ describe('AuthService', () => {
 
   describe('login - edge cases', () => {
     it('должен обработать истечение refresh token', async () => {
-      const user = {
-        id: '1',
-        email: 'test@example.com',
-        role: UserRole.CLIENT,
-        isActive: true,
-      } as User;
-
-      mockJwtService.sign.mockReturnValue('token');
-      mockJwtService.verify.mockImplementation((token: string) => {
-        if (token === 'expired_refresh_token') {
-          throw new Error('Token expired');
-        }
-        return { sub: '1' };
-      });
-
-      mockSessionRepository.findOne.mockResolvedValue({
-        userId: '1',
-        refreshToken: 'expired_refresh_token',
-      });
+      mockJwtAuthService.refreshTokens.mockRejectedValue(new Error('Token expired'));
 
       await expect(service.refreshToken('expired_refresh_token')).rejects.toThrow();
     });
 
     it('должен обработать невалидный формат refresh token', async () => {
-      await expect(service.refreshToken('invalid.token.format')).rejects.toThrow();
+      mockJwtAuthService.refreshTokens.mockRejectedValue(new UnauthorizedException('Invalid refresh token'));
+
+      await expect(service.refreshToken('invalid.token.format')).rejects.toThrow(UnauthorizedException);
     });
   });
 
@@ -767,10 +720,12 @@ describe('AuthService', () => {
 
       mockUserRepository.create.mockReturnValue(mockAdmin);
       mockUserRepository.save.mockResolvedValue(mockAdmin);
-      mockJwtService.sign.mockReturnValue('token');
-      mockConfigService.get.mockReturnValue('7d');
-      mockSessionRepository.create.mockReturnValue({} as Session);
-      mockSessionRepository.save.mockResolvedValue({} as Session);
+      mockJwtAuthService.generateTokenPair.mockResolvedValue({
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        accessTokenExpiresAt: new Date(),
+        refreshTokenExpiresAt: new Date(),
+      });
       mockAuthLogRepository.create.mockReturnValue({});
       mockAuthLogRepository.save.mockResolvedValue({});
 

@@ -11,7 +11,6 @@ import { apiClient } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { Loader2, Smartphone, QrCode } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '@/lib/contexts/AuthContext';
 import { Telegram2FATab } from './components/Telegram2FATab';
 import { AuthStepper, type AuthStep, type StepStatus } from './components/AuthStepper';
 import { CountdownTimer } from './components/CountdownTimer';
@@ -21,7 +20,6 @@ interface TelegramAuthTabProps {
 }
 
 export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps) {
-  const { user } = useAuth(); // Получаем данные текущего пользователя (админа)
   const queryClient = useQueryClient(); // КРИТИЧНО: Для инвалидации кеша статуса сессии
   const [authMethod, setAuthMethod] = useState<'phone' | 'qr'>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -34,7 +32,6 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
   const [qrStatus, setQrStatus] = useState<'pending' | 'accepted' | 'expired'>('pending');
   const [passwordHint, setPasswordHint] = useState<string>('');
   const [requires2FA, setRequires2FA] = useState(false);
-  const [twoFAPassword, setTwoFAPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRequestingCode, setIsRequestingCode] = useState(false);
   const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null); // Время истечения кода (timestamp в секундах)
@@ -71,8 +68,9 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       setQrTimeRemaining(response.data.expiresAt ? Math.max(0, response.data.expiresAt - Math.floor(Date.now() / 1000)) : 0);
       setQrStatus('pending');
       toast.success('QR-код сгенерирован');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Ошибка генерации QR-кода');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+      toast.error(typeof msg === 'string' ? msg : 'Ошибка генерации QR-кода');
     } finally {
       setIsLoading(false);
     }
@@ -87,112 +85,100 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
 
   // Polling статуса QR-кода и обновление таймера
   useEffect(() => {
-    if (authMethod === 'qr' && qrTokenId && qrStatus === 'pending') {
-      // Обновляем таймер каждую секунду
-      const timerInterval = setInterval(() => {
-        if (qrExpiresAt > 0) {
-          // qrExpiresAt приходит в секундах (Unix timestamp)
-          // Проверяем, не в миллисекундах ли оно (если больше 1e10, значит миллисекунды)
-          const expiresAtSeconds = qrExpiresAt > 1e10 ? Math.floor(qrExpiresAt / 1000) : qrExpiresAt;
-          const remaining = Math.max(0, expiresAtSeconds - Math.floor(Date.now() / 1000));
-          setQrTimeRemaining(remaining);
-          if (remaining === 0 && qrStatus === 'pending') {
-            setQrStatus('expired');
-            toast.error('QR-код истек. Генерируем новый...');
-            generateQrCode();
-          }
-        }
-      }, 1000);
-      
-      // Проверяем статус с max retries и обработкой ошибок
-      let retryCount = 0;
-      const maxRetries = 30; // Максимум 30 попыток (около 60 секунд при интервале 2 сек)
-      const pollInterval = 2000; // Интервал 2 секунды
-      
-      const interval = setInterval(async () => {
-        try {
-          const response = await apiClient.get(`/auth/telegram/qr/status/${qrTokenId}`);
-          const status = response.data.status;
-          setQrStatus(status);
-          
-          // Обновляем информацию о времени до истечения
-          if (response.data.timeRemaining !== undefined) {
-            setQrTimeRemaining(response.data.timeRemaining);
-          }
-          if (response.data.expiresAt) {
-            setQrExpiresAt(response.data.expiresAt);
-          }
+    if (authMethod !== 'qr' || !qrTokenId || qrStatus !== 'pending') return;
 
-          if (status === 'accepted' && response.data.user) {
-            clearInterval(interval);
-            toast.success('Telegram аккаунт успешно подключен!');
-            refetchSessions();
-            // КРИТИЧНО: Инвалидируем кеш статуса сессии для немедленного обновления UI
-            queryClient.invalidateQueries({ queryKey: ['telegram-session-status'] });
-            // Сброс формы
-            setQrTokenId('');
-            setQrUrl('');
-            setQrStatus('pending');
-            setQrTimeRemaining(0);
-            // Вызываем callback для переключения на таб личных сообщений
-            if (onAuthSuccess) {
-              onAuthSuccess();
-            }
-          } else if (status === 'expired') {
-            clearInterval(interval);
-            toast.error('QR-код истек. Генерируем новый...');
-            setQrTokenId('');
-            setQrUrl('');
-            setQrStatus('pending');
-            setQrTimeRemaining(0);
-            generateQrCode();
-          } else {
-            // Увеличиваем счетчик попыток
-            retryCount++;
-            if (retryCount >= maxRetries) {
-              clearInterval(interval);
-              toast.error('Превышено время ожидания. Генерируем новый QR-код...');
-              setQrTokenId('');
-              setQrUrl('');
-              setQrStatus('pending');
-              setQrTimeRemaining(0);
-              generateQrCode();
-            }
-          }
-        } catch (error: any) {
-          console.error('Error checking QR status:', error);
-          
-          // Останавливаем polling при критических ошибках
-          if (error.response?.status === 401 || error.response?.status === 403) {
-            clearInterval(interval);
-            toast.error('Ошибка авторизации. Пожалуйста, попробуйте снова.');
-            setQrTokenId('');
-            setQrUrl('');
-            setQrStatus('pending');
-            setQrTimeRemaining(0);
-            return;
-          }
-          
-          // Увеличиваем счетчик попыток при ошибках
-          retryCount++;
-          if (retryCount >= maxRetries) {
-            clearInterval(interval);
-            toast.error('Превышено время ожидания. Генерируем новый QR-код...');
-            setQrTokenId('');
-            setQrUrl('');
-            setQrStatus('pending');
-            setQrTimeRemaining(0);
-            generateQrCode();
-          }
-        }
-      }, pollInterval);
+    // Только обновляем отображаемый таймер каждую секунду. Истечение обрабатывает poll (API возвращает status 'expired').
+    const timerInterval = setInterval(() => {
+      if (qrExpiresAt <= 0) return;
+      const expiresAtSeconds = qrExpiresAt > 1e10 ? Math.floor(qrExpiresAt / 1000) : qrExpiresAt;
+      const remaining = Math.max(0, expiresAtSeconds - Math.floor(Date.now() / 1000));
+      setQrTimeRemaining(remaining);
+    }, 1000);
 
-      return () => {
+    let retryCount = 0;
+    const maxRetries = 30;
+    const pollInterval = 2000;
+
+    const interval = setInterval(async () => {
+      const stopPolling = () => {
         clearInterval(interval);
         clearInterval(timerInterval);
       };
-    }
-  }, [authMethod, qrTokenId, qrStatus, qrExpiresAt, generateQrCode, refetchSessions]);
+      try {
+        const response = await apiClient.get(`/auth/telegram/qr/status/${qrTokenId}`);
+        const status = response.data.status;
+        setQrStatus(status);
+
+        if (response.data.timeRemaining !== undefined) {
+          setQrTimeRemaining(response.data.timeRemaining);
+        }
+        if (response.data.expiresAt) {
+          setQrExpiresAt(response.data.expiresAt);
+        }
+
+        if (status === 'accepted' && response.data.user) {
+          stopPolling();
+          toast.success('Telegram аккаунт успешно подключен!');
+          refetchSessions();
+          queryClient.invalidateQueries({ queryKey: ['telegram-session-status'] });
+          setQrTokenId('');
+          setQrUrl('');
+          setQrStatus('pending');
+          setQrTimeRemaining(0);
+          if (onAuthSuccess) onAuthSuccess();
+          return;
+        }
+
+        if (status === 'expired') {
+          stopPolling();
+          toast.error('QR-код истек. Генерируем новый...');
+          setQrTokenId('');
+          setQrUrl('');
+          setQrStatus('pending');
+          setQrTimeRemaining(0);
+          generateQrCode();
+          return;
+        }
+
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          stopPolling();
+          toast.error('Превышено время ожидания. Генерируем новый QR-код...');
+          setQrTokenId('');
+          setQrUrl('');
+          setQrStatus('pending');
+          setQrTimeRemaining(0);
+          generateQrCode();
+        }
+      } catch (err: unknown) {
+        const ax = (err as { response?: { status?: number } })?.response;
+        if (ax?.status === 401 || ax?.status === 403) {
+          stopPolling();
+          toast.error('Ошибка авторизации. Пожалуйста, попробуйте снова.');
+          setQrTokenId('');
+          setQrUrl('');
+          setQrStatus('pending');
+          setQrTimeRemaining(0);
+          return;
+        }
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          stopPolling();
+          toast.error('Превышено время ожидания. Генерируем новый QR-код...');
+          setQrTokenId('');
+          setQrUrl('');
+          setQrStatus('pending');
+          setQrTimeRemaining(0);
+          generateQrCode();
+        }
+      }
+    }, pollInterval);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(timerInterval);
+    };
+  }, [authMethod, qrTokenId, qrStatus, qrExpiresAt, generateQrCode, refetchSessions, onAuthSuccess, queryClient]);
 
   const handleRequestCode = async () => {
     if (!phoneNumber) {
@@ -209,8 +195,9 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
       // Код Telegram живет 60 секунд по умолчанию (можно расширить, если backend будет возвращать timeout)
       setCodeExpiresAt(Math.floor(Date.now() / 1000) + 60);
       toast.success('Код отправлен на ваш телефон');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Ошибка отправки кода');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+      toast.error(typeof msg === 'string' ? msg : 'Ошибка отправки кода');
     } finally {
       setIsRequestingCode(false);
     }
@@ -250,174 +237,18 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
           onAuthSuccess();
         }
       }
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Ошибка проверки кода';
+    } catch (err: unknown) {
+      const data = (err as { response?: { data?: { message?: unknown; errorCode?: string } } })?.response?.data;
+      const errorMessage = (typeof data?.message === 'string' ? data.message : null) || 'Ошибка проверки кода';
+      const errorCode = data?.errorCode;
       toast.error(errorMessage);
-      
-      // Автоматический сброс при PHONE_CODE_EXPIRED
-      if (errorMessage.includes('PHONE_CODE_EXPIRED') || errorMessage.includes('expired') || errorMessage.includes('истек')) {
+
+      if (errorCode === 'PHONE_CODE_EXPIRED' || /истек|expired/i.test(errorMessage)) {
         setPhoneCodeHash('');
         setCode('');
         setCodeExpiresAt(null);
         toast.info('Код истек. Пожалуйста, запросите новый код.');
       }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerify2FA = async () => {
-    if (!twoFAPassword || !phoneCodeHash) {
-      toast.error('Введите пароль 2FA');
-      return;
-    }
-
-    if (!phoneNumber) {
-      toast.error('Номер телефона не указан');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      // Убеждаемся, что пароль передается как строка
-      const passwordToSend = String(twoFAPassword).trim();
-      if (!passwordToSend) {
-        toast.error('Пароль не может быть пустым');
-        setIsLoading(false);
-        return;
-      }
-
-      // КРИТИЧНО: Создаем СТРОГО типизированный payload БЕЗ userId
-      // Используем JSON.parse(JSON.stringify()) для полной изоляции от прототипов
-      const cleanPayload = {
-        phoneNumber: phoneNumber.trim(),
-        password: passwordToSend,
-        phoneCodeHash,
-      };
-      
-      // Дополнительная защита: создаем новый объект через JSON для гарантии чистоты
-      const requestBody = JSON.parse(JSON.stringify(cleanPayload)) as {
-        phoneNumber: string;
-        password: string;
-        phoneCodeHash: string;
-      };
-      
-      // Финальная проверка - убеждаемся что userId отсутствует
-      if ('userId' in requestBody || (requestBody as any).userId !== undefined) {
-        delete (requestBody as any).userId;
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[2FA] ⚠️ userId was detected and removed from requestBody');
-        }
-      }
-      
-      // Логируем для отладки (только в dev режиме)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[2FA] ✅ Clean request body keys:', Object.keys(requestBody));
-        console.log('[2FA] ✅ userId in body?', 'userId' in requestBody);
-        console.log('[2FA] ✅ Full body:', JSON.stringify(requestBody));
-      }
-      
-      const response = await apiClient.post('/auth/telegram/2fa/verify', requestBody);
-
-      if (response.data.success) {
-        toast.success('Telegram аккаунт успешно подключен!');
-        refetchSessions();
-        // КРИТИЧНО: Инвалидируем кеш статуса сессии для немедленного обновления UI
-        queryClient.invalidateQueries({ queryKey: ['telegram-session-status'] });
-        // Сброс формы
-        setPhoneNumber('');
-        setCode('');
-        setPhoneCodeHash('');
-        setTwoFAPassword('');
-        setRequires2FA(false);
-        // Вызываем callback для переключения на таб личных сообщений
-        if (onAuthSuccess) {
-          onAuthSuccess();
-        }
-      }
-    } catch (error: any) {
-      // КРИТИЧНО: Нормализация ошибок для работы с единым ErrorResponse контрактом
-      // Backend теперь всегда возвращает стандартизированный формат:
-      // { success: false, statusCode, errorCode, message: string, details?: ErrorDetail[] }
-      // Это гарантирует, что message всегда строка, а не объект или массив
-      const extractErrorMessage = (err: any): string => {
-        const data = err?.response?.data;
-
-        if (!data) {
-          return 'Неизвестная ошибка';
-        }
-
-        // КРИТИЧНО: Аварийный safeguard - если message не строка, логируем и возвращаем безопасное сообщение
-        if (data.message && typeof data.message !== 'string') {
-          console.error('[ErrorContractViolation] message is not a string:', {
-            type: typeof data.message,
-            isArray: Array.isArray(data.message),
-            value: data.message,
-            fullData: data,
-          });
-          // Возвращаем безопасное сообщение вместо объекта
-          return 'Произошла ошибка валидации. Проверьте введенные данные.';
-        }
-
-        // Новый стандартизированный формат ErrorResponse
-        if (data.message && typeof data.message === 'string') {
-          // Если есть details, добавляем их к сообщению
-          if (Array.isArray(data.details) && data.details.length > 0) {
-            const detailsMessages = data.details
-              .map((detail: any) => {
-                if (typeof detail === 'string') return detail;
-                if (detail?.message && typeof detail.message === 'string') {
-                  return detail.message;
-                }
-                return null;
-              })
-              .filter(Boolean);
-            
-            if (detailsMessages.length > 0) {
-              return `${data.message}\n${detailsMessages.join('\n')}`;
-            }
-          }
-          return data.message;
-        }
-
-        // Fallback для старых форматов (обратная совместимость)
-        const msg = data.message;
-        
-        // Если message - массив (старый формат ValidationPipe)
-        if (Array.isArray(msg)) {
-          return msg
-            .map((e: any) => {
-              if (typeof e === 'string') return e;
-              if (e?.constraints && typeof e.constraints === 'object') {
-                return Object.values(e.constraints).join(', ');
-              }
-              if (e?.message && typeof e.message === 'string') {
-                return e.message;
-              }
-              return 'Ошибка валидации';
-            })
-            .join('\n');
-        }
-
-        // Если message - объект (старый формат)
-        if (msg && typeof msg === 'object') {
-          if (msg.constraints && typeof msg.constraints === 'object') {
-            return Object.values(msg.constraints).join(', ');
-          }
-          if (msg.message && typeof msg.message === 'string') {
-            return msg.message;
-          }
-        }
-
-        // Fallback на error поле
-        if (data.error && typeof data.error === 'string') {
-          return data.error;
-        }
-
-        return 'Ошибка проверки 2FA';
-      };
-
-      toast.error(extractErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -500,7 +331,6 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                       setPhoneNumber('');
                       setCode('');
                       setPhoneCodeHash('');
-                      setTwoFAPassword('');
                       setRequires2FA(false);
                       if (onAuthSuccess) {
                         onAuthSuccess();
@@ -508,7 +338,13 @@ export default function TelegramAuthTab({ onAuthSuccess }: TelegramAuthTabProps)
                     }}
                     onCancel={() => {
                       setRequires2FA(false);
-                      setTwoFAPassword('');
+                    }}
+                    onRestart={() => {
+                      setPhoneNumber('');
+                      setCode('');
+                      setPhoneCodeHash('');
+                      setCodeExpiresAt(null);
+                      setRequires2FA(false);
                     }}
                   />
                 ) : (

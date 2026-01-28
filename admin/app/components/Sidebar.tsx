@@ -39,7 +39,8 @@ const menuItems = [
   { href: '/contact-requests', label: 'Заявки', icon: MessageSquare },
   { href: '/mailings', label: 'Рассылки', icon: Mail },
       { href: '/telegram', label: 'Telegram', icon: Bot },
-      { href: '/templates', label: 'Шаблоны', icon: FileCode },
+  { href: '/telegram-user', label: 'Telegram User', icon: Shield },
+  { href: '/templates', label: 'Шаблоны', icon: FileCode },
   { href: '/audit', label: 'Журнал действий', icon: FileText },
   { href: '/settings', label: 'Настройки', icon: Settings },
 ];

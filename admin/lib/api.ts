@@ -44,20 +44,18 @@ apiClient.interceptors.request.use((config) => {
   // Все остальные поля удаляются (userId, sessionId, client, user и т.д.)
   const url = config.url || '';
   const baseUrl = config.baseURL || '';
-  const fullUrl = (baseUrl + url).includes('/auth/telegram/2fa/verify') || url.includes('/auth/telegram/2fa/verify');
-  
-  // Разрешенные ключи (соответствуют Telegram2FAVerifyDto)
+  const is2FAVerify =
+    (baseUrl + url).includes('/auth/telegram/2fa/verify') || url.includes('/auth/telegram/2fa/verify');
+
   const ALLOWED_KEYS = ['phoneNumber', 'password', 'phoneCodeHash'] as const;
   const FORBIDDEN_KEYS = ['userId', 'sessionId', 'client', 'user', 'id'] as const;
-  
-  if (fullUrl && config.data) {
+
+  if (is2FAVerify && config.data) {
     // Обрабатываем как объект (самый частый случай)
     if (typeof config.data === 'object' && config.data !== null && !Array.isArray(config.data) && !(config.data instanceof FormData)) {
-      // ВСЕГДА создаем новый чистый объект только с разрешенными полями (allow-list)
-      const { phoneNumber, password, phoneCodeHash } = config.data as any;
-      const cleanPayload: Record<string, any> = {};
-      
-      // Добавляем только разрешенные поля, если они есть
+      const orig = config.data as Record<string, unknown>;
+      const { phoneNumber, password, phoneCodeHash } = orig;
+      const cleanPayload: Record<string, unknown> = {};
       if (phoneNumber !== undefined && phoneNumber !== null) {
         cleanPayload.phoneNumber = typeof phoneNumber === 'string' ? phoneNumber.trim() : phoneNumber;
       }
@@ -67,17 +65,15 @@ apiClient.interceptors.request.use((config) => {
       if (phoneCodeHash !== undefined && phoneCodeHash !== null) {
         cleanPayload.phoneCodeHash = phoneCodeHash;
       }
-      
-      // Заменяем data на чистый объект (гарантированно без userId и других запрещенных полей)
       config.data = cleanPayload;
-      
       if (process.env.NODE_ENV === 'development') {
-        const hadForbidden = FORBIDDEN_KEYS.some(key => key in (config.data as any));
-        const hadUnknown = Object.keys(config.data as any).some(key => !ALLOWED_KEYS.includes(key as any));
+        const hadForbidden = FORBIDDEN_KEYS.some((k) => k in orig);
+        const hadUnknown = Object.keys(orig).some(
+          (k) => !ALLOWED_KEYS.includes(k as (typeof ALLOWED_KEYS)[number]),
+        );
         if (hadForbidden || hadUnknown) {
           console.warn('[API Interceptor] ⚠️ Removed forbidden/unknown fields from 2FA verify request');
         }
-        console.log('[API Interceptor] ✅ Clean payload for 2FA verify:', Object.keys(cleanPayload));
       }
     }
     // Обрабатываем как строку (JSON)
@@ -86,8 +82,7 @@ apiClient.interceptors.request.use((config) => {
         const parsed = JSON.parse(config.data);
         if (parsed && typeof parsed === 'object' && parsed !== null) {
           const { phoneNumber, password, phoneCodeHash } = parsed;
-          // Создаем чистый объект только с разрешенными полями
-          const cleanPayload: Record<string, any> = {};
+          const cleanPayload: Record<string, unknown> = {};
           if (phoneNumber !== undefined && phoneNumber !== null) {
             cleanPayload.phoneNumber = typeof phoneNumber === 'string' ? phoneNumber.trim() : phoneNumber;
           }
@@ -97,14 +92,12 @@ apiClient.interceptors.request.use((config) => {
           if (phoneCodeHash !== undefined && phoneCodeHash !== null) {
             cleanPayload.phoneCodeHash = phoneCodeHash;
           }
-          
           config.data = JSON.stringify(cleanPayload);
           if (process.env.NODE_ENV === 'development') {
-            const hadForbidden = FORBIDDEN_KEYS.some(key => key in parsed);
+            const hadForbidden = FORBIDDEN_KEYS.some((k) => k in parsed);
             if (hadForbidden) {
               console.warn('[API Interceptor] ⚠️ Removed forbidden fields from 2FA verify request (JSON string)');
             }
-            console.log('[API Interceptor] ✅ Clean payload for 2FA verify (JSON):', Object.keys(cleanPayload));
           }
         }
       } catch (e) {

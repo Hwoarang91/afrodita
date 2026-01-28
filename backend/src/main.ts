@@ -12,11 +12,11 @@ import * as compression from 'compression';
 import { AppDataSource } from './config/data-source';
 import * as fs from 'fs';
 import * as path from 'path';
-import express from 'express';
+import { json, urlencoded } from 'express';
 import * as cookieParser from 'cookie-parser';
 import * as session from 'express-session';
 import { DataSource } from 'typeorm';
-import { authLimiter } from './common/middleware/rate-limit.middleware';
+import { authLimiter, telegram2FALimiter } from './common/middleware/rate-limit.middleware';
 
 async function bootstrap() {
   // Настройка кодировки для правильного отображения русского языка
@@ -104,8 +104,8 @@ async function bootstrap() {
       forceCloseConnections: true,
     });
     const bodyLimit = process.env.BODY_PARSER_LIMIT || '10mb';
-    app.use(express.json({ limit: bodyLimit }));
-    app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
+    app.use(json({ limit: bodyLimit }));
+    app.use(urlencoded({ extended: true, limit: bodyLimit }));
     logger.log('NestFactory создан, body parser limit: ' + bodyLimit);
     
     // Проверяем подключение TypeORM перед запуском сервера
@@ -172,6 +172,7 @@ async function bootstrap() {
   // Rate limiting на auth (защита от brute-force)
   app.use('/api/v1/auth/login', authLimiter);
   app.use('/api/v1/auth/register', authLimiter);
+  app.use('/api/v1/auth/telegram/2fa/verify', telegram2FALimiter);
 
   // CORS
   const allowedOrigins: (string | RegExp)[] = process.env.CORS_ORIGIN
@@ -192,7 +193,7 @@ async function bootstrap() {
     origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-CSRF-Token'],
     exposedHeaders: ['Set-Cookie'],
   });
 

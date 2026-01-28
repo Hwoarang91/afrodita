@@ -51,4 +51,3 @@ export class SessionInfoDto {
   @ApiProperty({ description: 'Является ли эта сессия текущей (используется для API)', required: false })
   isCurrent?: boolean;
 }
-

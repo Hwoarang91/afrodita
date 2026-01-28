@@ -12,6 +12,7 @@ import { MastersModule } from './modules/masters/masters.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { FinancialModule } from './modules/financial/financial.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
+import { TelegramUserApiModule } from './modules/telegram-user-api/telegram-user-api.module';
 import { WebSocketModule } from './modules/websocket/websocket.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { SettingsModule } from './modules/settings/settings.module';
@@ -50,6 +51,7 @@ import { validate } from './config/env.validation';
     NotificationsModule,
     FinancialModule,
     TelegramModule,
+    TelegramUserApiModule,
     WebSocketModule,
     AnalyticsModule,
     SettingsModule,

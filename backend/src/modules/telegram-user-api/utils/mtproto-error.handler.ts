@@ -1,7 +1,5 @@
 /**
- * Централизованная обработка MTProto ошибок
- * Определяет тип ошибки и возвращает действие для обработки
- * Интегрирован с ErrorResponse contract для единообразной обработки ошибок
+ * Централизованная обработка MTProto ошибок (модуль telegram-user-api)
  */
 
 import { ErrorResponse } from '../../../common/interfaces/error-response.interface';
@@ -24,18 +22,13 @@ export interface MtprotoErrorResult {
   action: MtprotoErrorAction;
   reason: string;
   retryAfter?: number;
-  errorResponse?: ErrorResponse; // Стандартизированный ErrorResponse для возврата в контроллере
+  errorResponse?: ErrorResponse;
 }
 
-/**
- * Обрабатывает MTProto ошибку и возвращает действие для обработки
- * Теперь также возвращает стандартизированный ErrorResponse для использования в контроллерах
- */
 export function handleMtprotoError(e: unknown): MtprotoErrorResult {
   const message = getErrorMessage(e);
   const errorResponse = mapTelegramErrorToResponse(e);
 
-  // 🔴 FATAL - инвалидировать сессию немедленно
   if (isFatalTelegramError(e)) {
     return {
       action: MtprotoErrorAction.INVALIDATE_SESSION,
@@ -44,7 +37,6 @@ export function handleMtprotoError(e: unknown): MtprotoErrorResult {
     };
   }
 
-  // 🟠 AUTH FLOW - требуется действие пользователя (проверки только в mapper)
   if (isRequire2faActionError(e)) {
     return {
       action: MtprotoErrorAction.REQUIRE_2FA,
@@ -53,7 +45,6 @@ export function handleMtprotoError(e: unknown): MtprotoErrorResult {
     };
   }
 
-  // 🟡 RETRYABLE - FLOOD_WAIT, DC_MIGRATE и др. (retryAfter из mapper)
   if (isRetryableTelegramError(e)) {
     return {
       action: MtprotoErrorAction.RETRY,
@@ -63,11 +54,9 @@ export function handleMtprotoError(e: unknown): MtprotoErrorResult {
     };
   }
 
-  // 🟢 SAFE - бизнес-ошибки, не требующие инвалидации сессии
   return {
     action: MtprotoErrorAction.SAFE_ERROR,
     reason: message,
     errorResponse,
   };
 }
-

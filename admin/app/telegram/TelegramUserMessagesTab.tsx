@@ -84,8 +84,13 @@ interface SessionInfo {
   isCurrent?: boolean;
 }
 
+interface TelegramUserMessagesTabProps {
+  /** Вызывается при нажатии «Перейти к авторизации», когда сессии нет (переключение на вкладку Авторизация). */
+  onRequestAuth?: () => void;
+}
 
-export default function TelegramUserMessagesTab() {
+export default function TelegramUserMessagesTab(props?: TelegramUserMessagesTabProps) {
+  const { onRequestAuth } = props ?? {};
   const [selectedTab, setSelectedTab] = useState<'send' | 'sessions' | 'events'>('send');
   const [selectedChatId, setSelectedChatId] = useState('');
   const [message, setMessage] = useState('');
@@ -478,8 +483,11 @@ export default function TelegramUserMessagesTab() {
           message={sessionData?.invalidReason || (sessionStatus === 'expired' ? 'Сессия была отозвана или истекла' : 'Не удалось подключить Telegram аккаунт')}
           actionText="Переавторизоваться"
           onAction={() => {
-            // Переходим на вкладку авторизации через изменение URL
-            window.location.href = '/telegram?tab=auth';
+            if (onRequestAuth) {
+              onRequestAuth();
+            } else {
+              window.location.href = '/telegram-user';
+            }
           }}
         />
       );
@@ -493,6 +501,11 @@ export default function TelegramUserMessagesTab() {
         <p className="text-sm text-muted-foreground">
           Перейдите на вкладку &quot;Авторизация&quot; и авторизуйтесь через телефон или QR-код.
         </p>
+        {onRequestAuth && (
+          <Button onClick={onRequestAuth}>
+            Перейти к авторизации
+          </Button>
+        )}
       </div>
     );
   }

@@ -1,26 +1,18 @@
 /**
  * Эталонный маппинг Telegram MTProto ошибок → ErrorCode
- * 
+ * (Модуль telegram-user-api — «От своего лица»)
+ *
  * Гарантирует:
  * - 100% покрытие реально встречающихся MTProto ошибок
  * - Нет string.includes() в бизнес-коде
  * - Предсказуемое поведение UI
  * - Канонический слой нормализации
- * 
- * Принципы:
- * 1. Все Telegram ошибки изолированы от UI
- * 2. UI работает только с ErrorResponse контрактом
- * 3. Machine-readable errorCode для программной обработки
- * 4. Human-readable message для отображения пользователю
  */
 
 import { ErrorCode } from '../../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../../common/utils/error-response.builder';
 import { getHttpStatusForErrorCode } from '../../../common/utils/error-code-http-map';
 
-/**
- * Результат маппинга Telegram ошибки
- */
 export interface TelegramErrorMapping {
   statusCode: number;
   errorCode: ErrorCode | string;
@@ -28,25 +20,11 @@ export interface TelegramErrorMapping {
   retryAfter?: number;
 }
 
-/**
- * Эталонный маппинг Telegram MTProto ошибки в стандартизированный ErrorResponse
- * 
- * Покрывает 100% реально встречающихся MTProto ошибок согласно официальной документации
- * и реальному опыту использования MTProto клиентов.
- * 
- * @param error - Telegram ошибка (может быть Error, string, или объект с message)
- * @returns ErrorResponse с правильным errorCode и message
- */
 export function mapTelegramError(error: unknown): TelegramErrorMapping {
   const e = error as { errorMessage?: string; message?: string } | null | undefined;
   const message = e?.errorMessage || e?.message || String(error ?? '').trim();
   const upperMessage = message.toUpperCase();
-  
-  // ============================================================================
-  // 🔴 RATE LIMITING (429) - FLOOD_WAIT
-  // ============================================================================
-  
-  // FLOOD_WAIT_X - стандартный rate limiting
+
   const floodWaitMatch = message.match(/FLOOD_WAIT_(\d+)/i);
   if (floodWaitMatch) {
     const seconds = parseInt(floodWaitMatch[1], 10);
@@ -58,7 +36,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // FLOOD_PREMIUM_WAIT_X - rate limiting для premium функций
   const floodPremiumMatch = message.match(/FLOOD_PREMIUM_WAIT_(\d+)/i);
   if (floodPremiumMatch) {
     const seconds = parseInt(floodPremiumMatch[1], 10);
@@ -70,7 +47,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // PHONE_NUMBER_FLOOD - слишком много попыток отправки кода
   if (upperMessage.includes('PHONE_NUMBER_FLOOD')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.TOO_MANY_REQUESTS),
@@ -79,10 +55,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // ============================================================================
-  // 🔴 PHONE CODE ОШИБКИ (400) - пользовательские ошибки
-  // ============================================================================
-  
   if (upperMessage.includes('PHONE_CODE_INVALID')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.PHONE_CODE_INVALID),
@@ -107,10 +79,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // ============================================================================
-  // 🔴 2FA ОШИБКИ (401) - требуется повторный ввод пароля
-  // ============================================================================
-  
   if (
     upperMessage.includes('PASSWORD_HASH_INVALID') ||
     upperMessage.includes('SESSION_PASSWORD_NEEDED')
@@ -122,7 +90,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // SRP_PASSWORD_CHANGED - пароль был изменён, требуется новый ввод
   if (upperMessage.includes('SRP_PASSWORD_CHANGED')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.INVALID_2FA_PASSWORD),
@@ -131,11 +98,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // ============================================================================
-  // 🔴 СЕССИЯ НЕДЕЙСТВИТЕЛЬНА (401/403) - фатальные ошибки, требующие перелогина
-  // ============================================================================
-  
-  // AUTH_KEY_UNREGISTERED - auth_key не зарегистрирован
   if (upperMessage.includes('AUTH_KEY_UNREGISTERED')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
@@ -144,7 +106,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // SESSION_REVOKED - сессия отозвана
   if (upperMessage.includes('SESSION_REVOKED')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
@@ -153,7 +114,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // AUTH_KEY_DUPLICATED - сессия вытеснена другой сессией
   if (upperMessage.includes('AUTH_KEY_DUPLICATED')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
@@ -162,7 +122,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // AUTH_RESTART - требуется перезапуск авторизации
   if (upperMessage.includes('AUTH_RESTART')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
@@ -171,7 +130,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // USER_DEACTIVATED - аккаунт деактивирован
   if (upperMessage.includes('USER_DEACTIVATED') && !upperMessage.includes('BAN')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
@@ -180,7 +138,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // USER_DEACTIVATED_BAN - аккаунт заблокирован
   if (upperMessage.includes('USER_DEACTIVATED_BAN')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.SESSION_INVALID),
@@ -189,10 +146,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // ============================================================================
-  // 🔴 ЗАБЛОКИРОВАННЫЙ НОМЕР (403)
-  // ============================================================================
-  
   if (upperMessage.includes('PHONE_NUMBER_BANNED')) {
     return {
       statusCode: getHttpStatusForErrorCode(ErrorCode.PHONE_NUMBER_BANNED),
@@ -201,11 +154,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // ============================================================================
-  // 🟡 MIGRATE ОШИБКИ (409) - требуют retry на backend с новым DC
-  // ============================================================================
-  
-  // DC_MIGRATE_X - перенаправление на другой дата-центр
   const dcMigrateMatch = message.match(/DC_MIGRATE_(\d+)/i);
   if (dcMigrateMatch) {
     const dcId = dcMigrateMatch[1];
@@ -216,7 +164,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // NETWORK_MIGRATE_X - перенаправление сети
   const networkMigrateMatch = message.match(/NETWORK_MIGRATE_(\d+)/i);
   if (networkMigrateMatch) {
     const dcId = networkMigrateMatch[1];
@@ -227,7 +174,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // FILE_MIGRATE_X - перенаправление файлов
   const fileMigrateMatch = message.match(/FILE_MIGRATE_(\d+)/i);
   if (fileMigrateMatch) {
     const dcId = fileMigrateMatch[1];
@@ -238,7 +184,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // PHONE_MIGRATE_X - перенаправление пользователя
   const phoneMigrateMatch = message.match(/PHONE_MIGRATE_(\d+)/i);
   if (phoneMigrateMatch) {
     const dcId = phoneMigrateMatch[1];
@@ -249,7 +194,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // USER_MIGRATE_X - перенаправление пользователя (альтернативное название)
   const userMigrateMatch = message.match(/USER_MIGRATE_(\d+)/i);
   if (userMigrateMatch) {
     const dcId = userMigrateMatch[1];
@@ -260,11 +204,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // ============================================================================
-  // 🟡 RETRYABLE ОШИБКИ (409/500) - временные проблемы, требуют retry
-  // ============================================================================
-  
-  // MSG_WAIT_FAILED - сообщение не дождалось ответа
   if (upperMessage.includes('MSG_WAIT_FAILED')) {
     return {
       statusCode: 409,
@@ -273,7 +212,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // RPC_CALL_FAIL - ошибка RPC вызова
   if (upperMessage.includes('RPC_CALL_FAIL')) {
     return {
       statusCode: 500,
@@ -282,7 +220,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // TIMEOUT - таймаут запроса
   if (upperMessage.includes('TIMEOUT')) {
     return {
       statusCode: 504,
@@ -291,7 +228,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // CONNECTION_NOT_INITED - соединение не инициализировано
   if (upperMessage.includes('CONNECTION_NOT_INITED')) {
     return {
       statusCode: 500,
@@ -300,7 +236,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // INTERNAL_SERVER_ERROR - внутренняя ошибка Telegram
   if (upperMessage.includes('INTERNAL_SERVER_ERROR') || upperMessage.includes('INTERNAL')) {
     return {
       statusCode: 500,
@@ -309,10 +244,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
     };
   }
 
-  // ============================================================================
-  // 🟢 FALLBACK - неизвестная ошибка (§17: пользовательское сообщение без технических деталей)
-  // ============================================================================
-  
   return {
     statusCode: 500,
     errorCode: ErrorCode.INTERNAL_SERVER_ERROR,
@@ -320,13 +251,6 @@ export function mapTelegramError(error: unknown): TelegramErrorMapping {
   };
 }
 
-/**
- * Преобразует Telegram ошибку в стандартизированный ErrorResponse
- * Используется в контроллерах и сервисах для единообразной обработки ошибок
- * 
- * @param error - Telegram ошибка
- * @returns Стандартизированный ErrorResponse
- */
 export function mapTelegramErrorToResponse(error: unknown) {
   const mapping = mapTelegramError(error);
   return buildErrorResponse(
@@ -338,23 +262,11 @@ export function mapTelegramErrorToResponse(error: unknown) {
   );
 }
 
-/**
- * Проверяет, является ли ошибка фатальной (требует инвалидации сессии)
- * 
- * @param error - Telegram ошибка
- * @returns true если ошибка фатальная
- */
 export function isFatalTelegramError(error: unknown): boolean {
   const mapping = mapTelegramError(error);
   return mapping.errorCode === ErrorCode.SESSION_INVALID;
 }
 
-/**
- * Проверяет, является ли ошибка retryable (можно повторить запрос)
- * 
- * @param error - Telegram ошибка
- * @returns true если ошибка retryable
- */
 export function isRetryableTelegramError(error: unknown): boolean {
   const mapping = mapTelegramError(error);
   return [
@@ -366,14 +278,6 @@ export function isRetryableTelegramError(error: unknown): boolean {
   ].includes(mapping.errorCode as ErrorCode);
 }
 
-/**
- * Проверяет, требует ли ошибка действия 2FA (REQUIRE_2FA).
- * Единственная точка проверки строк MTProto для AUTH FLOW.
- * Использовать вместо message.includes('SESSION_PASSWORD_NEEDED') и аналогичных.
- *
- * @param error - Telegram ошибка
- * @returns true если нужен REQUIRE_2FA
- */
 export function isRequire2faActionError(error: unknown): boolean {
   const mapping = mapTelegramError(error);
   return [

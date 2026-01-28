@@ -197,7 +197,7 @@ try {
 
 ## Связанные файлы
 
-- `backend/src/modules/telegram/utils/telegram-error-mapper.ts` - единственная точка знания MTProto
+- `backend/src/modules/telegram-user-api/utils/telegram-error-mapper.ts` - единственная точка знания MTProto («от своего лица»)
 - `backend/src/common/interfaces/error-response.interface.ts` - ErrorCode enum
 - `admin/lib/error-code-ui-matrix.ts` - UI поведение для ErrorCode
 - `backend/src/common/utils/error-code-http-map.ts` - маппинг ErrorCode → HTTP status

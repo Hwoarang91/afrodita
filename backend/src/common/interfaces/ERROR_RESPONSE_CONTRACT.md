@@ -138,7 +138,7 @@ throw new BadRequestException(
 ### Обработка Telegram MTProto ошибок
 
 ```typescript
-import { mapTelegramErrorToResponse } from '../modules/telegram/utils/telegram-error-mapper';
+import { mapTelegramErrorToResponse } from '../modules/telegram-user-api/utils/telegram-error-mapper';
 
 try {
   await client.invoke({ _: 'auth.signIn', ... });

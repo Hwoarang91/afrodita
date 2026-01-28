@@ -3,7 +3,7 @@ import { Request } from 'express';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
 import { getErrorMessage, getErrorStack } from '../../common/utils/error-message';
-import { mapTelegramErrorToResponse } from '../telegram/utils/telegram-error-mapper';
+import { mapTelegramErrorToResponse } from '../telegram-user-api/utils/telegram-error-mapper';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -13,7 +13,7 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { ReferralService } from '../users/referral.service';
 import { JwtAuthService } from './services/jwt.service';
-import { TelegramUserClientService } from '../telegram/services/telegram-user-client.service';
+import { TelegramUserClientService } from '../telegram-user-api/services/telegram-user-client.service';
 import { Client, checkPassword } from '@mtkruto/node';
 import { validate } from '@tma.js/init-data-node';
 import { v4 as uuidv4 } from 'uuid';
@@ -696,7 +696,12 @@ export class AuthService implements OnModuleDestroy {
           stored = this.phoneCodeHashStore.get(normalizedPhone);
         }
         if (!stored || stored.hash !== phoneCodeHash) {
-          throw new UnauthorizedException('Invalid phone code hash');
+          const err = buildErrorResponse(
+            HttpStatus.UNAUTHORIZED,
+            ErrorCode.SESSION_INVALID,
+            'Неверный phone code hash. Начните авторизацию заново.',
+          );
+          throw new HttpException(err, HttpStatus.UNAUTHORIZED);
         }
       }
 
@@ -705,7 +710,7 @@ export class AuthService implements OnModuleDestroy {
         const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
           ErrorCode.PHONE_CODE_EXPIRED,
-          'Phone code hash expired',
+          'Срок действия кода истёк. Запросите новый код.',
         );
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
@@ -1248,7 +1253,7 @@ export class AuthService implements OnModuleDestroy {
         const errorResponse = buildErrorResponse(
           HttpStatus.BAD_REQUEST,
           ErrorCode.SESSION_NOT_FOUND,
-          '2FA session not found. Please restart the authentication process.',
+          'Сессия 2FA не найдена. Начните авторизацию заново (Отправить код → Ввести код → 2FA).',
         );
         throw new HttpException(errorResponse, HttpStatus.BAD_REQUEST);
       }
@@ -1257,11 +1262,10 @@ export class AuthService implements OnModuleDestroy {
       
       if (stored.phoneCodeHash !== phoneCodeHash) {
         this.logger.error(`Phone code hash mismatch for phone: ${normalizedPhone}. Expected: ${stored.phoneCodeHash}, Received: ${phoneCodeHash}`);
-        // КРИТИЧНО: Используем buildErrorResponse вместо прямого UnauthorizedException
         const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
           ErrorCode.SESSION_INVALID,
-          'Invalid phone code hash. Please restart the authorization process.',
+          'Неверный phone code hash. Начните авторизацию заново.',
         );
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
@@ -1299,7 +1303,7 @@ export class AuthService implements OnModuleDestroy {
         const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
           ErrorCode.SESSION_INVALID,
-          '2FA session expired',
+          'Сессия 2FA истекла. Начните авторизацию заново.',
         );
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
@@ -1311,7 +1315,7 @@ export class AuthService implements OnModuleDestroy {
         const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
           ErrorCode.INTERNAL_SERVER_ERROR,
-          'Failed to get password parameters',
+          'Не удалось получить параметры пароля.',
         );
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
@@ -1321,7 +1325,7 @@ export class AuthService implements OnModuleDestroy {
         const errorResponse = buildErrorResponse(
           HttpStatus.UNAUTHORIZED,
           ErrorCode.INVALID_2FA_PASSWORD,
-          '2FA password verification failed',
+          'Неверный пароль 2FA.',
         );
         throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
       }
@@ -1418,7 +1422,7 @@ export class AuthService implements OnModuleDestroy {
       const errorResponse = buildErrorResponse(
         HttpStatus.UNAUTHORIZED,
         ErrorCode.INVALID_2FA_PASSWORD,
-        '2FA verification failed',
+        'Ошибка проверки пароля 2FA.',
       );
       throw new HttpException(errorResponse, HttpStatus.UNAUTHORIZED);
     }

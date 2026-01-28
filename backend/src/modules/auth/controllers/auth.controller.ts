@@ -21,7 +21,7 @@ import { AuthService, TelegramAuthData } from '../auth.service';
 import { getErrorMessage, getErrorStack } from '../../../common/utils/error-message';
 import { JwtAuthService, TokenPair } from '../services/jwt.service';
 import { CsrfService } from '../services/csrf.service';
-import { TelegramSessionService } from '../../telegram/services/telegram-session.service';
+import { TelegramSessionService } from '../../telegram-user-api/services/telegram-session.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../../common/guards/optional-jwt-auth.guard';
 import { LoginRequestDto } from '../dto/login-request.dto';
@@ -539,6 +539,8 @@ export class AuthController {
   }
 
   @Post('telegram/qr/generate')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Генерация QR-кода для авторизации через Telegram' })
   @ApiResponse({
@@ -546,6 +548,7 @@ export class AuthController {
     description: 'QR-код успешно сгенерирован',
     type: TelegramQrGenerateResponseDto,
   })
+  @ApiResponse({ status: 401, description: 'Требуется авторизация в админ-панели' })
   @ApiResponse({ status: 400, description: 'Ошибка конфигурации (отсутствуют API credentials)' })
   @ApiResponse({ status: 500, description: 'Внутренняя ошибка сервера' })
   async generateQrCode(@Request() req: AuthRequest): Promise<TelegramQrGenerateResponseDto> {

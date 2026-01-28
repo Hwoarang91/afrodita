@@ -17,16 +17,6 @@ import { AutoRepliesController } from './auto-replies.controller';
 import { ScheduledMessage } from '../../entities/scheduled-message.entity';
 import { ScheduledMessagesService } from './scheduled-messages.service';
 import { ScheduledMessagesController } from './scheduled-messages.controller';
-import { TelegramUserController } from './controllers/telegram-user.controller';
-import { TelegramUserSession } from '../../entities/telegram-user-session.entity';
-import { TelegramUserClientService } from './services/telegram-user-client.service';
-import { SessionEncryptionService } from './services/session-encryption.service';
-import { TelegramSessionService } from './services/telegram-session.service';
-import { TelegramHeartbeatService } from './services/telegram-heartbeat.service';
-import { TelegramClientEventEmitter } from './services/telegram-client-event-emitter.service';
-import { TelegramConnectionMonitorService } from './services/telegram-connection-monitor.service';
-import { TelegramEventLoggerService } from './services/telegram-event-logger.service';
-import { TelegramSessionGuard } from './guards/telegram-session.guard';
 import { UsersModule } from '../users/users.module';
 import { ServicesModule } from '../services/services.module';
 import { MastersModule } from '../masters/masters.module';
@@ -37,10 +27,20 @@ import { ReviewsModule } from '../reviews/reviews.module';
 import { FinancialModule } from '../financial/financial.module';
 import { WebSocketModule } from '../websocket/websocket.module';
 
+/** Модуль Telegram Bot API: бот, чаты, автоответы, запланированные сообщения. User API («от своего лица») — в TelegramUserApiModule. */
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([User, Service, Master, Appointment, TelegramChat, GroupSettings, AutoReply, ScheduledMessage, TelegramUserSession]),
+    TypeOrmModule.forFeature([
+      User,
+      Service,
+      Master,
+      Appointment,
+      TelegramChat,
+      GroupSettings,
+      AutoReply,
+      ScheduledMessage,
+    ]),
     UsersModule,
     ServicesModule,
     MastersModule,
@@ -51,21 +51,13 @@ import { WebSocketModule } from '../websocket/websocket.module';
     FinancialModule,
     forwardRef(() => WebSocketModule),
   ],
-  controllers: [TelegramController, AutoRepliesController, ScheduledMessagesController, TelegramUserController],
+  controllers: [TelegramController, AutoRepliesController, ScheduledMessagesController],
   providers: [
     TelegramService,
     TelegramBotService,
     TelegramChatsService,
     AutoRepliesService,
     ScheduledMessagesService,
-    TelegramUserClientService,
-    SessionEncryptionService,
-    TelegramSessionService,
-    TelegramHeartbeatService,
-    TelegramClientEventEmitter,
-    TelegramConnectionMonitorService,
-    TelegramEventLoggerService,
-    TelegramSessionGuard,
   ],
   exports: [
     TelegramService,
@@ -73,14 +65,6 @@ import { WebSocketModule } from '../websocket/websocket.module';
     TelegramChatsService,
     AutoRepliesService,
     ScheduledMessagesService,
-    TelegramUserClientService,
-    SessionEncryptionService,
-    TelegramSessionService,
-    TelegramHeartbeatService,
-    TelegramClientEventEmitter,
-    TelegramConnectionMonitorService,
-    TelegramEventLoggerService,
   ],
 })
 export class TelegramModule {}
-

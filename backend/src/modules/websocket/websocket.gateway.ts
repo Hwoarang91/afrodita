@@ -14,7 +14,7 @@ import {
   TelegramClientErrorEvent,
   TelegramClientInvokeEvent,
   TelegramClientFloodWaitEvent,
-} from '../telegram/services/telegram-client-event-emitter.service';
+} from '../telegram-user-api/services/telegram-client-event-emitter.service';
 import { Appointment } from '../../entities/appointment.entity';
 
 interface EventLogSubscription {

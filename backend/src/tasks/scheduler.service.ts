@@ -1,14 +1,13 @@
 import { Injectable, Logger, OnModuleInit, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, LessThan, In } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { Appointment, AppointmentStatus } from '../entities/appointment.entity';
 import { NotificationsService } from '../modules/notifications/notifications.service';
 import { FinancialService } from '../modules/financial/financial.service';
 import { SettingsService } from '../modules/settings/settings.service';
 import { Notification, NotificationType, NotificationStatus, NotificationChannel } from '../entities/notification.entity';
 import { User, UserRole } from '../entities/user.entity';
-import { TelegramUserSession } from '../entities/telegram-user-session.entity';
 import { getErrorMessage, getErrorStack } from '../common/utils/error-message';
 
 @Injectable()
@@ -57,8 +56,6 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
     private notificationRepository: Repository<Notification>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    @InjectRepository(TelegramUserSession)
-    private telegramSessionRepository: Repository<TelegramUserSession>,
     private notificationsService: NotificationsService,
     private financialService: FinancialService,
     private settingsService: SettingsService,
@@ -350,67 +347,5 @@ export class SchedulerService implements OnModuleInit, OnApplicationBootstrap {
     }
   }
 
-  /**
-   * Cleanup job для Telegram сессий
-   * 
-   * Правила очистки:
-   * 1. initializing > 24 часа → invalid
-   * 2. invalid/revoked > 30 дней → DELETE
-   * 
-   * Запускается раз в день в 3:00 UTC
-   */
-  @Cron('0 3 * * *', {
-    name: 'cleanupTelegramSessions',
-    timeZone: 'UTC',
-  })
-  async cleanupTelegramSessions() {
-    const now = new Date();
-    this.logger.log(`[CRON] 🧹 Запуск очистки Telegram сессий. Время: ${now.toISOString()}`);
-
-    try {
-      // 1. initializing > 24 часа → invalid
-      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const initializingSessions = await this.telegramSessionRepository.find({
-        where: {
-          status: 'initializing',
-          createdAt: LessThan(twentyFourHoursAgo),
-        },
-      });
-
-      if (initializingSessions.length > 0) {
-        const updateResult = await this.telegramSessionRepository.update(
-          { id: In(initializingSessions.map(s => s.id)) },
-          { status: 'invalid', updatedAt: now },
-        );
-        this.logger.log(`[CRON] ✅ Переведено ${updateResult.affected || 0} сессий из initializing в invalid (старше 24 часов)`);
-      }
-
-      // 2. invalid/revoked > 30 дней → DELETE
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const oldSessions = await this.telegramSessionRepository.find({
-        where: [
-          {
-            status: 'invalid',
-            updatedAt: LessThan(thirtyDaysAgo),
-          },
-          {
-            status: 'revoked',
-            updatedAt: LessThan(thirtyDaysAgo),
-          },
-        ],
-      });
-
-      if (oldSessions.length > 0) {
-        const deleteResult = await this.telegramSessionRepository.delete(
-          oldSessions.map(s => s.id),
-        );
-        this.logger.log(`[CRON] ✅ Удалено ${deleteResult.affected || 0} старых сессий (invalid/revoked старше 30 дней)`);
-      }
-
-      this.logger.log(`[CRON] ✅ Очистка Telegram сессий завершена`);
-    } catch (error: unknown) {
-      this.logger.error(`[CRON] ❌ Ошибка при очистке Telegram сессий: ${getErrorMessage(error)}`, getErrorStack(error));
-    }
-  }
 }
 

@@ -100,6 +100,113 @@ docker rm n8n
 
 ### Изменения
 
+✅ **Разделение «От своего лица» (Telegram User API) — отдельный модуль и вкладка (27.01.2026):**
+
+**Выполнено:**
+
+1. **Backend — модуль `TelegramUserApiModule`:**
+   - ✅ Создан `backend/src/modules/telegram-user-api/`: `controllers/`, `services/`, `guards/`, `dto/`, `utils/`.
+   - ✅ Перенесены: `TelegramUserController` (`telegram/user`), `TelegramUserClientService`, `TelegramSessionService`, `SessionEncryptionService`, `TelegramHeartbeatService`, `TelegramConnectionMonitorService`, `TelegramEventLoggerService`, `TelegramClientEventEmitter`, `TelegramSessionGuard`, DTO, `mtproto-error`, `mtproto-retry`, `session-state-machine`, `telegram-error-mapper` (MTProto).
+   - ✅ Добавлен `SessionCleanupService` (cron очистки сессий). Entity `TelegramUserSession` остаётся в `entities/`.
+
+2. **Зависимости:**
+   - ✅ `AuthModule` импортирует `TelegramUserApiModule`; `AuthService`/`AuthController` используют `TelegramSessionService`, `TelegramUserClientService`; `mapTelegramErrorToResponse` из `telegram-user-api/utils`.
+   - ✅ `WebSocketModule` импортирует `TelegramUserApiModule` для `TelegramClientEventEmitter` (event log «от своего лица»).
+   - ✅ `SchedulerModule`: убраны `TelegramModule` и `TelegramUserSession`; cron очистки сессий перенесён в `SessionCleanupService`.
+
+3. **Очистка `TelegramModule`:**
+   - ✅ Удалены все User API компоненты и `TelegramUserSession`. Оставлены только бот: `TelegramService`, `TelegramBotService`, `TelegramChatsService`, автоответы, запланированные сообщения, `TelegramController`.
+
+4. **Админка — вкладка «Telegram User»:**
+   - ✅ Новая страница `/telegram-user` (`admin/app/telegram-user/page.tsx`): табы «Авторизация» и «Личные сообщения». Используются `TelegramAuthTab`, `TelegramUserMessagesTab`, `useTelegramSession`, `TelegramHeader`, `TelegramStatusPanel`, `ErrorCard`.
+   - ✅ В сайдбаре добавлен пункт «Telegram User» (иконка Shield), маршрут `/telegram-user`.
+   - ✅ Страница `/telegram` оставлена только для бота (отправка, чаты, участники, планировщик, настройки). Вкладки «Авторизация» и «Личные сообщения» убраны.
+   - ✅ В `TelegramUserMessagesTab` редирект при необходимости переавторизации заменён на `/telegram-user`.
+
+5. **Маршруты и API:**
+   - ✅ Эндпоинты `telegram/user/*` и `auth/telegram/*` (phone, QR, 2FA) без изменений; обслуживаются `TelegramUserApiModule`.
+   - ✅ В `shared/constants/routes.ts` добавлен `TELEGRAM_USER: '/admin/telegram-user'`.
+
+**Файлы созданы:**
+- `backend/src/modules/telegram-user-api/telegram-user-api.module.ts`
+- `backend/src/modules/telegram-user-api/controllers/telegram-user.controller.ts`
+- `backend/src/modules/telegram-user-api/services/*` (в т.ч. `session-cleanup.service.ts`)
+- `backend/src/modules/telegram-user-api/guards/telegram-session.guard.ts`
+- `backend/src/modules/telegram-user-api/dto/*`, `utils/*`
+- `admin/app/telegram-user/page.tsx`
+
+**Файлы изменены:**
+- `backend/src/app.module.ts` — импорт `TelegramUserApiModule`
+- `backend/src/modules/auth/auth.module.ts`, `auth.service.ts`, `auth/controllers/auth.controller.ts` — переход на `TelegramUserApiModule` и `telegram-user-api` utils
+- `backend/src/modules/websocket/websocket.module.ts`, `websocket.gateway.ts` — переход на `TelegramUserApiModule` для event emitter
+- `backend/src/tasks/scheduler.module.ts`, `scheduler.service.ts` — удалены `TelegramModule`, `TelegramUserSession`, cron очистки сессий
+- `backend/src/modules/telegram/telegram.module.ts` — только бот
+- `backend/src/common/guards/telegram.strategy.ts` — импорт `TelegramSessionService` из `telegram-user-api`
+- `admin/app/components/Sidebar.tsx` — пункт «Telegram User»
+- `admin/app/telegram/page.tsx` — только раздел «Бот»
+- `admin/app/telegram/TelegramUserMessagesTab.tsx` — редирект на `/telegram-user`
+- `shared/constants/routes.ts` — `TELEGRAM_USER`
+
+**Использованы инструменты:** MCP Taskmanager (`request_planning`), MCP Sequential Thinking, Todo-лист, отчёт в REPORT.md.
+
+**Повторная проверка и исправления (27.01.2026):**
+- ✅ `SessionCleanupService`: массовый `delete` заменён на `delete({ id: In(ids) })` (TypeORM).
+- ✅ `ERROR_RESPONSE_CONTRACT.md`: пример импорта маппера обновлён на `telegram-user-api/utils/telegram-error-mapper`.
+- ✅ `architectural-principles.spec.ts`: путь к мапперу обновлён на `telegram-user-api/utils/telegram-error-mapper`.
+- ✅ `ARCHITECTURAL_PRINCIPLES.md`: ссылка на маппер обновлена на `telegram-user-api`.
+- ✅ Backend `tsc --noEmit` проходит. Старые User API файлы в `telegram/` (controllers, services, guards, dto, utils) остаются как мёртвый код; при необходимости их можно удалить, предварительно перенеся/обновив тесты.
+
+**2FA и вкладка «Личные сообщения» (27.01.2026):**
+- ✅ **2FA:** Подключён `telegram2FALimiter` на `POST /api/v1/auth/telegram/2fa/verify`. В CORS добавлен заголовок `X-CSRF-Token`. В `Telegram2FATab`: безопасное извлечение `message` из ошибки, обработка «Сессия 2FA не найдена» / «Сессия 2FA истекла» — блок с подсказкой и кнопка «Начать заново» (`onRestart`). В `TelegramAuthTab` для 2FA передаётся `onRestart` (сброс телефона, кода, `phoneCodeHash`). Сообщения в `auth.service` переведены на русский.
+- ✅ **Личные сообщения:** В `TelegramUserMessagesTab` добавлен опциональный `onRequestAuth`. При отсутствии сессии показывается кнопка «Перейти к авторизации»; при expired/error «Переавторизоваться» переключает на вкладку «Авторизация» вместо редиректа. На странице `/telegram-user` передаётся `onRequestAuth={() => setMainTab('auth')}`.
+
+**Файлы изменены:** `backend/src/main.ts`, `backend/src/modules/auth/auth.service.ts`, `admin/app/telegram/components/Telegram2FATab.tsx`, `admin/app/telegram/TelegramAuthTab.tsx`, `admin/app/telegram/TelegramUserMessagesTab.tsx`, `admin/app/telegram-user/page.tsx`.
+
+**Полировка «до идеала» (27.01.2026):**
+- ✅ **Auth:** Удалён неиспользуемый `useAuth().user` и импорт `AuthContext` из `TelegramAuthTab`. Ошибки `generateQrCode` / `handleRequestCode` / `handleVerifyCode`: безопасное извлечение `message` (всегда строка), проверка `errorCode === 'PHONE_CODE_EXPIRED'` и `/истек|expired/i` для сброса кода.
+- ✅ **Backend:** Сообщения «Invalid phone code hash», «Phone code hash expired» переведены на русский; замена `UnauthorizedException` на `buildErrorResponse` + `HttpException` в `verifyPhoneCode` при неверном hash.
+- ✅ **API interceptor:** Переименовано `fullUrl` → `is2FAVerify`; проверка «удалённых» полей выполняется по исходному `orig` до перезаписи; логи только при `hadForbidden || hadUnknown`; типизация `Record<string, unknown>`.
+- ✅ **Telegram2FATab:** `role="alert"` и `aria-live="polite"` для блока ошибки «сессия 2FA потеряна»; типизация `(x as { message?: string })` в `extractErrorMessage` вместо `any`.
+- ✅ **TelegramUserMessagesTab:** Сигнатура `props?: TelegramUserMessagesTabProps` и `const { onRequestAuth } = props ?? {}` вместо default param.
+- ✅ **telegram-user page:** Удалён неиспользуемый `sessionError` из `useTelegramSession`.
+
+**Инструменты:** MCP Sequential Thinking, Todo.
+
+**Повторная проверка (27.01.2026):**
+- ✅ Удалён мёртвый `handleVerify2FA` из `TelegramAuthTab` (2FA только через `Telegram2FATab`).
+- ✅ API interceptor: в ветке JSON `cleanPayload` типизирован как `Record<string, unknown>`.
+- ✅ `auth.service`: сообщения «Failed to get password parameters», «2FA password verification failed», «2FA verification failed» переведены на русский. Использованы MCP Sequential Thinking, Todo.
+
+**Финальная проверка (27.01.2026):**
+- ✅ Удалено неиспользуемое состояние `twoFAPassword` и вызовы `setTwoFAPassword` из `TelegramAuthTab` (форма 2FA полностью в `Telegram2FATab`). Backend `tsc`, lint — без ошибок.
+
+**Удаление мёртвого кода (27.01.2026):**
+- ✅ Удалены дубликаты User API из `backend/src/modules/telegram/`: `controllers/` (telegram-user), `services/` (telegram-user-client, session, encryption, heartbeat, connection-monitor, event-emitter, event-logger), `guards/` (telegram-session), `dto/` (session-management, telegram-session-status, user-send-message), `utils/` (mtproto-error.handler, mtproto-retry, session-state-machine, telegram-error-mapper + specs). Убраны пустые `guards/` и `controllers/`. Оставлены только бот-часть и `dto/send-message.dto`, `utils/markdown-v2.*`.
+- ✅ Удалён неиспользуемый `common/guards/telegram.strategy.ts` (активная проверка сессии — в `TelegramSessionGuard` модуля `telegram-user-api`).
+- ✅ Backend `tsc --noEmit` проходит. Использованы MCP Sequential Thinking, Todo.
+
+**Тесты: переписанные и новые (27.01.2026):**
+- ✅ **auth.service.spec:** Удалены Session/JwtService, добавлены моки ReferralService, JwtAuthService, TelegramUserClientService. `logout` и `refreshToken` переписаны под делегирование в JwtAuthService. `registerFirstAdmin` использует `mockJwtAuthService.generateTokenPair`. Edge cases для `refreshToken` и `login` обновлены.
+- ✅ **auth.controller.spec:** Переведён на `controllers/auth.controller`, `LoginRequestDto`, моки CsrfService и TelegramSessionService. Тесты login, refresh, logout, getMe, checkSetup, register, telegramAuth, error handling приведены в соответствие с реализацией (cookies, res).
+- ✅ **telegram-user-api:** Добавлены `telegram-error-mapper.spec.ts`, `session-state-machine.spec.ts`, `mtproto-retry.utils.spec.ts`, `mtproto-error.handler.spec.ts`, `session-encryption.service.spec.ts`, `session-cleanup.service.spec.ts`. Покрыты маппинг ошибок, переходы состояний сессии, retry при FLOOD_WAIT, обработчик MTProto, шифрование/дешифрование сессий, cron очистки.
+- ✅ Backend `tsc --noEmit` и линт по затронутым файлам — без ошибок. Jest в среде запуска падал с EPERM (spawn); тесты рекомендуется выполнять локально:  
+  `npm test -- --testPathPattern="auth\.(service|controller)\.spec|telegram-error-mapper|session-state-machine|mtproto-retry|session-encryption|session-cleanup|mtproto-error\.handler|architectural-principles"`.
+
+**Инструменты:** MCP Sequential Thinking, Todo.
+
+**Дополировка «до идеала» (27.01.2026):**
+- ✅ **auth.controller.spec:** В мок CsrfService добавлен `getCsrfCookieOptions` (используется в `setCsrfCookie` при login/register/refresh/telegramAuth). Добавлен тест «должен передать rememberMe в generateTokenPair»; в тестах refresh и telegramAuth добавлена проверка `res.cookie`; для refresh задан `refreshTokenExpiresAt` на 7 дней.
+- ✅ **session-cleanup.service.spec:** Тесты обёрнуты в `describe('cleanup')`, исправлена индентация.
+- ✅ Backend `tsc --noEmit` и линт — без ошибок. Использован MCP Sequential Thinking.
+
+**Проверка алгоритма авторизации и QR (27.01.2026):**
+- ✅ **QR (TelegramAuthTab):** Таймер только обновляет `qrTimeRemaining`; истечение обрабатывает только poll (API `status: 'expired'`). Убрана таймерная логика «remaining === 0 → set expired + generate», устраняющая гонку и повторную генерацию после успеха. При accepted/expired/max retries/401|403 вызывается `stopPolling()` — очищаются оба интервала (poll + timer). В catch заменено `error: any` на `err: unknown`, типизация `(err as { response?: { status?: number } })?.response`.
+- ✅ **QR (backend):** На `POST /telegram/qr/generate` добавлены `@UseGuards(JwtAuthGuard)` и `@ApiBearerAuth()`; в OpenAPI — `@ApiResponse(401)`. Генерация QR и проверка статуса теперь оба требуют авторизации в админ-панели.
+- ✅ **Авторизация:** Цепочка телефон → код → 2FA и 2FA `onRestart`/`onCancel` проверены; очистка payload для 2FA в `api.ts` и обработка «сессия 2FA потеряна» в `Telegram2FATab` без изменений.
+- ✅ Backend `tsc --noEmit`, линт — ок. Использованы MCP Sequential Thinking, Todo.
+
+---
+
 ✅ **Выполнение плана исправлений — Фаза 1 (часть) (23.01.2026):**
 
 **Источник:** план (см. «Сводка плана исправлений» и «Не сделано» в данном отчёте; файл TODO_EXECUTION_PLAN.md не найден).

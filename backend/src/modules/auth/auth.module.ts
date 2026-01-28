@@ -14,7 +14,7 @@ import { User } from '../../entities/user.entity';
 import { RefreshToken } from '../../entities/refresh-token.entity';
 import { AuthLog } from '../../entities/auth-log.entity';
 import { UsersModule } from '../users/users.module';
-import { TelegramModule } from '../telegram/telegram.module';
+import { TelegramUserApiModule } from '../telegram-user-api/telegram-user-api.module';
 
 @Module({
   imports: [
@@ -31,7 +31,7 @@ import { TelegramModule } from '../telegram/telegram.module';
       inject: [ConfigService],
     }),
     UsersModule,
-    TelegramModule,
+    TelegramUserApiModule,
   ],
   controllers: [AuthController],
   providers: [

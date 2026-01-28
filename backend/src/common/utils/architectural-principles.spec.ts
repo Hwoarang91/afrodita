@@ -84,7 +84,7 @@ describe('Архитектурные принципы', () => {
 
   describe('Принцип 3: Единственная точка знания MTProto', () => {
     it('telegram-error-mapper.ts должен быть единственным местом маппинга', () => {
-      const mapperPath = path.join(backendRoot, 'modules/telegram/utils/telegram-error-mapper.ts');
+      const mapperPath = path.join(backendRoot, 'modules/telegram-user-api/utils/telegram-error-mapper.ts');
       const mapperContent = fs.readFileSync(mapperPath, 'utf-8');
       
       // Проверяем, что mapper содержит все необходимые маппинги

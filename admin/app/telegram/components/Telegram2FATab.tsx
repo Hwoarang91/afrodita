@@ -15,21 +15,52 @@ interface Telegram2FATabProps {
   passwordHint?: string;
   onSuccess: () => void;
   onCancel: () => void;
+  /** Вызывается при «2FA session not found» / «2FA session expired» — сброс и переход к шагу «телефон». */
+  onRestart?: () => void;
 }
 
-export function Telegram2FATab({ 
-  phoneNumber, 
-  phoneCodeHash, 
+function extractErrorMessage(err: unknown): string {
+  const e = err as { response?: { data?: { message?: unknown }; status?: number }; message?: string };
+  const data = e?.response?.data;
+  if (!data) return e?.message && typeof e.message === 'string' ? e.message : 'Ошибка проверки пароля 2FA';
+  const m = data.message;
+  if (typeof m === 'string') return m;
+  if (Array.isArray(m)) {
+    const parts = m.map((x: unknown) => (typeof x === 'string' ? x : (x as { message?: string })?.message)).filter(Boolean);
+    return parts.length ? String(parts.join('. ')) : 'Ошибка проверки пароля 2FA';
+  }
+  return 'Ошибка проверки пароля 2FA';
+}
+
+function is2FASessionLostMessage(msg: string): boolean {
+  const s = msg.toLowerCase();
+  return (
+    s.includes('2fa session not found') ||
+    s.includes('2fa session expired') ||
+    s.includes('сессия 2fa не найдена') ||
+    s.includes('сессия 2fa истекла') ||
+    s.includes('session not found') ||
+    s.includes('session expired') ||
+    s.includes('неверный phone code hash') ||
+    s.includes('invalid phone code hash')
+  );
+}
+
+export function Telegram2FATab({
+  phoneNumber,
+  phoneCodeHash,
   passwordHint,
   onSuccess,
-  onCancel 
+  onCancel,
+  onRestart,
 }: Telegram2FATabProps) {
   const [twoFAPassword, setTwoFAPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setLastError(null);
     if (!twoFAPassword.trim()) {
       toast.error('Введите пароль 2FA');
       return;
@@ -49,8 +80,9 @@ export function Telegram2FATab({
         toast.success('Telegram аккаунт успешно подключен!');
         onSuccess();
       }
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Ошибка проверки пароля 2FA';
+    } catch (error: unknown) {
+      const errorMessage = extractErrorMessage(error);
+      setLastError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -68,7 +100,7 @@ export function Telegram2FATab({
           <Button
             variant="ghost"
             size="sm"
-            onClick={onCancel}
+            onClick={() => { setLastError(null); onCancel(); }}
             disabled={isLoading}
           >
             <X className="w-4 h-4" />
@@ -85,6 +117,31 @@ export function Telegram2FATab({
               <p className="text-sm text-muted-foreground">
                 <span className="font-medium">Подсказка:</span> {passwordHint}
               </p>
+            </div>
+          )}
+
+          {lastError && is2FASessionLostMessage(lastError) && (
+            <div
+              className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3"
+              role="alert"
+              aria-live="polite"
+            >
+              <p className="text-sm text-amber-700 dark:text-amber-400">{lastError}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Начните авторизацию заново: «Отправить код» → «Ввести код» → «2FA».
+              </p>
+              {onRestart && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => { setLastError(null); setTwoFAPassword(''); onRestart(); }}
+                  disabled={isLoading}
+                >
+                  Начать заново
+                </Button>
+              )}
             </div>
           )}
 
@@ -119,7 +176,7 @@ export function Telegram2FATab({
             <Button
               type="button"
               variant="outline"
-              onClick={onCancel}
+              onClick={() => { setLastError(null); onCancel(); }}
               disabled={isLoading}
             >
               Отмена

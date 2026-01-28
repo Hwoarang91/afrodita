@@ -37,13 +37,8 @@ interface Circuit {
 @Injectable()
 export class CircuitBreakerService {
   private readonly circuits = new Map<string, Circuit>();
-  private readonly defaultThreshold: number;
-  private readonly defaultResetMs: number;
-
-  constructor(options?: CircuitBreakerOptions) {
-    this.defaultThreshold = options?.failureThreshold ?? 5;
-    this.defaultResetMs = options?.resetTimeoutMs ?? 30000;
-  }
+  private readonly defaultThreshold = 5;
+  private readonly defaultResetMs = 30000;
 
   async run<T>(key: string, fn: () => Promise<T>, options?: CircuitBreakerOptions): Promise<T> {
     const circuit = this.getOrCreate(key);

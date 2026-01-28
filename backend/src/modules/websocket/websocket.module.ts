@@ -1,9 +1,9 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { WebSocketGateway } from './websocket.gateway';
-import { TelegramModule } from '../telegram/telegram.module';
+import { TelegramUserApiModule } from '../telegram-user-api/telegram-user-api.module';
 
 @Module({
-  imports: [forwardRef(() => TelegramModule)], // Импортируем TelegramModule для доступа к TelegramClientEventEmitter
+  imports: [forwardRef(() => TelegramUserApiModule)], // Telegram User API event emitter (от своего лица)
   providers: [WebSocketGateway],
   exports: [WebSocketGateway],
 })

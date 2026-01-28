@@ -1,27 +1,18 @@
 /**
- * Retry-логика для MTProto client.invoke (§17).
- * При RETRY (FLOOD_WAIT, DC_MIGRATE и т.п.) ждёт retryAfter и повторяет вызов.
+ * Retry-логика для MTProto client.invoke (модуль telegram-user-api)
  */
 
 import { handleMtprotoError, MtprotoErrorAction } from './mtproto-error.handler';
 
-/** Минимальный интерфейс для MTProto client в retry. Client из @mtkruto имеет более узкий invoke; на местах вызова используется приведение. */
 export type InvokeClient = { invoke: (r: object, p?: unknown) => Promise<unknown> };
 
 export interface InvokeWithRetryOptions {
-  /** Макс. повторов при RETRY (по умолчанию 2 → до 3 попыток) */
   maxRetries?: number;
-  /** Вызов перед ожиданием (для emitFloodWait, логирования) */
   onRetry?: (retryAfterSeconds: number, attempt: number) => void;
 }
 
 const DEFAULT_MAX_RETRIES = 2;
 
-/**
- * Выполняет client.invoke с retry при RETRY-ошибках (FLOOD_WAIT и др.).
- * При MtprotoErrorAction.RETRY и retryAfter ждёт и повторяет до maxRetries раз.
- * Остальные действия (INVALIDATE_SESSION, REQUIRE_2FA, SAFE_ERROR) — пробрасывает.
- */
 export async function invokeWithRetry<T = unknown>(
   client: InvokeClient,
   request: object,

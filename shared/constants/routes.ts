@@ -28,6 +28,7 @@ export const ADMIN_ROUTES = {
   SERVICES: '/admin/services',
   TEMPLATES: '/admin/templates',
   TELEGRAM: '/admin/telegram',
+  TELEGRAM_USER: '/admin/telegram-user',
   MAILINGS: '/admin/mailings',
   SETTINGS: '/admin/settings',
   AUDIT: '/admin/audit',

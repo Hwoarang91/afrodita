@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AuthController } from './auth.controller';
+import { AuthController } from './controllers/auth.controller';
 import { AuthService, TelegramAuthData } from './auth.service';
 import { JwtAuthService } from './services/jwt.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { LoginDto } from './dto/login.dto';
+import { CsrfService } from './services/csrf.service';
+import { TelegramSessionService } from '../telegram-user-api/services/telegram-session.service';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { LoginRequestDto } from './dto/login-request.dto';
 import { User, UserRole } from '../../entities/user.entity';
 
 describe('AuthController', () => {
@@ -14,31 +16,49 @@ describe('AuthController', () => {
   const mockAuthService = {
     validateEmailPassword: jest.fn(),
     validateTelegramAuth: jest.fn(),
-    refreshToken: jest.fn(),
-    logout: jest.fn(),
-    updatePhone: jest.fn(),
+    logAuthAction: jest.fn().mockResolvedValue(undefined),
     checkHasUsers: jest.fn(),
     registerFirstAdmin: jest.fn(),
-    logAuthAction: jest.fn(),
   };
 
   const mockJwtAuthService = {
     generateTokenPair: jest.fn(),
-    logout: jest.fn(),
+    refreshTokens: jest.fn(),
+    logout: jest.fn().mockResolvedValue(undefined),
   };
+
+  const mockCsrfService = {
+    generateCsrfToken: jest.fn().mockReturnValue('csrf-token'),
+    getCsrfCookieOptions: jest.fn().mockReturnValue({
+      httpOnly: false,
+      secure: false,
+      sameSite: 'strict' as const,
+      path: '/',
+      maxAge: 86400,
+    }),
+  };
+
+  const mockTelegramSessionService = {
+    load: jest.fn(),
+    save: jest.fn().mockResolvedValue(undefined),
+  };
+
+  function mockRes() {
+    return {
+      cookie: jest.fn(),
+      clearCookie: jest.fn(),
+      setHeader: jest.fn(),
+    };
+  }
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
-        {
-          provide: AuthService,
-          useValue: mockAuthService,
-        },
-        {
-          provide: JwtAuthService,
-          useValue: mockJwtAuthService,
-        },
+        { provide: AuthService, useValue: mockAuthService },
+        { provide: JwtAuthService, useValue: mockJwtAuthService },
+        { provide: CsrfService, useValue: mockCsrfService },
+        { provide: TelegramSessionService, useValue: mockTelegramSessionService },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -55,8 +75,8 @@ describe('AuthController', () => {
   });
 
   describe('login', () => {
-    it('должен авторизовать пользователя', async () => {
-      const loginDto: LoginDto = {
+    it('должен авторизовать пользователя и вернуть токены', async () => {
+      const loginDto: LoginRequestDto = {
         email: 'test@example.com',
         password: 'password123',
       };
@@ -64,17 +84,13 @@ describe('AuthController', () => {
         ip: '127.0.0.1',
         get: jest.fn().mockReturnValue('Mozilla/5.0'),
       };
+      const res = mockRes();
       const mockUser: User = {
         id: 'user-1',
         email: loginDto.email,
         role: UserRole.CLIENT,
+        bonusPoints: 0,
       } as User;
-      const mockResult = {
-        accessToken: 'token',
-        refreshToken: 'refresh',
-        user: mockUser,
-      };
-
       const tokenPair = {
         accessToken: 'token',
         refreshToken: 'refresh',
@@ -84,9 +100,12 @@ describe('AuthController', () => {
 
       mockAuthService.validateEmailPassword.mockResolvedValue(mockUser);
       mockJwtAuthService.generateTokenPair.mockResolvedValue(tokenPair);
-      mockAuthService.logAuthAction.mockResolvedValue(undefined);
 
-      const result = await controller.login(loginDto, req);
+      const result = await controller.login(
+        loginDto as LoginRequestDto,
+        req as any,
+        res as any,
+      );
 
       expect(result).toHaveProperty('accessToken', 'token');
       expect(result).toHaveProperty('refreshToken', 'refresh');
@@ -98,29 +117,24 @@ describe('AuthController', () => {
       expect(mockJwtAuthService.generateTokenPair).toHaveBeenCalledWith(
         mockUser,
         req.ip,
-        req.get('user-agent'),
+        'Mozilla/5.0',
         false,
       );
+      expect(res.cookie).toHaveBeenCalled();
     });
-  });
 
-  describe('telegramAuth', () => {
-    it('должен авторизовать через Telegram', async () => {
-      const telegramData: TelegramAuthData = {
-        id: '123456789',
-        first_name: 'Test',
-        auth_date: Date.now(),
-        hash: 'hash',
+    it('должен передать rememberMe в generateTokenPair и установить cookies', async () => {
+      const loginDto: LoginRequestDto = {
+        email: 'test@example.com',
+        password: 'password123',
+        rememberMe: true,
       };
       const req = {
         ip: '127.0.0.1',
         get: jest.fn().mockReturnValue('Mozilla/5.0'),
       };
-      const mockUser: User = {
-        id: 'user-1',
-        telegramId: telegramData.id,
-        role: UserRole.CLIENT,
-      } as User;
+      const res = mockRes();
+      const mockUser = { id: 'user-1', email: loginDto.email, role: UserRole.CLIENT, bonusPoints: 0 } as User;
       const tokenPair = {
         accessToken: 'token',
         refreshToken: 'refresh',
@@ -128,147 +142,95 @@ describe('AuthController', () => {
         refreshTokenExpiresAt: new Date(),
       };
 
-      mockAuthService.validateTelegramAuth.mockResolvedValue(mockUser);
+      mockAuthService.validateEmailPassword.mockResolvedValue(mockUser);
       mockJwtAuthService.generateTokenPair.mockResolvedValue(tokenPair);
-      mockAuthService.logAuthAction.mockResolvedValue(undefined);
 
-      const result = await controller.telegramAuth(telegramData, req);
+      await controller.login(loginDto as LoginRequestDto, req as any, res as any);
 
-      expect(result).toHaveProperty('accessToken', 'token');
-      expect(result).toHaveProperty('refreshToken', 'refresh');
-      expect(result).toHaveProperty('user');
-      expect(mockAuthService.validateTelegramAuth).toHaveBeenCalledWith(telegramData);
       expect(mockJwtAuthService.generateTokenPair).toHaveBeenCalledWith(
         mockUser,
         req.ip,
-        req.get('user-agent'),
-        false,
+        'Mozilla/5.0',
+        true,
       );
+      expect(res.cookie).toHaveBeenCalled();
     });
   });
 
-  describe('telegramAuth', () => {
-    it('должен авторизовать через Telegram', async () => {
-      const telegramData: TelegramAuthData = {
-        id: '123456789',
-        first_name: 'Test',
-        auth_date: Date.now(),
-        hash: 'hash',
-      };
+  describe('refresh', () => {
+    it('должен обновить токены и установить cookies', async () => {
+      const refreshDto = { refreshToken: 'refresh-token' };
       const req = {
         ip: '127.0.0.1',
         get: jest.fn().mockReturnValue('Mozilla/5.0'),
+        cookies: {},
       };
-      const mockUser: User = {
-        id: 'user-1',
-        telegramId: telegramData.id,
-        role: UserRole.CLIENT,
-      } as User;
+      const res = mockRes();
       const tokenPair = {
-        accessToken: 'token',
-        refreshToken: 'refresh',
-        accessTokenExpiresAt: new Date(),
-        refreshTokenExpiresAt: new Date(),
-      };
-
-      mockAuthService.validateTelegramAuth.mockResolvedValue(mockUser);
-      mockJwtAuthService.generateTokenPair.mockResolvedValue(tokenPair);
-      mockAuthService.logAuthAction.mockResolvedValue(undefined);
-
-      const result = await controller.telegramAuth(telegramData, req);
-
-      expect(result).toHaveProperty('accessToken', 'token');
-      expect(result).toHaveProperty('refreshToken', 'refresh');
-      expect(result).toHaveProperty('user');
-      expect(mockAuthService.validateTelegramAuth).toHaveBeenCalledWith(telegramData);
-      expect(mockJwtAuthService.generateTokenPair).toHaveBeenCalledWith(
-        mockUser,
-        req.ip,
-        req.get('user-agent'),
-        false,
-      );
-    });
-  });
-
-  describe('refreshToken', () => {
-    it('должен обновить токен', async () => {
-      const refreshToken = 'refresh-token';
-      const req = {
-        ip: '127.0.0.1',
-        get: jest.fn().mockReturnValue('Mozilla/5.0'),
-      };
-      const mockResult = {
         accessToken: 'new-token',
         refreshToken: 'new-refresh',
+        accessTokenExpiresAt: new Date(),
+        refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       };
 
-      mockAuthService.refreshToken.mockResolvedValue(mockResult);
+      mockJwtAuthService.refreshTokens.mockResolvedValue(tokenPair);
 
-      const result = await controller.refreshToken(refreshToken, req);
-
-      expect(result).toEqual(mockResult);
-      expect(mockAuthService.refreshToken).toHaveBeenCalledWith(
-        refreshToken,
-        req.ip,
-        req.get('user-agent'),
+      const result = await controller.refresh(
+        refreshDto as any,
+        req as any,
+        res as any,
       );
+
+      expect(result).toHaveProperty('accessToken', 'new-token');
+      expect(result).toHaveProperty('refreshToken', 'new-refresh');
+      expect(mockJwtAuthService.refreshTokens).toHaveBeenCalledWith(
+        'refresh-token',
+        req.ip,
+        'Mozilla/5.0',
+      );
+      expect(res.cookie).toHaveBeenCalled();
     });
   });
 
   describe('logout', () => {
-    it('должен выйти из системы', async () => {
+    it('должен выйти из системы и очистить cookies', async () => {
       const req = {
         user: { sub: 'user-1', email: 'test@example.com' },
         ip: '127.0.0.1',
         get: jest.fn().mockReturnValue('Mozilla/5.0'),
       };
-      const res = {
-        clearCookie: jest.fn(),
-      } as any;
+      const res = mockRes();
 
-      mockJwtAuthService.logout.mockResolvedValue(undefined);
-      mockAuthService.logAuthAction.mockResolvedValue(undefined);
+      const result = await controller.logout(req as any, res as any);
 
-      await controller.logout(req, res);
-
+      expect(result).toEqual({ message: 'Logged out successfully' });
       expect(mockJwtAuthService.logout).toHaveBeenCalledWith('user-1');
+      expect(mockAuthService.logAuthAction).toHaveBeenCalled();
       expect(res.clearCookie).toHaveBeenCalled();
     });
   });
 
-  describe('updatePhone', () => {
-    it('должен обновить номер телефона', async () => {
-      const req = {
-        user: { sub: 'user-1' },
-      };
-      const dto = { phone: '+79991234567' };
-      const mockUser: User = {
-        id: 'user-1',
-        phone: dto.phone,
-      } as User;
-
-      mockAuthService.updatePhone.mockResolvedValue(mockUser);
-
-      const result = await controller.updatePhone(req, dto);
-
-      expect(result).toEqual(mockUser);
-      expect(mockAuthService.updatePhone).toHaveBeenCalledWith(req.user.sub, dto.phone);
-    });
-  });
-
   describe('getMe', () => {
-    it('должен вернуть текущего пользователя', async () => {
+    it('должен вернуть данные текущего пользователя', async () => {
       const req = {
         user: {
           sub: 'user-1',
+          id: 'user-1',
           role: UserRole.CLIENT,
           email: 'test@example.com',
+          firstName: 'Test',
+          lastName: 'User',
+          bonusPoints: 0,
         },
       };
 
-      const result = await controller.getMe(req);
+      const result = await controller.getMe(req as any);
 
-      expect(result).toEqual(req.user);
+      expect(result).toMatchObject({
+        id: 'user-1',
+        email: 'test@example.com',
+        role: UserRole.CLIENT,
+      });
     });
   });
 
@@ -282,7 +244,7 @@ describe('AuthController', () => {
       expect(mockAuthService.checkHasUsers).toHaveBeenCalled();
     });
 
-    it('должен вернуть false если нет администраторов', async () => {
+    it('должен вернуть needsSetup true если нет администраторов', async () => {
       mockAuthService.checkHasUsers.mockResolvedValue(false);
 
       const result = await controller.checkSetup();
@@ -303,8 +265,10 @@ describe('AuthController', () => {
         ip: '127.0.0.1',
         get: jest.fn().mockReturnValue('Mozilla/5.0'),
       };
+      const res = mockRes();
       const mockResult = {
         accessToken: 'token',
+        token: 'token',
         refreshToken: 'refresh',
         user: {
           id: 'admin-1',
@@ -315,40 +279,87 @@ describe('AuthController', () => {
 
       mockAuthService.registerFirstAdmin.mockResolvedValue(mockResult);
 
-      const result = await controller.register(registerDto, req);
+      const result = await controller.register(
+        registerDto as any,
+        req as any,
+        res as any,
+      );
 
       expect(result).toEqual(mockResult);
       expect(mockAuthService.registerFirstAdmin).toHaveBeenCalledWith(
         registerDto.email,
         registerDto.password,
-        registerDto.firstName,
-        registerDto.lastName,
+        'Admin',
+        'User',
         req.ip,
-        req.get('user-agent'),
+        'Mozilla/5.0',
       );
+      expect(res.cookie).toHaveBeenCalled();
     });
 
-    it('должен обработать ошибку при регистрации', async () => {
+    it('должен пробросить ошибку при регистрации', async () => {
       const registerDto = {
         email: 'admin@example.com',
         password: 'password123',
         firstName: 'Admin',
       };
-      const req = {
-        ip: '127.0.0.1',
-        get: jest.fn().mockReturnValue('Mozilla/5.0'),
-      };
+      const req = { ip: '127.0.0.1', get: jest.fn().mockReturnValue('Mozilla/5.0') };
+      const res = mockRes();
       const error = new Error('Администратор уже существует');
 
       mockAuthService.registerFirstAdmin.mockRejectedValue(error);
 
-      await expect(controller.register(registerDto, req)).rejects.toThrow(error);
+      await expect(
+        controller.register(registerDto as any, req as any, res as any),
+      ).rejects.toThrow(error);
+    });
+  });
+
+  describe('telegramAuth', () => {
+    it('должен авторизовать через Telegram', async () => {
+      const telegramData: TelegramAuthData = {
+        id: '123456789',
+        first_name: 'Test',
+        auth_date: Date.now(),
+        hash: 'hash',
+      } as TelegramAuthData;
+      const req = {
+        ip: '127.0.0.1',
+        get: jest.fn().mockReturnValue('Mozilla/5.0'),
+      };
+      const res = mockRes();
+      const mockUser: User = {
+        id: 'user-1',
+        telegramId: telegramData.id,
+        role: UserRole.CLIENT,
+      } as User;
+      const tokenPair = {
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        accessTokenExpiresAt: new Date(),
+        refreshTokenExpiresAt: new Date(),
+      };
+
+      mockAuthService.validateTelegramAuth.mockResolvedValue(mockUser);
+      mockJwtAuthService.generateTokenPair.mockResolvedValue(tokenPair);
+
+      const result = await controller.telegramAuth(
+        telegramData,
+        req as any,
+        res as any,
+      );
+
+      expect(result).toHaveProperty('accessToken', 'token');
+      expect(result).toHaveProperty('refreshToken', 'refresh');
+      expect(result).toHaveProperty('user');
+      expect(mockAuthService.validateTelegramAuth).toHaveBeenCalledWith(telegramData);
+      expect(res.cookie).toHaveBeenCalled();
     });
   });
 
   describe('login - error handling', () => {
-    it('должен обработать ошибку при входе', async () => {
-      const loginDto: LoginDto = {
+    it('должен пробросить ошибку при неверных данных', async () => {
+      const loginDto: LoginRequestDto = {
         email: 'test@example.com',
         password: 'wrongpassword',
       };
@@ -356,11 +367,14 @@ describe('AuthController', () => {
         ip: '127.0.0.1',
         get: jest.fn().mockReturnValue('Mozilla/5.0'),
       };
+      const res = mockRes();
       const error = new Error('Invalid email or password');
 
       mockAuthService.validateEmailPassword.mockRejectedValue(error);
 
-      await expect(controller.login(loginDto, req)).rejects.toThrow(error);
+      await expect(
+        controller.login(loginDto, req as any, res as any),
+      ).rejects.toThrow(error);
       expect(mockAuthService.validateEmailPassword).toHaveBeenCalledWith(
         loginDto.email,
         loginDto.password,
@@ -368,4 +382,3 @@ describe('AuthController', () => {
     });
   });
 });
-
