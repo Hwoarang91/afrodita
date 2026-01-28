@@ -27,10 +27,13 @@ export default {
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
+        "background-light": "#FFF5F7",
+        "background-dark": "#1F1116",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "#F472B6",
+          light: "#FCE7F3",
+          dark: "#DB2777",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",

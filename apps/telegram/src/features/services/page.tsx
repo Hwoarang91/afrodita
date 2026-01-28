@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { servicesApi } from '../../shared/api/services';
@@ -6,10 +7,13 @@ import EmptyState from '../../shared/components/EmptyState';
 import ServiceCard from './ServiceCard';
 import { useTelegramBackButton } from '../../hooks/useTelegramBackButton';
 import { useTelegram } from '../../contexts/TelegramContext';
+import type { Service } from '@shared/types';
 
 export default function Services() {
   const navigate = useNavigate();
   const { hapticFeedback } = useTelegram();
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
+  const [selectedCategory, setSelectedCategory] = useState<string>('Все');
   
   // Настройка BackButton для Telegram Web App
   useTelegramBackButton();
@@ -19,52 +23,166 @@ export default function Services() {
     retry: 1,
   });
 
+  // Получаем уникальные категории
+  const categories = useMemo(() => {
+    if (!services) return [];
+    const cats = new Set<string>();
+    services.forEach(service => {
+      if (service.category) {
+        cats.add(service.category);
+      }
+    });
+    return ['Все', ...Array.from(cats)];
+  }, [services]);
+
+  // Фильтруем услуги по категории
+  const filteredServices = useMemo(() => {
+    if (!services) return [];
+    if (selectedCategory === 'Все') return services;
+    return services.filter(service => service.category === selectedCategory);
+  }, [services, selectedCategory]);
+
   // Логирование ошибок для отладки
   if (error) {
     console.error('Ошибка загрузки услуг:', error);
   }
 
+  const toggleService = (serviceId: string) => {
+    setSelectedServices(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(serviceId)) {
+        newSet.delete(serviceId);
+      } else {
+        newSet.add(serviceId);
+      }
+      return newSet;
+    });
+    hapticFeedback.selectionChanged();
+  };
+
+  const selectedServicesArray = useMemo(() => {
+    if (!services) return [];
+    return services.filter(service => selectedServices.has(service.id));
+  }, [services, selectedServices]);
+
+  const totalPrice = useMemo(() => {
+    return selectedServicesArray.reduce((sum, service) => sum + service.price, 0);
+  }, [selectedServicesArray]);
+
+  const handleContinue = () => {
+    if (selectedServicesArray.length === 0) return;
+    const firstService = selectedServicesArray[0];
+    hapticFeedback.impactOccurred('medium');
+    navigate(`/services/${firstService.id}`);
+  };
+
   return (
-    <div className="min-h-screen bg-background p-2 sm:p-4">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6">Наши услуги</h1>
-        {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <ServiceCardSkeleton />
-            <ServiceCardSkeleton />
-            <ServiceCardSkeleton />
-            <ServiceCardSkeleton />
+    <div className="min-h-screen bg-background-light dark:bg-background-dark text-[#2D1B22] dark:text-pink-50">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-20 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md">
+        <div className="flex items-center p-4 justify-between">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex size-10 items-center justify-center rounded-full bg-white dark:bg-[#2D1B22] shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[#2D1B22] dark:text-pink-100">arrow_back_ios_new</span>
+          </button>
+          <div className="flex flex-col items-center flex-1">
+            <h2 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight">Выберите услугу</h2>
+            <span className="text-[10px] font-bold text-pink-500 dark:text-pink-400 uppercase tracking-widest mt-0.5">Шаг 1 из 5</span>
           </div>
-        ) : error ? (
-          <EmptyState
-            icon="❌"
-            title="Ошибка загрузки услуг"
-            description={error instanceof Error ? error.message : 'Не удалось загрузить услуги. Проверьте подключение к интернету.'}
-            actionLabel="Обновить"
-            onAction={() => window.location.reload()}
-          />
-        ) : services && services.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {services.map((service) => (
+          <div className="size-10"></div>
+        </div>
+        {/* Progress Indicator */}
+        <div className="flex w-full flex-row items-center justify-center gap-2 pb-4">
+          <div className="h-1.5 w-8 rounded-full bg-primary"></div>
+          <div className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40"></div>
+          <div className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40"></div>
+          <div className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40"></div>
+          <div className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40"></div>
+        </div>
+      </header>
+
+      <main className="pb-32">
+        {/* Category Filters */}
+        <div className="flex gap-3 px-4 py-2 overflow-x-auto no-scrollbar">
+          {categories.map((category) => (
+            <button
+              key={category}
+              onClick={() => {
+                setSelectedCategory(category);
+                hapticFeedback.selectionChanged();
+              }}
+              className={`flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-full px-6 shadow-sm transition ${
+                selectedCategory === category
+                  ? 'bg-primary text-white font-semibold'
+                  : 'bg-white dark:bg-[#2D1B22] border border-pink-100 dark:border-pink-900/30 text-[#2D1B22] dark:text-pink-100 font-medium'
+              }`}
+            >
+              <p className="text-sm">{category}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Services List */}
+        <div className="flex flex-col gap-4 p-4">
+          {isLoading ? (
+            <div className="grid grid-cols-1 gap-4">
+              <ServiceCardSkeleton />
+              <ServiceCardSkeleton />
+              <ServiceCardSkeleton />
+            </div>
+          ) : error ? (
+            <EmptyState
+              title="Ошибка загрузки услуг"
+              description={error instanceof Error ? error.message : 'Не удалось загрузить услуги. Проверьте подключение к интернету.'}
+              actionLabel="Обновить"
+              onAction={() => window.location.reload()}
+            />
+          ) : filteredServices && filteredServices.length > 0 ? (
+            filteredServices.map((service) => (
               <ServiceCard
                 key={service.id}
                 service={service}
-                onClick={() => {
+                isSelected={selectedServices.has(service.id)}
+                onToggle={() => toggleService(service.id)}
+                onInfoClick={() => {
                   hapticFeedback.selectionChanged();
                   navigate(`/services/${service.id}`);
                 }}
               />
-            ))}
+            ))
+          ) : (
+            <EmptyState
+              title="Услуги не найдены"
+              description="В данный момент услуги временно недоступны. Попробуйте позже."
+            />
+          )}
+        </div>
+      </main>
+
+      {/* Sticky Footer */}
+      {selectedServicesArray.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl border-t border-pink-100 dark:border-pink-900/30 p-4 pb-8 z-30">
+          <div className="max-w-md mx-auto">
+            <button
+              onClick={handleContinue}
+              className="w-full h-14 bg-primary rounded-xl flex items-center justify-between px-6 shadow-lg shadow-pink-500/20 group active:scale-[0.98] transition-transform"
+            >
+              <div className="flex flex-col items-start text-white">
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">
+                  Выбрана {selectedServicesArray.length} {selectedServicesArray.length === 1 ? 'услуга' : 'услуги'}
+                </span>
+                <span className="text-lg font-bold leading-tight">Продолжить</span>
+              </div>
+              <div className="flex items-center gap-3 text-white">
+                <span className="text-xl font-bold">{totalPrice.toLocaleString('ru-RU')} ₽</span>
+                <span className="material-symbols-outlined">arrow_forward</span>
+              </div>
+            </button>
           </div>
-        ) : (
-          <EmptyState
-            icon="🔍"
-            title="Услуги не найдены"
-            description="В данный момент услуги временно недоступны. Попробуйте позже."
-          />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
-
