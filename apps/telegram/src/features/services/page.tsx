@@ -147,7 +147,6 @@ export default function Services() {
                 onToggle={() => toggleService(service.id)}
                 onInfoClick={() => {
                   hapticFeedback.selectionChanged();
-                  navigate(`/services/${service.id}`);
                 }}
               />
             ))
@@ -175,7 +174,7 @@ export default function Services() {
                 <span className="text-lg font-bold leading-tight">Продолжить</span>
               </div>
               <div className="flex items-center gap-3 text-white">
-                <span className="text-xl font-bold">{totalPrice.toLocaleString('ru-RU')} ₽</span>
+                <span className="text-xl font-bold">{Number(totalPrice).toLocaleString('ru-RU')} ₽</span>
                 <span className="material-symbols-outlined">arrow_forward</span>
               </div>
             </button>

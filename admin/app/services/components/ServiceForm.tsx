@@ -53,7 +53,10 @@ export function ServiceForm({
     parentServiceId: null as string | null,
     allowMultipleSubcategories: false,
     masterIds: [] as string[],
+    imageUrl: '',
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const currentService = service;
   const isCategory = currentService?.isCategory || serviceType === 'category';
@@ -73,7 +76,9 @@ export function ServiceForm({
         parentServiceId: currentService.parentServiceId || null,
         allowMultipleSubcategories: currentService.allowMultipleSubcategories || false,
         masterIds: currentService.masters?.map((m: any) => m.id) || [],
+        imageUrl: (currentService as any).imageUrl || '',
       });
+      setImagePreview((currentService as any).imageUrl || null);
     } else if (parentServiceForSubcategory) {
       setServiceType('subcategory');
       setFormData({
@@ -133,14 +138,87 @@ export function ServiceForm({
 
   const categories = Array.isArray(categoriesData) ? categoriesData : [];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Размер файла не должен превышать 5MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        alert('Выберите файл изображения');
+        return;
+      }
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleImageUpload = async (): Promise<string | null> => {
+    if (!imageFile) return formData.imageUrl || null;
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          const maxWidth = 800;
+          const maxHeight = 800;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(imageFile);
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    let imageUrl = formData.imageUrl;
+    if (imageFile) {
+      try {
+        imageUrl = (await handleImageUpload()) || formData.imageUrl;
+      } catch (error) {
+        alert('Ошибка при обработке изображения');
+        return;
+      }
+    }
+
     const submitData: any = {
       name: formData.name,
       description: formData.description,
       isActive: formData.isActive,
       masterIds: formData.masterIds,
       isCategory: serviceType === 'category',
+      imageUrl,
       ...(serviceType !== 'category' && {
         price: formData.price,
         duration: formData.duration,
@@ -293,6 +371,40 @@ export function ServiceForm({
           rows={3}
           required
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="image">Изображение услуги</Label>
+        {imagePreview && (
+          <div className="relative w-full max-w-xs mb-2">
+            <img
+              src={imagePreview}
+              alt="Preview"
+              className="w-full h-48 object-cover rounded-lg border border-border"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setImageFile(null);
+                setImagePreview(null);
+                setFormData({ ...formData, imageUrl: '' });
+              }}
+              className="absolute top-2 right-2 w-8 h-8 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center hover:bg-destructive/90 transition-colors"
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <Input
+          id="image"
+          type="file"
+          accept="image/*"
+          onChange={handleImageSelect}
+          className="cursor-pointer"
+        />
+        <p className="text-xs text-muted-foreground">
+          JPG, PNG, размер до 5MB. Изображение будет автоматически сжато.
+        </p>
       </div>
 
       {serviceType !== 'category' && (

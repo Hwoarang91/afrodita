@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { Service } from '@shared/types';
+import ServiceInfoModal from './ServiceInfoModal';
 
 interface ServiceCardProps {
   service: Service;
@@ -9,8 +11,21 @@ interface ServiceCardProps {
 
 export default function ServiceCard({ service, isSelected, onToggle, onInfoClick }: ServiceCardProps) {
   const categoryName = service.category || 'Релакс';
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleInfoClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsModalOpen(true);
+    onInfoClick();
+  };
 
   return (
+    <>
+      <ServiceInfoModal 
+        service={service} 
+        open={isModalOpen} 
+        onOpenChange={setIsModalOpen} 
+      />
     <div
       className={`group relative flex items-stretch justify-between gap-4 rounded-xl bg-white dark:bg-[#2D1B22] p-4 shadow-sm cursor-pointer transition ${
         isSelected
@@ -44,13 +59,10 @@ export default function ServiceCard({ service, isSelected, onToggle, onInfoClick
               <span className="material-symbols-outlined text-sm">schedule</span>
               <span className="text-xs font-medium">{service.duration} мин</span>
             </div>
-            <p className="text-primary text-xl font-extrabold">{service.price.toLocaleString('ru-RU')} ₽</p>
+            <p className="text-primary text-xl font-extrabold">{Number(service.price).toLocaleString('ru-RU')} ₽</p>
           </div>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onInfoClick();
-            }}
+            onClick={handleInfoClick}
             className="flex size-8 items-center justify-center rounded-full bg-pink-50 dark:bg-pink-900/20 text-primary hover:bg-pink-100 dark:hover:bg-pink-900/30 transition"
           >
             <span className="material-symbols-outlined text-lg">info</span>
@@ -64,5 +76,6 @@ export default function ServiceCard({ service, isSelected, onToggle, onInfoClick
         />
       )}
     </div>
+    </>
   );
 }
