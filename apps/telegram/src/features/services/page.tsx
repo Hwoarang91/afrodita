@@ -7,7 +7,6 @@ import EmptyState from '../../shared/components/EmptyState';
 import ServiceCard from './ServiceCard';
 import { useTelegramBackButton } from '../../hooks/useTelegramBackButton';
 import { useTelegram } from '../../contexts/TelegramContext';
-import type { Service } from '@shared/types';
 
 export default function Services() {
   const navigate = useNavigate();
