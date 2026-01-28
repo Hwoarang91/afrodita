@@ -92,6 +92,7 @@ export function ServiceForm({
         parentServiceId: parentServiceForSubcategory.id,
         allowMultipleSubcategories: false,
         masterIds: [],
+        imageUrl: '',
       });
     } else {
       setServiceType('main');
@@ -106,6 +107,7 @@ export function ServiceForm({
         parentServiceId: null,
         allowMultipleSubcategories: false,
         masterIds: [],
+        imageUrl: '',
       });
     }
   }, [currentService, parentServiceForSubcategory]);
