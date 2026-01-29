@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { servicesApi } from '../../shared/api/services';
 import { ServiceCardSkeleton } from '../../shared/components/SkeletonLoader';
 import EmptyState from '../../shared/components/EmptyState';
+import StepIndicator from '../../shared/components/StepIndicator';
 import ServiceCard from './ServiceCard';
 import { useTelegramBackButton } from '../../hooks/useTelegramBackButton';
 import { useTelegram } from '../../contexts/TelegramContext';
@@ -105,18 +106,10 @@ export default function Services() {
           </button>
           <div className="flex flex-col items-center flex-1">
             <h2 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight">Выберите услугу</h2>
-            <span className="text-[10px] font-bold text-pink-500 dark:text-pink-400 uppercase tracking-widest mt-0.5">Шаг 1 из 5</span>
           </div>
           <div className="size-10"></div>
         </div>
-        {/* Progress Indicator */}
-        <div className="flex w-full flex-row items-center justify-center gap-2 pb-4">
-          <div className="h-1.5 w-8 rounded-full bg-primary"></div>
-          <div className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40"></div>
-          <div className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40"></div>
-          <div className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40"></div>
-          <div className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40"></div>
-        </div>
+        <StepIndicator currentStep={1} />
       </header>
 
       <main className="pb-32">

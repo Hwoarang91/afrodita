@@ -5,6 +5,7 @@ import { apiClient } from '../../shared/api/client';
 import { ServiceCardSkeleton } from '../../shared/components/SkeletonLoader';
 import LoadingSpinner from '../../shared/components/LoadingSpinner';
 import EmptyState from '../../shared/components/EmptyState';
+import StepIndicator from '../../shared/components/StepIndicator';
 import { useTelegramBackButton } from '../../hooks/useTelegramBackButton';
 import { useTelegram } from '../../contexts/TelegramContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
@@ -143,16 +144,7 @@ export default function MasterSelection() {
           </div>
           <div className="size-10"></div>
         </div>
-        {/* Progress Indicator */}
-        <div className="flex flex-col gap-2 px-4 pb-4">
-          <div className="flex gap-6 justify-between items-center mb-1">
-            <span className="text-[#8b5e66] dark:text-pink-300 text-xs font-semibold uppercase tracking-wide">Этап 2 из 5</span>
-            <span className="text-primary-dark dark:text-primary text-xs font-bold">40%</span>
-          </div>
-          <div className="rounded-full bg-pink-100 dark:bg-pink-900/30 overflow-hidden">
-            <div className="h-2 rounded-full bg-primary" style={{ width: '40%' }}></div>
-          </div>
-        </div>
+        <StepIndicator currentStep={2} />
       </header>
 
       <main className="pb-24">

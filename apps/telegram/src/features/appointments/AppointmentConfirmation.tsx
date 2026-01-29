@@ -6,6 +6,7 @@ import { servicesApi } from '../../shared/api/services';
 import { apiClient } from '../../shared/api/client';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../../shared/components/LoadingSpinner';
+import StepIndicator from '../../shared/components/StepIndicator';
 import { useTelegramBackButton } from '../../hooks/useTelegramBackButton';
 import { useTelegram } from '../../contexts/TelegramContext';
 
@@ -111,9 +112,25 @@ export default function AppointmentConfirmation() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-2 sm:p-4">
+    <div className="min-h-screen bg-background-light dark:bg-background-dark text-[#2D1B22] dark:text-pink-50">
+      <header className="sticky top-0 z-20 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md">
+        <div className="flex items-center p-4 justify-between">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="flex size-10 items-center justify-center rounded-full bg-white dark:bg-[#2D1B22] shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[#2D1B22] dark:text-pink-100">arrow_back_ios_new</span>
+          </button>
+          <div className="flex flex-col items-center flex-1">
+            <h2 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight">Подтверждение записи</h2>
+          </div>
+          <div className="size-10" />
+        </div>
+        <StepIndicator currentStep={4} />
+      </header>
+      <main className="p-4 sm:p-4">
       <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-4 sm:p-6 border border-border">
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6">Подтверждение записи</h1>
         <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
           <div>
             <span className="text-xs sm:text-sm text-muted-foreground">Услуга:</span>
@@ -135,6 +152,7 @@ export default function AppointmentConfirmation() {
           </div>
         </div>
       </div>
+      </main>
     </div>
   );
 }
