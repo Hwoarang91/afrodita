@@ -1,8 +1,9 @@
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../shared/api/client';
 import { ServiceCardSkeleton } from '../../shared/components/SkeletonLoader';
+import LoadingSpinner from '../../shared/components/LoadingSpinner';
 import EmptyState from '../../shared/components/EmptyState';
 import { useTelegramBackButton } from '../../hooks/useTelegramBackButton';
 import { useTelegram } from '../../contexts/TelegramContext';
@@ -40,6 +41,13 @@ export default function MasterSelection() {
   // Настройка BackButton для Telegram Web App
   useTelegramBackButton();
 
+  // Без serviceId возврат к списку услуг (избегаем ошибок и бессмысленного экрана)
+  useEffect(() => {
+    if (!serviceId || serviceId === '') {
+      navigate('/services', { replace: true });
+    }
+  }, [serviceId, navigate]);
+
   const { data: mastersData, isLoading } = useQuery({
     queryKey: ['masters'],
     queryFn: async () => {
@@ -48,7 +56,7 @@ export default function MasterSelection() {
     },
   });
 
-  const masters = Array.isArray(mastersData) ? mastersData : (mastersData?.data || []);
+  const masters: Master[] = Array.isArray(mastersData) ? mastersData : (mastersData?.data || []) || [];
 
   // Просмотр отзывов доступен всем; оставить отзыв можно только после посещения услуги (проверяется при создании отзыва на бэкенде)
 
@@ -64,6 +72,11 @@ export default function MasterSelection() {
     enabled: !!reviewsModalMasterId,
   });
   const reviews = (reviewsList ?? []) as Review[];
+
+  // Пока редирект в /services не сработал — не рендерить контент
+  if (!serviceId || serviceId === '') {
+    return <LoadingSpinner />;
+  }
 
   const handleMasterSelect = (masterId: string) => {
     setSelectedMaster(masterId);
@@ -215,7 +228,10 @@ export default function MasterSelection() {
               <ServiceCardSkeleton />
             </div>
           ) : masters && masters.length > 0 ? (
-            masters.map((master: Master) => (
+            masters.map((master: Master) => {
+              const rating = Number((master as any).rating) || 0;
+              const experience = Number((master as any).experience) || 0;
+              return (
               <div
                 key={master.id}
                 role="button"
@@ -230,7 +246,7 @@ export default function MasterSelection() {
                   <div className="flex flex-[2_2_0px] flex-col gap-1">
                     <div className="flex flex-col">
                       <p className="text-primary dark:text-primary text-[10px] font-bold uppercase tracking-widest mb-0.5">
-                        Опыт {master.experience} {master.experience === 1 ? 'год' : master.experience < 5 ? 'года' : 'лет'}
+                        Опыт {experience} {experience === 1 ? 'год' : experience < 5 ? 'года' : 'лет'}
                       </p>
                       <p className="text-[#4a3438] dark:text-pink-50 text-lg font-bold leading-tight">{master.name}</p>
                       <p className="text-[#8b5e66] dark:text-pink-300 text-xs font-medium mt-0.5">
@@ -240,16 +256,16 @@ export default function MasterSelection() {
                       </p>
                     </div>
                     <div className="flex items-center gap-1 mt-2">
-                      {renderStars(master.rating)}
-                      <span className="text-[#4a3438] dark:text-pink-50 text-xs font-bold ml-1">{master.rating.toFixed(1)}</span>
+                      {renderStars(rating)}
+                      <span className="text-[#4a3438] dark:text-pink-50 text-xs font-bold ml-1">{rating.toFixed(1)}</span>
                       <button
                         type="button"
-                        className={`text-[11px] font-bold underline ml-2 ${hasCompletedAppointment ? 'text-primary dark:text-primary cursor-pointer' : 'text-pink-300 dark:text-pink-700 cursor-not-allowed'}`}
+                        className="text-primary dark:text-primary text-[11px] font-bold underline ml-2 cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           openReviewsModal(master.id);
                         }}
-                        title={!hasCompletedAppointment ? 'Доступно после посещения процедуры' : 'Отзывы'}
+                        title="Отзывы"
                       >
                         Отзывы
                       </button>
@@ -263,7 +279,7 @@ export default function MasterSelection() {
                   )}
                 </div>
               </div>
-            ))
+            ); })
           ) : (
             <EmptyState
               icon="👤"
@@ -306,12 +322,12 @@ export default function MasterSelection() {
                   type="button"
                   onClick={() => {
                     setClickedReview(review);
-                    hapticFeedback.selectionChanged();
+                    hapticFeedback?.selectionChanged?.();
                   }}
                   className="w-full text-left p-3 rounded-xl border border-pink-100 dark:border-pink-900/30 hover:bg-pink-50/50 dark:hover:bg-pink-950/30 transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    {renderStars(review.rating)}
+                    {renderStars(Number(review.rating) || 0)}
                     <span className="text-xs font-semibold text-[#4a3438] dark:text-pink-100">
                       {review.user?.name ?? '—'}
                     </span>
@@ -335,7 +351,7 @@ export default function MasterSelection() {
           {clickedReview && (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                {renderStars(clickedReview.rating)}
+                {renderStars(Number(clickedReview.rating) || 0)}
                 <span className="text-sm text-[#8b5e66] dark:text-pink-400">{clickedReview.user?.name ?? '—'}</span>
               </div>
               {clickedReview.comment ? (

@@ -2769,7 +2769,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       let message = `💬 *Отзывы — ${masterName}*\n\n`;
       reviews.forEach((r, i) => {
         const u = r.user as { name?: string; firstName?: string; lastName?: string } | undefined;
-        const userName = u?.name ?? [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim() || 'Гость';
+        const userName = u?.name ?? ([u?.firstName, u?.lastName].filter(Boolean).join(' ').trim() || 'Гость');
         const comment = r.comment ? (r.comment.length > 120 ? r.comment.substring(0, 120) + '…' : r.comment) : '';
         message += `${i + 1}. ${formatRating(r.rating)} _${userName}_\n`;
         if (comment) message += `   ${comment}\n`;

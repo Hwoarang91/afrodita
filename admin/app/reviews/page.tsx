@@ -147,7 +147,7 @@ export default function ReviewsPage() {
   const userName = (r: Review) => {
     const u = r.user;
     if (!u) return '—';
-    return (u as { name?: string }).name ?? [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
+    return (u as { name?: string }).name ?? ([u.firstName, u.lastName].filter(Boolean).join(' ') || '—');
   };
 
   const statusBadge = (status: string) => {

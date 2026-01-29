@@ -43,7 +43,9 @@ class ErrorBoundary extends Component<Props, State> {
       error: null,
       errorInfo: null,
     });
-    window.location.href = '/';
+    // Главная веб-приложения — список услуг, не лендинг
+    const base = (import.meta.env.BASE_URL || '/app/').replace(/\/$/, '') || '/app';
+    window.location.href = `${base}/services`;
   };
 
   render() {
