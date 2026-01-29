@@ -28,17 +28,20 @@ export default function Services() {
     if (!services) return [];
     
     // Фильтруем: исключаем только категории (isCategory = true), но включаем подкатегории
+    // Убираем проверку price > 0 и duration > 0, так как это может скрывать услуги
     const availableServices = services.filter(service => 
-      !service.isCategory && 
-      service.price > 0 &&
-      service.duration > 0
+      !service.isCategory
     );
     
     if (selectedCategory === 'Все') return availableServices;
     
-    // Фильтруем по строковому полю category
+    // Фильтруем по строковому полю category (нечувствительно к регистру)
     // Бэкенд уже заполняет category у подкатегорий из родительской категории
-    return availableServices.filter(service => service.category === selectedCategory);
+    const selectedCategoryNormalized = selectedCategory.trim().toLowerCase();
+    return availableServices.filter(service => {
+      const serviceCategory = service.category?.trim().toLowerCase();
+      return serviceCategory === selectedCategoryNormalized;
+    });
   }, [services, selectedCategory]);
 
   // Получаем уникальные категории из всех услуг (включая подкатегории)
@@ -52,8 +55,10 @@ export default function Services() {
       if (service.isCategory) return;
       
       // Добавляем категорию из строкового поля (уже заполнено бэкендом для подкатегорий)
-      if (service.category && service.category.trim()) {
-        cats.add(service.category.trim());
+      // Сохраняем оригинальное значение для отображения, но нормализуем для сравнения
+      const category = service.category?.trim();
+      if (category) {
+        cats.add(category);
       }
     });
     
