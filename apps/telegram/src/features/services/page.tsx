@@ -50,6 +50,15 @@ export default function Services() {
     if (!services) return ['Все'];
     const cats = new Set<string>();
     
+    // Временное логирование для отладки
+    console.log('🔍 Отладка категорий - Все услуги:', services.map(s => ({
+      name: s.name,
+      category: s.category,
+      isCategory: s.isCategory,
+      isActive: s.isActive,
+      parentServiceId: s.parentServiceId
+    })));
+    
     services.forEach(service => {
       // Пропускаем категории (isCategory = true)
       if (service.isCategory) return;
@@ -59,14 +68,16 @@ export default function Services() {
       const category = service.category?.trim();
       if (category) {
         cats.add(category);
+        console.log('✅ Добавлена категория:', category, 'из услуги:', service.name);
+      } else {
+        console.log('⚠️ Услуга без категории:', service.name, 'isCategory:', service.isCategory);
       }
     });
     
-    // Если есть хотя бы одна категория, показываем "Все" и категории
-    if (cats.size > 0) {
-      return ['Все', ...Array.from(cats).sort()];
-    }
-    return ['Все'];
+    const result = cats.size > 0 ? ['Все', ...Array.from(cats).sort()] : ['Все'];
+    console.log('📋 Итоговый список категорий:', result);
+    
+    return result;
   }, [services]);
 
   // Логирование ошибок для отладки
