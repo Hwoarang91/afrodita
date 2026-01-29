@@ -137,15 +137,19 @@ export class ServicesService {
   }
 
   // Получить только самостоятельные услуги (не категории, не подкатегории)
-  async findMainServices(isActive: boolean = true): Promise<Service[]> {
-    return await this.serviceRepository
+  async findMainServices(isActive: boolean = true, category?: string): Promise<Service[]> {
+    const query = this.serviceRepository
       .createQueryBuilder('service')
       .leftJoinAndSelect('service.masters', 'masters')
       .where('service.parentServiceId IS NULL')
       .andWhere('service.isCategory = :isCategory', { isCategory: false })
-      .andWhere('service.isActive = :isActive', { isActive })
-      .orderBy('service.name', 'ASC')
-      .getMany();
+      .andWhere('service.isActive = :isActive', { isActive });
+    
+    if (category) {
+      query.andWhere('service.category = :category', { category });
+    }
+    
+    return query.orderBy('service.name', 'ASC').getMany();
   }
 
   // Получить только категории (без подкатегорий)

@@ -54,26 +54,29 @@ export default function ServiceCard({ service, isSelected, onToggle, onInfoClick
             </p>
           )}
         </div>
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-gray-400 dark:text-pink-300/40">
-              <span className="material-symbols-outlined text-sm">schedule</span>
-              <span className="text-xs font-medium">{service.duration} мин</span>
+        {/* Показываем цену и время только для самостоятельных услуг с ценой > 0 */}
+        {service.price > 0 && service.duration > 0 && (
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1 text-gray-400 dark:text-pink-300/40">
+                <span className="material-symbols-outlined text-sm">schedule</span>
+                <span className="text-xs font-medium">{service.duration} мин</span>
+              </div>
+              <p className="text-primary text-xl font-extrabold">
+                {typeof service.price === 'string' 
+                  ? parseFloat(service.price).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                  : Number(service.price).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                } ₽
+              </p>
             </div>
-            <p className="text-primary text-xl font-extrabold">
-              {typeof service.price === 'string' 
-                ? parseFloat(service.price).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-                : Number(service.price).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-              } ₽
-            </p>
+            <button
+              onClick={handleInfoClick}
+              className="flex size-8 items-center justify-center rounded-full bg-pink-50 dark:bg-pink-900/20 text-primary hover:bg-pink-100 dark:hover:bg-pink-900/30 transition"
+            >
+              <span className="material-symbols-outlined text-lg">info</span>
+            </button>
           </div>
-          <button
-            onClick={handleInfoClick}
-            className="flex size-8 items-center justify-center rounded-full bg-pink-50 dark:bg-pink-900/20 text-primary hover:bg-pink-100 dark:hover:bg-pink-900/30 transition"
-          >
-            <span className="material-symbols-outlined text-lg">info</span>
-          </button>
-        </div>
+        )}
       </div>
       {service.imageUrl && (
         <div

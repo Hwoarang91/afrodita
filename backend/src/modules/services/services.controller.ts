@@ -48,8 +48,9 @@ export class ServicesController {
   @Get('main')
   @ApiOperation({ summary: 'Получение только самостоятельных услуг (без категорий и подкатегорий)' })
   @ApiOkResponse({ description: 'Список самостоятельных услуг' })
-  async findMainServices() {
-    return await this.servicesService.findMainServices();
+  @ApiQuery({ name: 'category', required: false, type: String, description: 'Фильтр по категории' })
+  async findMainServices(@Query('category') category?: string) {
+    return await this.servicesService.findMainServices(true, category);
   }
 
   @Get('categories')

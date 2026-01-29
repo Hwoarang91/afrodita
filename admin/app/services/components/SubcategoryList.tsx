@@ -44,14 +44,17 @@ export const SubcategoryList = memo(({
               )}
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                  <FolderOpen className="h-4 w-4 text-orange-500" />
                   <span className="font-medium text-sm">{sub.name}</span>
+                  <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300">
+                    Подкатегория
+                  </Badge>
                   {!sub.isActive && (
                     <Badge variant="secondary" className="text-xs">Неактивна</Badge>
                   )}
                 </div>
                 <div className="text-sm text-muted-foreground ml-6">
-                  {sub.price}₽ • {sub.duration} мин
+                  {Number(sub.price).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}₽ • {sub.duration} мин
                 </div>
               </div>
               <div className="flex gap-2">

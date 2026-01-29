@@ -55,6 +55,7 @@ export interface Service {
   category?: string;
   subcategory?: string;
   isCategory: boolean;
+  parentServiceId?: string | null; // ID родительской услуги (для подкатегорий)
   isActive: boolean;
   imageUrl?: string;
   createdAt: string;

@@ -2602,6 +2602,75 @@ tsc --noEmit OK.
 **Файлы изменены:**
 - `infrastructure/nginx/nginx.conf` - добавлен server блок для n8n.realmary.ru
 
+#### Исправление форматирования цены и улучшение отображения типов услуг (28.01.2026)
+
+✅ Исправлено форматирование цены услуг:
+- Убраны лишние нули спереди при отображении цены
+- Добавлена правильная обработка строковых и числовых значений цены
+- Используется `toLocaleString` с опциями `minimumFractionDigits: 0, maximumFractionDigits: 0` для корректного форматирования
+- Исправлено отображение цены в компонентах:
+  - `apps/telegram/src/features/services/ServiceCard.tsx`
+  - `apps/telegram/src/features/services/ServiceInfoModal.tsx`
+  - `apps/telegram/src/features/services/page.tsx` (футер с итоговой суммой)
+
+✅ Реализовано правильное отображение типов услуг:
+
+**В веб-приложении (Telegram Web App):**
+- Обновлен API клиент для использования endpoint `/services/main` вместо `/services`
+- Добавлена фильтрация только самостоятельных услуг (`isCategory = false`, `parentServiceId = null`)
+- Исключены категории (`isCategory = true`) из списка выбираемых услуг
+- Исключены подкатегории (`parentServiceId != null`) из основного списка
+- Цена и время отображаются только для услуг с `price > 0` и `duration > 0`
+- Добавлена дополнительная фильтрация на клиенте для надежности
+
+**В админке:**
+- Добавлены визуальные индикаторы типов услуг:
+  - **Категория** - фиолетовый бейдж с иконкой FolderTree
+  - **Услуга с подкатегориями** - синий бейдж
+  - **Самостоятельная услуга** - зеленый бейдж
+  - **Подкатегория** - оранжевый бейдж (в списке подкатегорий)
+- Улучшено отображение информации о типе услуги с цветовыми блоками
+- Добавлены пояснительные тексты для категорий ("Без цены и времени, используется для группировки подкатегорий")
+
+**В бэкенде:**
+- Обновлен метод `findMainServices()` в `services.service.ts`:
+  - Добавлена поддержка фильтрации по категории через параметр `category`
+  - Метод возвращает только самостоятельные услуги (не категории, не подкатегории)
+- Обновлен контроллер `services.controller.ts`:
+  - Endpoint `/services/main` теперь поддерживает query-параметр `category`
+  - Добавлена документация в Swagger
+
+**Типы:**
+- Добавлено поле `parentServiceId?: string | null` в интерфейс `Service` в `shared/types/entities.ts`
+- Типы теперь полностью соответствуют структуре базы данных
+
+**Логика отображения:**
+- **Самостоятельная услуга**: `isCategory = false`, `parentServiceId = null` - имеет цену и время, показывается в веб-приложении
+- **Категория**: `isCategory = true`, `parentServiceId = null` - без цены и времени, используется для группировки подкатегорий, НЕ показывается в веб-приложении
+- **Подкатегория**: `isCategory = false`, `parentServiceId != null` - имеет цену и время, привязана к категории, НЕ показывается в основном списке веб-приложения
+
+**Файлы изменены:**
+- `backend/src/modules/services/services.service.ts` - добавлена поддержка фильтрации по категории
+- `backend/src/modules/services/services.controller.ts` - добавлен query-параметр category
+- `apps/telegram/src/shared/api/services.ts` - изменен endpoint на `/services/main`, добавлен метод `getSubcategories()`
+- `apps/telegram/src/features/services/page.tsx` - добавлена фильтрация только самостоятельных услуг
+- `apps/telegram/src/features/services/ServiceCard.tsx` - улучшено отображение цены и времени
+- `apps/telegram/src/features/services/ServiceInfoModal.tsx` - исправлено форматирование цены
+- `admin/app/services/components/ServiceCard.tsx` - добавлены визуальные индикаторы типов услуг
+- `admin/app/services/components/SubcategoryList.tsx` - добавлен бейдж "Подкатегория"
+- `admin/app/services/components/ServiceForm.tsx` - исправлена ошибка компиляции (добавлено поле `imageUrl` в инициализацию формы)
+- `shared/types/entities.ts` - добавлено поле `parentServiceId`
+
+✅ Исправлена ошибка компиляции TypeScript:
+- Добавлено поле `imageUrl: ''` в инициализацию формы при создании подкатегории и самостоятельной услуги
+- Исправлена ошибка: "Property 'imageUrl' is missing in type"
+
+✅ Обновление на сервере:
+- Код обновлен через `git pull origin main`
+- Проект пересобран без кеша: `docker compose build --no-cache`
+- Все контейнеры успешно перезапущены и работают
+- Проверены логи сборки и запуска - ошибок не обнаружено
+
 #### Установка n8n на сервер (15.12.2025)
 
 ✅ Установлен и настроен n8n контейнер:

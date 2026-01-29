@@ -35,10 +35,20 @@ export default function Services() {
   }, [services]);
 
   // Фильтруем услуги по категории
+  // API уже возвращает только самостоятельные услуги, но дополнительно фильтруем на клиенте
   const filteredServices = useMemo(() => {
     if (!services) return [];
-    if (selectedCategory === 'Все') return services;
-    return services.filter(service => service.category === selectedCategory);
+    
+    // Дополнительная фильтрация: исключаем категории и подкатегории (на всякий случай)
+    const mainServices = services.filter(service => 
+      !service.isCategory && 
+      !service.parentServiceId &&
+      service.price > 0 &&
+      service.duration > 0
+    );
+    
+    if (selectedCategory === 'Все') return mainServices;
+    return mainServices.filter(service => service.category === selectedCategory);
   }, [services, selectedCategory]);
 
   // Логирование ошибок для отладки

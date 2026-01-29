@@ -5,12 +5,18 @@ import type { Service } from '@shared/types';
 export type { Service };
 
 export const servicesApi = {
+  // Получить только самостоятельные услуги (без категорий и подкатегорий)
   getAll: async (category?: string): Promise<Service[]> => {
-    const { data } = await apiClient.get('/services', {
-      params: { category, limit: 1000 }, // Получаем все услуги для фронтенда
+    const { data } = await apiClient.get('/services/main', {
+      params: category ? { category } : {}, // Фильтр по категории если указан
     });
-    // API возвращает пагинированный ответ { data: [], total: ... }
-    return Array.isArray(data) ? data : (data?.data || []);
+    // API возвращает массив самостоятельных услуг
+    return Array.isArray(data) ? data : [];
+  },
+  // Получить подкатегории для категории
+  getSubcategories: async (categoryId: string): Promise<Service[]> => {
+    const { data } = await apiClient.get(`/services/${categoryId}/subcategories`);
+    return Array.isArray(data) ? data : [];
   },
   getById: async (id: string): Promise<Service> => {
     const { data } = await apiClient.get(`/services/${id}`);
