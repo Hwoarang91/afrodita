@@ -50,34 +50,12 @@ export default function Services() {
     if (!services) return ['Все'];
     const cats = new Set<string>();
     
-    // Временное логирование для отладки
-    console.log('🔍 Отладка категорий - Все услуги:', services.map(s => ({
-      name: s.name,
-      category: s.category,
-      isCategory: s.isCategory,
-      isActive: s.isActive,
-      parentServiceId: s.parentServiceId
-    })));
-    
     services.forEach(service => {
-      // Пропускаем категории (isCategory = true)
       if (service.isCategory) return;
-      
-      // Добавляем категорию из строкового поля (уже заполнено бэкендом для подкатегорий)
-      // Сохраняем оригинальное значение для отображения, но нормализуем для сравнения
       const category = service.category?.trim();
-      if (category) {
-        cats.add(category);
-        console.log('✅ Добавлена категория:', category, 'из услуги:', service.name);
-      } else {
-        console.log('⚠️ Услуга без категории:', service.name, 'isCategory:', service.isCategory);
-      }
+      if (category) cats.add(category);
     });
-    
-    const result = cats.size > 0 ? ['Все', ...Array.from(cats).sort()] : ['Все'];
-    console.log('📋 Итоговый список категорий:', result);
-    
-    return result;
+    return cats.size > 0 ? ['Все', ...Array.from(cats).sort()] : ['Все'];
   }, [services]);
 
   // Логирование ошибок для отладки

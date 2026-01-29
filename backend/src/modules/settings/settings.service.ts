@@ -115,22 +115,30 @@ export class SettingsService {
     enabled: boolean;
     pointsPerRuble: number;
     pointsForRegistration: number;
-    pointsForReferral: number; // Бонусы за приглашение друга
+    pointsForReferral: number;
+    pointsForReview: number; // Бонусы за одобренный отзыв
   }> {
     const settings = await this.settingsRepository.findOne({
       where: { key: 'bonuses' },
     });
 
     if (settings) {
-      return settings.value;
+      const v = settings.value as Record<string, unknown>;
+      return {
+        enabled: v?.enabled !== false,
+        pointsPerRuble: Number(v?.pointsPerRuble) || 0.1,
+        pointsForRegistration: Number(v?.pointsForRegistration) ?? 100,
+        pointsForReferral: Number(v?.pointsForReferral ?? v?.referralBonus) ?? 200,
+        pointsForReview: Number(v?.pointsForReview) ?? 0,
+      };
     }
 
-    // Дефолтные значения
     return {
       enabled: true,
       pointsPerRuble: 0.1,
       pointsForRegistration: 100,
-      pointsForReferral: 200, // По умолчанию 200 бонусов за приглашение друга
+      pointsForReferral: 200,
+      pointsForReview: 0,
     };
   }
 
@@ -139,8 +147,12 @@ export class SettingsService {
     pointsPerRuble: number;
     pointsForRegistration: number;
     pointsForReferral: number;
+    pointsForReview?: number;
   }): Promise<Settings> {
-    return await this.set('bonuses', settings);
+    return await this.set('bonuses', {
+      ...settings,
+      pointsForReview: settings.pointsForReview ?? 0,
+    });
   }
 }
 

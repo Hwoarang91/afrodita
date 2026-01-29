@@ -33,6 +33,7 @@ import { SettingsService } from '../settings/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationChannel } from '../../entities/notification.entity';
 import { ReviewsService } from '../reviews/reviews.service';
+import { ReviewStatus } from '../../entities/review.entity';
 import { FinancialService } from '../financial/financial.service';
 import { TransactionType } from '../../entities/transaction.entity';
 import { AutoRepliesService } from './auto-replies.service';
@@ -1546,6 +1547,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
             // Формат: review:appointmentId
             await this.handleReviewRequest(ctx, params[0]);
             break;
+          case 'reviews_master':
+            // Формат: reviews_master:masterId — просмотр отзывов по мастеру (только для прошедших процедуру)
+            if (params[0]) await this.handleMasterReviewsRequest(ctx, params[0]);
+            break;
           case 'calendar_nav':
             // Формат: calendar_nav:prev/next:year:month
             await this.handleCalendarNavigation(ctx, params[0], params[1], params[2]);
@@ -2725,6 +2730,58 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Просмотр отзывов по мастеру — только для пользователей, прошедших процедуру.
+   */
+  private async handleMasterReviewsRequest(ctx: Context, masterId: string) {
+    const telegramId = ctx.from!.id.toString();
+    const user = await this.usersService.findByTelegramId(telegramId);
+
+    if (!user) {
+      await ctx.answerCbQuery('Пользователь не найден. Используйте /start');
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+
+      const master = await this.mastersService.findById(masterId).catch(() => null);
+      const masterName = master?.name ?? 'Мастер';
+      const { data: reviews } = await this.reviewsService.findAll(
+        masterId,
+        undefined,
+        ReviewStatus.APPROVED,
+        1,
+        20,
+      );
+
+      if (!reviews || reviews.length === 0) {
+        await ctx.reply(`💬 *Отзывы — ${masterName}*\n\nПока нет отзывов.`, { parse_mode: 'Markdown' });
+        return;
+      }
+
+      const formatRating = (rating: number) => {
+        const full = Math.floor(rating);
+        const half = rating % 1 >= 0.25 && rating % 1 < 0.75;
+        return '⭐'.repeat(full) + (half ? '½' : '') + '☆'.repeat(5 - full - (half ? 1 : 0));
+      };
+
+      let message = `💬 *Отзывы — ${masterName}*\n\n`;
+      reviews.forEach((r, i) => {
+        const u = r.user as { name?: string; firstName?: string; lastName?: string } | undefined;
+        const userName = u?.name ?? [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim() || 'Гость';
+        const comment = r.comment ? (r.comment.length > 120 ? r.comment.substring(0, 120) + '…' : r.comment) : '';
+        message += `${i + 1}. ${formatRating(r.rating)} _${userName}_\n`;
+        if (comment) message += `   ${comment}\n`;
+        message += '\n';
+      });
+      await ctx.reply(message, { parse_mode: 'Markdown' });
+    } catch (error: unknown) {
+      this.logger.error(`Ошибка при показе отзывов мастера: ${getErrorMessage(error)}`, getErrorStack(error));
+      await ctx.answerCbQuery('Ошибка при загрузке отзывов.');
+    }
+  }
+
   // Показать записи пользователя
   private async showAppointments(ctx: Context) {
     const telegramId = ctx.from!.id.toString();
@@ -3885,10 +3942,15 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       const botInfo = await this.bot.telegram.getMe();
       const botUsername = botInfo.username;
-      const keyboard = Markup.inlineKeyboard([
+      const keyboardRows: Array<Array<{ text: string; callback_data?: string; url?: string; switch_inline_query?: string }>> = [
         [{ text: '📅 Записаться', switch_inline_query: 'book' }],
         [Markup.button.url('💬 Личный чат', `https://t.me/${botUsername}?start=book`)],
-      ]);
+      ];
+      masters.forEach((master) => {
+        const btnText = `💬 Отзывы — ${master.name.length > 18 ? master.name.substring(0, 18) + '…' : master.name}`;
+        keyboardRows.push([Markup.button.callback(btnText, `reviews_master:${master.id}`)]);
+      });
+      const keyboard = Markup.inlineKeyboard(keyboardRows as any);
 
       await ctx.reply(message, {
         reply_markup: keyboard.reply_markup,

@@ -27,6 +27,7 @@ import {
   FileCode,
   MessageSquare,
   Shield,
+  Star,
 } from 'lucide-react';
 
 const menuItems = [
@@ -36,6 +37,7 @@ const menuItems = [
   { href: '/clients', label: 'Клиенты', icon: Users },
   { href: '/services', label: 'Услуги', icon: Sparkles },
   { href: '/masters', label: 'Мастера', icon: UserCog },
+  { href: '/reviews', label: 'Отзывы', icon: Star },
   { href: '/contact-requests', label: 'Заявки', icon: MessageSquare },
   { href: '/mailings', label: 'Рассылки', icon: Mail },
       { href: '/telegram', label: 'Telegram', icon: Bot },

@@ -267,29 +267,29 @@ export class SettingsController {
   @ApiOperation({ summary: 'Получить настройки бонусов' })
   async getBonusSettings() {
     const settings = await this.settingsService.getBonusSettings();
-    // Маппим pointsForReferral на referralBonus для frontend
     return {
       value: {
         enabled: settings.enabled,
         pointsPerRuble: settings.pointsPerRuble,
         pointsForRegistration: settings.pointsForRegistration,
-        referralBonus: settings.pointsForReferral || 50, // Маппинг на frontend поле
+        referralBonus: settings.pointsForReferral || 50,
+        pointsForReview: settings.pointsForReview ?? 0,
       },
     };
   }
 
   @Put('bonuses')
   @ApiOperation({ summary: 'Установить настройки бонусов' })
-  @ApiBody({ schema: { type: 'object', required: ['value'], properties: { value: { type: 'object', properties: { enabled: { type: 'boolean' }, pointsPerRuble: { type: 'number' }, pointsForRegistration: { type: 'number' }, referralBonus: { type: 'number' } } } } } })
-  async setBonusSettings(@Request() req: AuthRequest, @Body() body: { value: { enabled: boolean; pointsPerRuble: number; pointsForRegistration: number; referralBonus: number } }) {
-    // Маппим referralBonus из запроса на pointsForReferral в сервисе
+  @ApiBody({ schema: { type: 'object', required: ['value'], properties: { value: { type: 'object', properties: { enabled: { type: 'boolean' }, pointsPerRuble: { type: 'number' }, pointsForRegistration: { type: 'number' }, referralBonus: { type: 'number' }, pointsForReview: { type: 'number' } } } } } })
+  async setBonusSettings(@Request() req: AuthRequest, @Body() body: { value: { enabled: boolean; pointsPerRuble: number; pointsForRegistration: number; referralBonus: number; pointsForReview?: number } }) {
     const result = await this.settingsService.setBonusSettings({
       enabled: body.value.enabled,
       pointsPerRuble: body.value.pointsPerRuble,
       pointsForRegistration: body.value.pointsForRegistration,
-      pointsForReferral: body.value.referralBonus, // Маппинг на backend поле
+      pointsForReferral: body.value.referralBonus,
+      pointsForReview: body.value.pointsForReview ?? 0,
     });
-    
+
     await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
       entityType: 'settings',
       entityId: 'bonuses',
@@ -298,16 +298,16 @@ export class SettingsController {
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
     });
-    
-    // Маппим pointsForReferral обратно на referralBonus для ответа
-    const response = result.value;
+
+    const response = result.value as { enabled: boolean; pointsPerRuble: number; pointsForRegistration: number; pointsForReferral: number; pointsForReview: number };
     return {
       success: true,
       value: {
         enabled: response.enabled,
         pointsPerRuble: response.pointsPerRuble,
         pointsForRegistration: response.pointsForRegistration,
-        referralBonus: response.pointsForReferral || 50, // Маппинг на frontend поле
+        referralBonus: response.pointsForReferral || 50,
+        pointsForReview: response.pointsForReview ?? 0,
       },
     };
   }

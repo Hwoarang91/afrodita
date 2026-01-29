@@ -354,7 +354,7 @@ export function ServiceForm({
 
       {serviceType === 'subcategory' && (
         <div className="space-y-2">
-          <Label htmlFor="parentServiceId">Родительская категория *</Label>
+          <Label htmlFor="parentServiceId">Родительская категория</Label>
           <select
             id="parentServiceId"
             value={formData.parentServiceId || ''}
@@ -364,12 +364,13 @@ export function ServiceForm({
                 ...formData,
                 parentServiceId: parentId,
               });
+              // При выборе «Без категории» переключаем на самостоятельную услугу
+              if (!parentId) setServiceType('main');
             }}
             disabled={!!parentServiceForSubcategory}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            required
           >
-            <option value="">Выберите категорию</option>
+            <option value="">Без категории (самостоятельная услуга)</option>
             {categoriesLoading ? (
               <option value="" disabled>Загрузка категорий...</option>
             ) : categories && categories.length > 0 ? (
@@ -384,6 +385,9 @@ export function ServiceForm({
               <option value="" disabled>Нет доступных категорий</option>
             )}
           </select>
+          <p className="text-xs text-muted-foreground">
+            Выберите категорию или «Без категории», чтобы сделать услугу самостоятельной (не подкатегорией).
+          </p>
           {parentServiceForSubcategory && (
             <p className="text-xs text-muted-foreground">
               Родительская категория: <strong>{parentServiceForSubcategory.name}</strong>

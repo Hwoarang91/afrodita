@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
 import { AuthRequest } from '../../common/types/request.types';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam, ApiQuery, ApiOkResponse, ApiNotFoundResponse } from '@nestjs/swagger';
 import { ReviewsService } from './reviews.service';
@@ -51,6 +51,14 @@ export class ReviewsController {
     return await this.reviewsService.findAll(masterId, serviceId, normalizedStatus as ReviewStatus | undefined, page, limit);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Получение отзыва по ID' })
+  @ApiParam({ name: 'id', description: 'ID отзыва' })
+  @ApiNotFoundResponse({ description: 'Отзыв не найден' })
+  async findOne(@Param('id') id: string) {
+    return await this.reviewsService.findOne(id);
+  }
+
   @Post(':id/moderate')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -63,6 +71,29 @@ export class ReviewsController {
     @Body() body: { status: ReviewStatus; moderationComment?: string },
   ) {
     return await this.reviewsService.moderate(id, body.status, body.moderationComment);
+  }
+
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Редактирование отзыва (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID отзыва' })
+  @ApiBody({ schema: { type: 'object', properties: { rating: { type: 'number' }, comment: { type: 'string' } } } })
+  async update(
+    @Param('id') id: string,
+    @Body() body: { rating?: number; comment?: string },
+  ) {
+    return await this.reviewsService.update(id, body.rating, body.comment);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Удаление отзыва (только для админов)' })
+  @ApiParam({ name: 'id', description: 'ID отзыва' })
+  @ApiNotFoundResponse({ description: 'Отзыв не найден' })
+  async remove(@Param('id') id: string) {
+    await this.reviewsService.remove(id);
   }
 }
 

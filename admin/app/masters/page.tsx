@@ -249,12 +249,12 @@ export default function MastersPage() {
               <div className="flex items-center">
                 <span className="text-sm text-muted-foreground">Рейтинг:</span>
                 <span className="ml-2 font-semibold flex items-center gap-1">
-                  <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                  <StarRating rating={Number(master.rating || 0)} sizeClass="h-4 w-4" />
                   {Number(master.rating || 0).toFixed(1)}
                 </span>
               </div>
             </div>
-            <MasterReviews masterId={master.id} />
+            <MasterReviews masterId={master.id} masterName={master.name} />
             <div className="flex flex-col space-y-2">
               <div className="flex space-x-2">
                 <Button
@@ -342,41 +342,79 @@ export default function MastersPage() {
   );
 }
 
-function MasterReviews({ masterId }: { masterId: string }) {
-  const { data: reviews } = useQuery({
+// Звёзды рейтинга с поддержкой половинки (например 4.5 из 5)
+function StarRating({ rating, sizeClass = 'h-3 w-3' }: { rating: number; sizeClass?: string }) {
+  const fullStars = Math.floor(rating);
+  const remainder = rating % 1;
+  const showHalfStar = remainder >= 0.25 && remainder < 0.75;
+  return (
+    <div className="flex items-center gap-0.5">
+      {[0, 1, 2, 3, 4].map((i) => {
+        if (i < fullStars) {
+          return <Star key={i} className={`${sizeClass} fill-yellow-500 text-yellow-500 shrink-0`} />;
+        }
+        if (i === fullStars && showHalfStar) {
+          return (
+            <div key={i} className={`${sizeClass} relative w-3 shrink-0`} style={{ width: '0.75rem' }}>
+              <Star className={`${sizeClass} absolute fill-yellow-500 text-yellow-500`} style={{ clipPath: 'inset(0 50% 0 0)' }} />
+              <Star className={`${sizeClass} text-muted-foreground`} />
+            </div>
+          );
+        }
+        return <Star key={i} className={`${sizeClass} text-muted-foreground shrink-0`} />;
+      })}
+    </div>
+  );
+}
+
+function MasterReviews({ masterId, masterName }: { masterId: string; masterName?: string }) {
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+  const [clickedReview, setClickedReview] = useState<Review | null>(null);
+  const { data: reviewsResponse } = useQuery({
     queryKey: ['reviews', masterId],
     queryFn: async () => {
       const { data } = await apiClient.get('/reviews', {
-        params: { masterId, status: 'APPROVED' },
+        params: { masterId, status: 'approved', limit: 100 },
       });
-      return data.slice(0, 3); // Показываем только последние 3 отзыва
+      const list = Array.isArray(data) ? data : (data?.data ?? []);
+      return list;
     },
     enabled: !!masterId,
   });
 
-  if (!reviews || reviews.length === 0) {
+  const reviews = reviewsResponse ?? [];
+  const previewReviews = reviews.slice(0, 3);
+
+  if (reviews.length === 0) {
     return null;
   }
 
   return (
     <div className="mt-4 pt-4 border-t">
-      <p className="text-sm font-semibold mb-2">Последние отзывы:</p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-semibold">Последние отзывы:</p>
+        {reviews.length > 3 && (
+          <button
+            type="button"
+            onClick={() => setReviewsModalOpen(true)}
+            className="text-xs text-primary hover:underline"
+          >
+            Все отзывы ({reviews.length})
+          </button>
+        )}
+      </div>
       <div className="space-y-2">
-        {reviews.map((review: Review) => (
-          <div key={review.id} className="text-sm">
+        {previewReviews.map((review: Review) => (
+          <button
+            key={review.id}
+            type="button"
+            onClick={() => setClickedReview(review)}
+            className="w-full text-left text-sm rounded-md p-2 hover:bg-muted/50 transition-colors border border-transparent hover:border-border"
+          >
             <div className="flex items-center gap-1 mb-1">
-              {[...Array(5)].map((_, i) => (
-                <Star
-                  key={i}
-                  className={`h-3 w-3 ${
-                    i < review.rating
-                      ? 'fill-yellow-500 text-yellow-500'
-                      : 'text-muted-foreground'
-                  }`}
-                />
-              ))}
+              <StarRating rating={Number(review.rating)} />
               <span className="text-xs text-muted-foreground ml-1">
-                {review.user.name}
+                {review.user?.name ?? '—'}
               </span>
             </div>
             {review.comment && (
@@ -384,9 +422,59 @@ function MasterReviews({ masterId }: { masterId: string }) {
                 {review.comment}
               </p>
             )}
-          </div>
+          </button>
         ))}
       </div>
+      <Dialog open={reviewsModalOpen} onOpenChange={setReviewsModalOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Отзывы{masterName ? ` — ${masterName}` : ''}</DialogTitle>
+            <DialogDescription>Список одобренных отзывов. Нажмите на отзыв, чтобы увидеть полный текст.</DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1 space-y-2 pr-2">
+            {reviews.map((review: Review) => (
+              <button
+                key={review.id}
+                type="button"
+                onClick={() => setClickedReview(review)}
+                className="w-full text-left text-sm rounded-md p-3 hover:bg-muted/50 transition-colors border border-transparent hover:border-border"
+              >
+                <div className="flex items-center gap-1 mb-1">
+                  <StarRating rating={Number(review.rating)} />
+                  <span className="text-xs text-muted-foreground ml-1">
+                    {review.user?.name ?? '—'}
+                  </span>
+                </div>
+                {review.comment && (
+                  <p className="text-xs text-muted-foreground line-clamp-2">
+                    {review.comment}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!clickedReview} onOpenChange={(open) => !open && setClickedReview(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Отзыв</DialogTitle>
+          </DialogHeader>
+          {clickedReview && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <StarRating rating={Number(clickedReview.rating)} sizeClass="h-4 w-4" />
+                <span className="text-sm text-muted-foreground">{clickedReview.user?.name ?? '—'}</span>
+              </div>
+              {clickedReview.comment ? (
+                <p className="text-sm whitespace-pre-wrap">{clickedReview.comment}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Без комментария</p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

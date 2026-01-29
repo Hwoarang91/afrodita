@@ -50,6 +50,7 @@ interface Settings {
     pointsPerRuble: number;
     pointsForRegistration: number;
     referralBonus: number;
+    pointsForReview: number;
   };
   firstVisitDiscount: {
     enabled: boolean;
@@ -107,6 +108,7 @@ export default function SettingsPage() {
         pointsPerRuble: 0.1,
         pointsForRegistration: 100,
         referralBonus: 50,
+        pointsForReview: 0,
       },
       firstVisitDiscount: {
         enabled: false,
@@ -742,6 +744,29 @@ export default function SettingsPage() {
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         Сколько бонусных баллов начисляется за приглашение друга (и новому пользователю, и пригласившему)
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">
+                        Баллов за отзыв
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.bonuses.pointsForReview ?? 0}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            bonuses: {
+                              ...formData.bonuses,
+                              pointsForReview: Number(e.target.value),
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-input rounded-lg bg-background"
+                        min="0"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Сколько бонусных баллов начисляется клиенту после одобрения отзыва модератором
                       </p>
                     </div>
                   </div>

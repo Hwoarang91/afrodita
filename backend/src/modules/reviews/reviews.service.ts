@@ -5,6 +5,8 @@ import { Review, ReviewStatus } from '../../entities/review.entity';
 import { Appointment, AppointmentStatus } from '../../entities/appointment.entity';
 import { Master } from '../../entities/master.entity';
 import { normalizePagination } from '../../common/dto/pagination.dto';
+import { FinancialService } from '../financial/financial.service';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class ReviewsService {
@@ -15,6 +17,8 @@ export class ReviewsService {
     private appointmentRepository: Repository<Appointment>,
     @InjectRepository(Master)
     private masterRepository: Repository<Master>,
+    private financialService: FinancialService,
+    private settingsService: SettingsService,
   ) {}
 
   async create(
@@ -114,6 +118,7 @@ export class ReviewsService {
       throw new NotFoundException('Отзыв не найден');
     }
 
+    const previousStatus = review.status;
     review.status = status;
     if (moderationComment) {
       review.moderationComment = moderationComment;
@@ -121,10 +126,66 @@ export class ReviewsService {
 
     const saved = await this.reviewRepository.save(review);
 
+    // При одобрении отзыва начисляем бонусы за отзыв (если настроено)
+    if (status === ReviewStatus.APPROVED && previousStatus !== ReviewStatus.APPROVED) {
+      const bonusSettings = await this.settingsService.getBonusSettings();
+      if (bonusSettings.enabled && bonusSettings.pointsForReview > 0) {
+        try {
+          await this.financialService.awardBonusPoints(
+            review.userId,
+            null,
+            bonusSettings.pointsForReview,
+            'Бонусы за отзыв',
+          );
+        } catch {
+          // Игнорируем ошибку начисления бонусов (например, пользователь удалён)
+        }
+      }
+    }
+
     // Обновляем рейтинг мастера
     await this.updateMasterRating(review.masterId);
 
     return saved;
+  }
+
+  async findOne(id: string): Promise<Review> {
+    const review = await this.reviewRepository.findOne({
+      where: { id },
+      relations: ['user', 'master', 'service'],
+    });
+    if (!review) {
+      throw new NotFoundException('Отзыв не найден');
+    }
+    return review;
+  }
+
+  async update(id: string, rating?: number, comment?: string): Promise<Review> {
+    const review = await this.reviewRepository.findOne({ where: { id } });
+    if (!review) {
+      throw new NotFoundException('Отзыв не найден');
+    }
+    if (rating !== undefined) {
+      if (rating < 1 || rating > 5) {
+        throw new BadRequestException('Рейтинг должен быть от 1 до 5');
+      }
+      review.rating = rating;
+    }
+    if (comment !== undefined) {
+      review.comment = comment;
+    }
+    const saved = await this.reviewRepository.save(review);
+    await this.updateMasterRating(review.masterId);
+    return saved;
+  }
+
+  async remove(id: string): Promise<void> {
+    const review = await this.reviewRepository.findOne({ where: { id } });
+    if (!review) {
+      throw new NotFoundException('Отзыв не найден');
+    }
+    await this.reviewRepository.remove(review);
+    await this.updateMasterRating(review.masterId);
   }
 
   private async updateMasterRating(masterId: string) {
