@@ -137,7 +137,9 @@ export class ServicesService {
   }
 
   // Получить только самостоятельные услуги (не категории, не подкатегории)
+  // Также возвращает подкатегории, если они есть
   async findMainServices(isActive: boolean = true, category?: string): Promise<Service[]> {
+    // Получаем самостоятельные услуги
     const query = this.serviceRepository
       .createQueryBuilder('service')
       .leftJoinAndSelect('service.masters', 'masters')
@@ -149,7 +151,39 @@ export class ServicesService {
       query.andWhere('service.category = :category', { category });
     }
     
-    return query.orderBy('service.name', 'ASC').getMany();
+    const mainServices = await query.orderBy('service.name', 'ASC').getMany();
+    
+    // Если указана категория, получаем также подкатегории из категорий с этой категорией
+    // Если категория не указана, получаем все подкатегории
+    const subcategoriesQuery = this.serviceRepository
+      .createQueryBuilder('service')
+      .leftJoinAndSelect('service.masters', 'masters')
+      .leftJoinAndSelect('service.parentService', 'parentService')
+      .where('service.parentServiceId IS NOT NULL')
+      .andWhere('service.isCategory = :isCategory', { isCategory: false })
+      .andWhere('service.isActive = :isActive', { isActive });
+    
+    if (category) {
+      // Для подкатегорий берем категорию из родительской категории или из строкового поля category
+      subcategoriesQuery.andWhere(
+        '(parentService.category = :category OR service.category = :category)',
+        { category }
+      );
+    }
+    
+    const subcategories = await subcategoriesQuery.orderBy('service.name', 'ASC').getMany();
+    
+    // Заполняем поле category у подкатегорий из родительской категории, если оно пустое
+    const subcategoriesWithCategory = subcategories.map(sub => {
+      if (!sub.category && sub.parentService) {
+        // Используем категорию из родительской категории
+        sub.category = sub.parentService.category || null;
+      }
+      return sub;
+    });
+    
+    // Объединяем самостоятельные услуги и подкатегории
+    return [...mainServices, ...subcategoriesWithCategory];
   }
 
   // Получить только категории (без подкатегорий)

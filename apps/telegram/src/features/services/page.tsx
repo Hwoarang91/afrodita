@@ -23,33 +23,46 @@ export default function Services() {
   });
 
   // Фильтруем услуги по категории
-  // API уже возвращает только самостоятельные услуги, но дополнительно фильтруем на клиенте
+  // API возвращает самостоятельные услуги и подкатегории
   const filteredServices = useMemo(() => {
     if (!services) return [];
     
-    // Дополнительная фильтрация: исключаем категории и подкатегории (на всякий случай)
-    const mainServices = services.filter(service => 
+    // Фильтруем: исключаем только категории (isCategory = true), но включаем подкатегории
+    const availableServices = services.filter(service => 
       !service.isCategory && 
-      !service.parentServiceId &&
       service.price > 0 &&
       service.duration > 0
     );
     
-    if (selectedCategory === 'Все') return mainServices;
-    return mainServices.filter(service => service.category === selectedCategory);
+    if (selectedCategory === 'Все') return availableServices;
+    
+    // Фильтруем по строковому полю category
+    // Бэкенд уже заполняет category у подкатегорий из родительской категории
+    return availableServices.filter(service => service.category === selectedCategory);
   }, [services, selectedCategory]);
 
-  // Получаем уникальные категории только из отфильтрованных услуг
+  // Получаем уникальные категории из всех услуг (включая подкатегории)
+  // Бэкенд уже заполняет category у подкатегорий из родительской категории
   const sortedCategories = useMemo(() => {
-    if (!filteredServices || filteredServices.length === 0) return ['Все'];
+    if (!services) return ['Все'];
     const cats = new Set<string>();
-    filteredServices.forEach(service => {
+    
+    services.forEach(service => {
+      // Пропускаем категории (isCategory = true)
+      if (service.isCategory) return;
+      
+      // Добавляем категорию из строкового поля (уже заполнено бэкендом для подкатегорий)
       if (service.category && service.category.trim()) {
         cats.add(service.category.trim());
       }
     });
-    return ['Все', ...Array.from(cats).sort()];
-  }, [filteredServices]);
+    
+    // Если есть хотя бы одна категория, показываем "Все" и категории
+    if (cats.size > 0) {
+      return ['Все', ...Array.from(cats).sort()];
+    }
+    return ['Все'];
+  }, [services]);
 
   // Логирование ошибок для отладки
   if (error) {
