@@ -86,25 +86,10 @@ export default function CalendarPage() {
 
   useTelegramBackButton();
 
+  // Не показываем MainButton Telegram — используем только свою кнопку «Продолжить» в футере
   useEffect(() => {
-    if (!webApp?.MainButton) return;
-    const mainButton = webApp.MainButton;
-    if (selectedSlot) {
-      mainButton.setText('Продолжить');
-      mainButton.show();
-      const handleMainButtonClick = () => {
-        hapticFeedback.impactOccurred('medium');
-        handleNext();
-      };
-      mainButton.onClick(handleMainButtonClick);
-      return () => {
-        mainButton.offClick(handleMainButtonClick);
-        mainButton.hide();
-      };
-    } else {
-      mainButton.hide();
-    }
-  }, [selectedSlot, webApp, hapticFeedback]);
+    if (webApp?.MainButton) webApp.MainButton.hide();
+  }, [webApp]);
 
   const { data: slots, isLoading, error } = useQuery({
     queryKey: ['slots', masterId, serviceId, selectedDate],
@@ -184,14 +169,14 @@ export default function CalendarPage() {
         <div className="size-12 flex items-center justify-end" />
       </header>
 
-      <div className="px-4 py-2 bg-white dark:bg-background-dark">
+      <div className="px-4 py-1 bg-white dark:bg-background-dark">
         <StepIndicator currentStep={3} />
       </div>
 
       <main className="flex-1 overflow-y-auto pb-44">
-        <section className="p-4 bg-white dark:bg-background-dark">
+        <section className="px-4 pt-2 pb-4 bg-white dark:bg-background-dark">
           <div className="flex flex-col gap-0.5">
-            <div className="flex items-center p-1 justify-between mb-4">
+            <div className="flex items-center p-1 justify-between mb-2">
               <button
                 type="button"
                 onClick={handlePrevMonth}
@@ -211,11 +196,11 @@ export default function CalendarPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-7 mb-2">
+            <div className="grid grid-cols-7 gap-0.5 mb-2">
               {WEEKDAYS.map((wd) => (
                 <p
                   key={wd}
-                  className="text-pink-400 dark:text-pink-300 text-[12px] font-bold leading-normal flex h-8 w-full items-center justify-center"
+                  className="text-pink-400 dark:text-pink-300 text-[11px] font-bold leading-normal flex h-6 w-full items-center justify-center"
                 >
                   {wd}
                 </p>
@@ -226,7 +211,7 @@ export default function CalendarPage() {
                   type="button"
                   disabled={!day.isCurrentMonth || day.isPast}
                   onClick={() => handleSelectDate(day)}
-                  className={`h-12 w-full text-sm font-medium rounded-full transition-colors ${
+                  className={`h-9 w-full text-sm font-medium rounded-full transition-colors ${
                     !day.isCurrentMonth || day.isPast
                       ? 'text-gray-300 dark:text-gray-600 cursor-default'
                       : 'text-[#2D1B22] dark:text-white hover:bg-pink-50 dark:hover:bg-pink-900/20'
@@ -234,7 +219,7 @@ export default function CalendarPage() {
                 >
                   <div className="flex size-full items-center justify-center">
                     {day.isSelected ? (
-                      <span className="flex size-10 mx-auto items-center justify-center rounded-full bg-primary text-white font-bold shadow-lg shadow-primary/30 ring-4 ring-primary/20">
+                      <span className="flex size-8 mx-auto items-center justify-center rounded-full bg-primary text-white text-sm font-bold shadow-lg shadow-primary/30 ring-2 ring-primary/20">
                         {day.dayNum}
                       </span>
                     ) : (
@@ -299,15 +284,6 @@ export default function CalendarPage() {
           )}
         </section>
       </main>
-
-      {/* Точки этапа над футером */}
-      <div className="absolute bottom-44 left-0 right-0 flex w-full flex-row items-center justify-center gap-2 pointer-events-none z-0">
-        <span className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40" />
-        <span className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40" />
-        <span className="h-1.5 w-5 rounded-full bg-primary" />
-        <span className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40" />
-        <span className="h-1.5 w-1.5 rounded-full bg-pink-200 dark:bg-pink-900/40" />
-      </div>
 
       {/* Футер с деталями и кнопкой */}
       <footer className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-background-dark/95 backdrop-blur-lg border-t border-pink-50 dark:border-pink-900/20 p-4 z-20 pb-[env(safe-area-inset-bottom)]">
