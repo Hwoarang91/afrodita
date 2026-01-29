@@ -175,9 +175,14 @@ export class ServicesService {
     
     // Заполняем поле category у подкатегорий из родительской категории, если оно пустое
     const subcategoriesWithCategory = subcategories.map(sub => {
-      if (!sub.category && sub.parentService && sub.parentService.category) {
-        // Используем категорию из родительской категории
-        sub.category = sub.parentService.category;
+      if (!sub.category && sub.parentService) {
+        // Если родитель - категория (isCategory=true), используем её название как category
+        // Иначе используем строковое поле category родителя
+        if (sub.parentService.isCategory) {
+          sub.category = sub.parentService.name;
+        } else if (sub.parentService.category) {
+          sub.category = sub.parentService.category;
+        }
       }
       return sub;
     });
