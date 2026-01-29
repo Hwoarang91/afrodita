@@ -136,7 +136,7 @@ export function ServiceForm({
         return [];
       }
     },
-    enabled: serviceType === 'subcategory' || !service,
+    enabled: serviceType === 'subcategory' || (serviceType === 'main' && service) || !service,
   });
 
   const categories = Array.isArray(categoriesData) ? categoriesData : [];
@@ -257,13 +257,13 @@ export function ServiceForm({
       isCategory: serviceType === 'category',
       imageUrl,
       ...(serviceType === 'main' && {
-        category: formData.category?.trim() || null,
+        category: formData.parentServiceId ? null : (formData.category?.trim() || null), // Очищаем category если есть parentServiceId
       }),
       ...(serviceType !== 'category' && {
         price: formData.price,
         duration: formData.duration,
       }),
-      ...(serviceType === 'subcategory' && {
+      ...((serviceType === 'subcategory' || (serviceType === 'main' && formData.parentServiceId)) && {
         parentServiceId: formData.parentServiceId || null,
       }),
       ...(serviceType === 'category' && {
@@ -446,6 +446,43 @@ export function ServiceForm({
           </div>
           <p className="text-xs text-muted-foreground">
             Выберите существующую категорию или введите новую. Категория используется для фильтрации услуг в веб-приложении.
+          </p>
+        </div>
+      )}
+
+      {serviceType === 'main' && service && (
+        <div className="space-y-2">
+          <Label htmlFor="moveToCategory">Переместить в категорию/подкатегорию</Label>
+          <select
+            id="moveToCategory"
+            value={formData.parentServiceId || ''}
+            onChange={(e) => {
+              const parentId = e.target.value || null;
+              setFormData({
+                ...formData,
+                parentServiceId: parentId,
+                category: parentId ? null : formData.category, // Очищаем строковую категорию при перемещении
+              });
+            }}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">Оставить самостоятельной услугой</option>
+            {categoriesLoading ? (
+              <option value="" disabled>Загрузка категорий...</option>
+            ) : categories && categories.length > 0 ? (
+              categories
+                .filter((s: Service) => s.id !== service?.id)
+                .map((s: Service) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))
+            ) : (
+              <option value="" disabled>Нет доступных категорий</option>
+            )}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Выберите категорию, чтобы превратить эту услугу в подкатегорию. Оставьте пустым, чтобы оставить самостоятельной услугой.
           </p>
         </div>
       )}

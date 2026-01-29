@@ -22,18 +22,6 @@ export default function Services() {
     retry: 1,
   });
 
-  // Получаем уникальные категории и сортируем их
-  const sortedCategories = useMemo(() => {
-    if (!services) return ['Все'];
-    const cats = new Set<string>();
-    services.forEach(service => {
-      if (service.category && service.category.trim()) {
-        cats.add(service.category.trim());
-      }
-    });
-    return ['Все', ...Array.from(cats).sort()];
-  }, [services]);
-
   // Фильтруем услуги по категории
   // API уже возвращает только самостоятельные услуги, но дополнительно фильтруем на клиенте
   const filteredServices = useMemo(() => {
@@ -50,6 +38,18 @@ export default function Services() {
     if (selectedCategory === 'Все') return mainServices;
     return mainServices.filter(service => service.category === selectedCategory);
   }, [services, selectedCategory]);
+
+  // Получаем уникальные категории только из отфильтрованных услуг
+  const sortedCategories = useMemo(() => {
+    if (!filteredServices || filteredServices.length === 0) return ['Все'];
+    const cats = new Set<string>();
+    filteredServices.forEach(service => {
+      if (service.category && service.category.trim()) {
+        cats.add(service.category.trim());
+      }
+    });
+    return ['Все', ...Array.from(cats).sort()];
+  }, [filteredServices]);
 
   // Логирование ошибок для отладки
   if (error) {
@@ -114,7 +114,7 @@ export default function Services() {
 
       <main className="pb-32">
         {/* Category Filters */}
-        <div className="flex gap-3 px-4 py-2 overflow-x-auto no-scrollbar">
+        <div className="flex gap-3 px-4 py-2 overflow-x-auto">
           {sortedCategories.map((category) => (
             <button
               key={category}
