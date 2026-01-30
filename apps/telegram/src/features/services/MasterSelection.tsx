@@ -190,7 +190,7 @@ export default function MasterSelection() {
           </div>
         </div>
 
-        {/* Any Master Checkbox */}
+        {/* Любой свободный мастер — скрыто по запросу, не удалять
         <div className="px-4 mb-4">
           <label className="flex items-center gap-x-3 py-4 px-5 rounded-2xl border border-pink-100 dark:border-pink-900/30 bg-pink-50/30 dark:bg-pink-950/10 shadow-sm cursor-pointer">
             <input
@@ -210,6 +210,7 @@ export default function MasterSelection() {
             <p className="text-[#4a3438] dark:text-pink-100 text-sm font-semibold">Любой свободный мастер</p>
           </label>
         </div>
+        */}
 
         {/* Masters List */}
         <div className="flex flex-col gap-4 px-4">

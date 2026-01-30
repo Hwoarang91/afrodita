@@ -50,15 +50,16 @@ function buildCalendarDays(viewMonth: Date, selectedDate: Date) {
       dayNum: day,
     });
   }
-  // Следующий месяц до 42 ячеек
+  // Следующий месяц до 42 ячеек (будущие даты можно выбирать — переключится месяц)
   let nextDay = 1;
   while (days.length < 42) {
     const d = new Date(year, month + 1, nextDay);
+    const isPast = d < today;
     days.push({
       date: d,
       isCurrentMonth: false,
-      isPast: true,
-      isSelected: false,
+      isPast,
+      isSelected: startOfDay(d).getTime() === selectedDay.getTime(),
       dayNum: nextDay,
     });
     nextDay++;
@@ -130,10 +131,14 @@ export default function CalendarPage() {
   };
 
   const handleSelectDate = (day: (typeof calendarDays)[0]) => {
-    if (!day.isCurrentMonth || day.isPast) return;
+    if (day.isPast) return;
     hapticFeedback.selectionChanged();
     setSelectedDate(day.date);
     setSelectedSlot(null);
+    // При выборе даты из следующего месяца — переключаем отображаемый месяц
+    if (!day.isCurrentMonth) {
+      setViewMonth(new Date(day.date.getFullYear(), day.date.getMonth()));
+    }
   };
 
   const handleNext = () => {
@@ -153,30 +158,29 @@ export default function CalendarPage() {
   const monthTitle = monthStr.charAt(0).toUpperCase() + monthStr.slice(1);
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark">
-      <div className="max-w-[430px] mx-auto bg-white dark:bg-background-dark min-h-screen flex flex-col relative overflow-hidden shadow-2xl">
-      <header className="flex items-center bg-white dark:bg-background-dark p-4 pb-2 justify-between sticky top-0 z-10 border-b border-pink-50 dark:border-pink-900/20">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="text-[#2D1B22] dark:text-white flex size-12 shrink-0 items-center justify-start cursor-pointer rounded-full hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-colors"
-        >
-          <span className="material-symbols-outlined">arrow_back_ios</span>
-        </button>
-        <h2 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight flex-1 text-center">
-          Выбор даты и времени
-        </h2>
-        <div className="size-12 flex items-center justify-end" />
+    <div className="min-h-screen bg-background-light dark:bg-background-dark text-[#2D1B22] dark:text-pink-50">
+      {/* Единый стиль с этапами 1 и 2 */}
+      <header className="sticky top-0 z-20 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md">
+        <div className="flex items-center p-4 justify-between">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="flex size-10 items-center justify-center rounded-full bg-white dark:bg-[#2D1B22] shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[#2D1B22] dark:text-pink-100">arrow_back_ios_new</span>
+          </button>
+          <div className="flex flex-col items-center flex-1">
+            <h2 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight">Выбор даты и времени</h2>
+          </div>
+          <div className="size-10" />
+        </div>
+        <StepIndicator currentStep={3} />
       </header>
 
-      <div className="px-4 py-1 bg-white dark:bg-background-dark">
-        <StepIndicator currentStep={3} />
-      </div>
-
-      <main className="flex-1 overflow-y-auto pb-44">
-        <section className="px-4 pt-2 pb-4 bg-white dark:bg-background-dark">
+      <main className="pb-32">
+        <section className="px-4 pt-2 pb-4">
           <div className="flex flex-col gap-0.5">
-            <div className="flex items-center p-1 justify-between mb-2">
+            <div className="flex items-center p-1 justify-between mb-1">
               <button
                 type="button"
                 onClick={handlePrevMonth}
@@ -196,11 +200,11 @@ export default function CalendarPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-7 gap-0.5 mb-2">
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
               {WEEKDAYS.map((wd) => (
                 <p
                   key={wd}
-                  className="text-pink-400 dark:text-pink-300 text-[11px] font-bold leading-normal flex h-6 w-full items-center justify-center"
+                  className="text-pink-400 dark:text-pink-300 text-[11px] font-bold leading-normal flex h-5 w-full items-center justify-center"
                 >
                   {wd}
                 </p>
@@ -209,17 +213,17 @@ export default function CalendarPage() {
                 <button
                   key={idx}
                   type="button"
-                  disabled={!day.isCurrentMonth || day.isPast}
+                  disabled={day.isPast}
                   onClick={() => handleSelectDate(day)}
-                  className={`h-9 w-full text-sm font-medium rounded-full transition-colors ${
-                    !day.isCurrentMonth || day.isPast
+                  className={`h-8 w-full text-sm font-medium rounded-full transition-colors ${
+                    day.isPast
                       ? 'text-gray-300 dark:text-gray-600 cursor-default'
                       : 'text-[#2D1B22] dark:text-white hover:bg-pink-50 dark:hover:bg-pink-900/20'
                   } ${day.isSelected ? 'cursor-default' : ''}`}
                 >
                   <div className="flex size-full items-center justify-center">
                     {day.isSelected ? (
-                      <span className="flex size-8 mx-auto items-center justify-center rounded-full bg-primary text-white text-sm font-bold shadow-lg shadow-primary/30 ring-2 ring-primary/20">
+                      <span className="flex size-7 mx-auto items-center justify-center rounded-full bg-primary text-white text-sm font-bold shadow-lg shadow-primary/30 ring-2 ring-primary/20">
                         {day.dayNum}
                       </span>
                     ) : (
@@ -234,8 +238,8 @@ export default function CalendarPage() {
 
         <div className="h-2 bg-pink-50/50 dark:bg-pink-950/30" />
 
-        <section className="bg-white dark:bg-background-dark">
-          <h3 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight px-4 pb-2 pt-6">
+        <section className="px-4">
+          <h3 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight pb-2 pt-4">
             Доступное время
           </h3>
           {error ? (
@@ -285,9 +289,9 @@ export default function CalendarPage() {
         </section>
       </main>
 
-      {/* Футер с деталями и кнопкой */}
-      <footer className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-background-dark/95 backdrop-blur-lg border-t border-pink-50 dark:border-pink-900/20 p-4 z-20 pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center justify-between mb-4">
+      {/* Футер — как на этапе 2 (выбор мастера) */}
+      <footer className="fixed bottom-0 left-0 right-0 z-20 max-w-[430px] mx-auto p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-white/90 dark:bg-[#1f1214]/90 backdrop-blur-md border-t border-pink-100 dark:border-pink-900/30">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex flex-col">
             <span className="text-[10px] text-pink-400 dark:text-pink-300 uppercase tracking-widest font-bold">
               Детали записи
@@ -311,13 +315,11 @@ export default function CalendarPage() {
           type="button"
           disabled={!selectedSlot}
           onClick={handleNext}
-          className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-2xl h-14 bg-primary text-white text-base font-bold leading-normal tracking-wide shadow-lg shadow-primary/30 active:scale-[0.98] transition-transform disabled:opacity-50 disabled:pointer-events-none"
+          className="w-full h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-pink-200/50 dark:shadow-none transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
         >
-          <span className="truncate text-center">Продолжить</span>
-          <span className="material-symbols-outlined ml-2 text-xl">chevron_right</span>
+          Продолжить
         </button>
       </footer>
-      </div>
     </div>
   );
 }
