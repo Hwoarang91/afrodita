@@ -35,7 +35,7 @@ export default function MasterSelection() {
   const serviceId = searchParams.get('serviceId');
   const [selectedMaster, setSelectedMaster] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'today'>('all');
-  const [anyMaster, setAnyMaster] = useState(false);
+  const [anyMaster, _setAnyMaster] = useState(false); // сеттер не используется — блок «Любой мастер» закомментирован
   const [reviewsModalMasterId, setReviewsModalMasterId] = useState<string | null>(null);
   const [clickedReview, setClickedReview] = useState<Review | null>(null);
 
