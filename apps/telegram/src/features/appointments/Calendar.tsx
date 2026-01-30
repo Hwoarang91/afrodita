@@ -177,9 +177,10 @@ export default function CalendarPage() {
         <StepIndicator currentStep={3} />
       </header>
 
-      <main className="pb-32">
-        <section className="px-4 pt-2 pb-4">
-          <div className="flex flex-col gap-0.5">
+      <main className="pb-32 -mt-1">
+        <section className="px-4 pt-0 pb-3">
+          <div className="rounded-xl bg-white dark:bg-[#25171a] shadow-sm border border-pink-100 dark:border-pink-900/30 p-4">
+            <div className="flex flex-col gap-0.5">
             <div className="flex items-center p-1 justify-between mb-1">
               <button
                 type="button"
@@ -234,23 +235,25 @@ export default function CalendarPage() {
               ))}
             </div>
           </div>
+          </div>
         </section>
 
-        <div className="h-2 bg-pink-50/50 dark:bg-pink-950/30" />
+        <div className="h-2 bg-transparent" />
 
         <section className="px-4">
-          <h3 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight pb-2 pt-4">
+          <div className="rounded-xl bg-white dark:bg-[#25171a] shadow-sm border border-pink-100 dark:border-pink-900/30 p-4">
+          <h3 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight pb-2">
             Доступное время
           </h3>
           {error ? (
-            <div className="px-4 pb-6 text-center py-6">
+            <div className="pb-4 text-center py-4">
               <p className="text-sm text-destructive mb-2">Ошибка загрузки доступного времени</p>
               <p className="text-xs text-muted-foreground">
                 {error instanceof Error ? error.message : 'Попробуйте выбрать другую дату'}
               </p>
             </div>
           ) : slots && slots.length > 0 ? (
-            <div className="grid grid-cols-4 gap-3 p-4">
+            <div className="grid grid-cols-4 gap-3 pt-2">
               {slots.map((slot: string) => {
                 const time = new Date(slot).toLocaleTimeString('ru-RU', {
                   hour: '2-digit',
@@ -279,13 +282,14 @@ export default function CalendarPage() {
               })}
             </div>
           ) : (
-            <div className="px-4 pb-6 text-center py-6">
+            <div className="pb-4 text-center py-4">
               <p className="text-sm text-muted-foreground mb-2">На эту дату нет доступного времени</p>
               <p className="text-xs text-muted-foreground">
                 Выберите другую дату или проверьте расписание мастера
               </p>
             </div>
           )}
+          </div>
         </section>
       </main>
 
