@@ -108,7 +108,7 @@ export class SettingsController {
 
   @Put()
   @ApiOperation({ summary: 'Обновление настроек' })
-  @ApiBody({ schema: { type: 'object', properties: { bookingSettings: { type: 'object', description: 'manualConfirmation, minAdvanceBooking, maxAdvanceBooking, cancellationDeadline' } } } } })
+  @ApiBody({ schema: { type: 'object', properties: { bookingSettings: { type: 'object', description: 'manualConfirmation, minAdvanceBooking, maxAdvanceBooking, cancellationDeadline' } } } })
   async updateSettings(
     @Request() req: AuthRequest,
     @Body() body: { bookingSettings?: Record<string, unknown> },
