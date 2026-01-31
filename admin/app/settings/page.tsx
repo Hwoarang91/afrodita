@@ -39,6 +39,10 @@ interface Settings {
     cancellationDeadline: number; // в часах
     manualConfirmation: boolean; // подтверждение записи вручную
   };
+  bookingTerms?: {
+    termsOfServiceUrl: string | null;
+    cancellationPolicyUrl: string | null;
+  };
   notifications: {
     emailEnabled: boolean;
     smsEnabled: boolean;
@@ -97,6 +101,10 @@ export default function SettingsPage() {
         cancellationDeadline: 24,
         manualConfirmation: false,
       },
+      bookingTerms: {
+        termsOfServiceUrl: null as string | null,
+        cancellationPolicyUrl: null as string | null,
+      },
       notifications: {
         emailEnabled: true,
         smsEnabled: true,
@@ -143,6 +151,7 @@ export default function SettingsPage() {
             ...defaultSettings.bookingSettings,
             ...(settingsData.data.bookingSettings || {}),
           },
+          bookingTerms: settingsData.data.bookingTerms ?? defaultSettings.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null },
           notifications: {
             ...defaultSettings.notifications,
             reminderIntervals: reminderIntervalsData.data.value || defaultSettings.notifications.reminderIntervals,
@@ -201,6 +210,15 @@ export default function SettingsPage() {
         await apiClient.put('/settings', {
           bookingSettings: bookingSettingsToSave,
         });
+
+        if (data.bookingTerms !== undefined) {
+          await apiClient.put('/settings/booking-terms', {
+            value: {
+              termsOfServiceUrl: data.bookingTerms.termsOfServiceUrl ?? null,
+              cancellationPolicyUrl: data.bookingTerms.cancellationPolicyUrl ?? null,
+            },
+          });
+        }
         
         // Сохраняем часовой пояс
         if (data.timezone) {
@@ -511,6 +529,54 @@ export default function SettingsPage() {
                       />
                       <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                     </label>
+                  </div>
+                </div>
+
+                {/* Ссылки для экрана подтверждения записи в веб-приложении */}
+                <div className="mt-6 p-4 border border-border rounded-lg space-y-4">
+                  <h3 className="font-medium text-foreground">Ссылки на экране подтверждения записи</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Эти ссылки отображаются в веб-приложении при записи. «Условия обслуживания» и «Политика отмены» становятся кликабельными.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      Условия обслуживания (URL)
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      value={formData.bookingTerms?.termsOfServiceUrl ?? ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          bookingTerms: {
+                            ...(formData.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null }),
+                            termsOfServiceUrl: e.target.value.trim() || null,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-input rounded-lg bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      Политика отмены (URL)
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      value={formData.bookingTerms?.cancellationPolicyUrl ?? ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          bookingTerms: {
+                            ...(formData.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null }),
+                            cancellationPolicyUrl: e.target.value.trim() || null,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-input rounded-lg bg-background"
+                    />
                   </div>
                 </div>
               </div>

@@ -154,5 +154,29 @@ export class SettingsService {
       pointsForReview: settings.pointsForReview ?? 0,
     });
   }
+
+  async getBookingTermsSettings(): Promise<{
+    termsOfServiceUrl: string | null;
+    cancellationPolicyUrl: string | null;
+  }> {
+    const settings = await this.settingsRepository.findOne({
+      where: { key: 'bookingTerms' },
+    });
+    if (settings?.value && typeof settings.value === 'object') {
+      const v = settings.value as { termsOfServiceUrl?: string | null; cancellationPolicyUrl?: string | null };
+      return {
+        termsOfServiceUrl: v.termsOfServiceUrl ?? null,
+        cancellationPolicyUrl: v.cancellationPolicyUrl ?? null,
+      };
+    }
+    return { termsOfServiceUrl: null, cancellationPolicyUrl: null };
+  }
+
+  async setBookingTermsSettings(settings: {
+    termsOfServiceUrl: string | null;
+    cancellationPolicyUrl: string | null;
+  }): Promise<Settings> {
+    return await this.set('bookingTerms', settings);
+  }
 }
 

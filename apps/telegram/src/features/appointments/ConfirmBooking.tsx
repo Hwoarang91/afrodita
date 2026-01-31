@@ -1,9 +1,10 @@
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { appointmentsApi } from '../../shared/api/appointments';
 import { servicesApi } from '../../shared/api/services';
 import { extraServicesApi } from '../../shared/api/extra-services';
+import { getBookingTerms } from '../../shared/api/settings';
 import { apiClient } from '../../shared/api/client';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../../shared/components/LoadingSpinner';
@@ -35,8 +36,14 @@ export default function ConfirmBooking() {
   const extraIdsParam = searchParams.get('extraIds') || '';
   const extraIds = useMemo(() => extraIdsParam ? extraIdsParam.split(',').filter(Boolean) : [], [extraIdsParam]);
   const notes = (location.state as { notes?: string } | null)?.notes;
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useTelegramBackButton();
+
+  const { data: bookingTerms } = useQuery({
+    queryKey: ['booking-terms'],
+    queryFn: getBookingTerms,
+  });
 
   const createMutation = useMutation({
     mutationFn: appointmentsApi.create,
@@ -160,15 +167,6 @@ export default function ConfirmBooking() {
             Подтверждение записи
           </h2>
         </div>
-        <div className="flex flex-col gap-3 px-4 pb-3">
-          <div className="flex gap-6 justify-between items-center">
-            <p className="text-[#3d2b31] dark:text-[#fce7f3] text-base font-medium">Финальный шаг</p>
-            <p className="text-primary font-semibold text-sm">5 из 5</p>
-          </div>
-          <div className="rounded-full bg-pink-100 dark:bg-pink-900/20 overflow-hidden h-2">
-            <div className="h-full rounded-full bg-primary w-full" />
-          </div>
-        </div>
         <StepIndicator currentStep={5} />
       </header>
 
@@ -283,21 +281,49 @@ export default function ConfirmBooking() {
           <input
             type="checkbox"
             id="terms"
-            checked
-            readOnly
-            className="mt-0.5 rounded border-pink-300 text-primary focus:ring-primary cursor-default"
+            checked={termsAccepted}
+            onChange={(e) => setTermsAccepted(e.target.checked)}
+            className="mt-0.5 rounded border-pink-300 text-primary focus:ring-primary cursor-pointer"
           />
-          <label className="text-[11px] text-[#9d7886] dark:text-[#d4aebc] leading-tight cursor-default" htmlFor="terms">
-            Я согласен с <span className="text-primary font-medium underline">Условиями обслуживания</span> и <span className="text-primary font-medium underline">Политикой отмены</span>.
+          <label className="text-[11px] text-[#9d7886] dark:text-[#d4aebc] leading-tight cursor-pointer select-none" htmlFor="terms">
+            Я согласен с{' '}
+            {bookingTerms?.termsOfServiceUrl ? (
+              <a
+                href={bookingTerms.termsOfServiceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary font-medium underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Условиями обслуживания
+              </a>
+            ) : (
+              <span className="text-primary font-medium">Условиями обслуживания</span>
+            )}{' '}
+            и{' '}
+            {bookingTerms?.cancellationPolicyUrl ? (
+              <a
+                href={bookingTerms.cancellationPolicyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary font-medium underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Политикой отмены
+              </a>
+            ) : (
+              <span className="text-primary font-medium">Политикой отмены</span>
+            )}
+            .
           </label>
         </div>
         <button
           type="button"
           onClick={handlePayAndBook}
-          disabled={createMutation.isPending}
-          className="w-full bg-primary hover:brightness-105 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-primary/30 flex justify-between px-6 items-center disabled:opacity-70"
+          disabled={!termsAccepted || createMutation.isPending}
+          className="w-full bg-primary hover:brightness-105 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-primary/30 flex justify-between px-6 items-center disabled:opacity-70 disabled:cursor-not-allowed"
         >
-          <span className="text-lg">Оплатить и записаться</span>
+          <span className="text-lg">Записаться</span>
           <span className="text-lg">{totalPrice.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽</span>
         </button>
       </footer>

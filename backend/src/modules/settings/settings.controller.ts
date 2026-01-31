@@ -29,9 +29,55 @@ export class SettingsController {
   @ApiOperation({ summary: 'Получение всех настроек' })
   async getSettings() {
     const bookingSettings = await this.settingsService.getBookingSettings();
+    const bookingTerms = await this.settingsService.getBookingTermsSettings();
     return {
       bookingSettings,
+      bookingTerms,
     };
+  }
+
+  @Get('booking-terms')
+  @ApiOperation({ summary: 'Получить ссылки на условия обслуживания и политику отмены (админ)' })
+  async getBookingTerms() {
+    const value = await this.settingsService.getBookingTermsSettings();
+    return { value };
+  }
+
+  @Put('booking-terms')
+  @ApiOperation({ summary: 'Установить ссылки на условия обслуживания и политику отмены' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['value'],
+      properties: {
+        value: {
+          type: 'object',
+          properties: {
+            termsOfServiceUrl: { type: 'string', nullable: true },
+            cancellationPolicyUrl: { type: 'string', nullable: true },
+          },
+        },
+      },
+    },
+  })
+  async setBookingTerms(
+    @Request() req: AuthRequest,
+    @Body() body: { value: { termsOfServiceUrl?: string | null; cancellationPolicyUrl?: string | null } },
+  ) {
+    const value = {
+      termsOfServiceUrl: body.value?.termsOfServiceUrl ?? null,
+      cancellationPolicyUrl: body.value?.cancellationPolicyUrl ?? null,
+    };
+    const result = await this.settingsService.setBookingTermsSettings(value);
+    await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
+      entityType: 'settings',
+      entityId: 'bookingTerms',
+      description: 'Обновлены ссылки на условия обслуживания и политику отмены',
+      changes: { value },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+    return { success: true, value: result.value };
   }
 
   @Put()
