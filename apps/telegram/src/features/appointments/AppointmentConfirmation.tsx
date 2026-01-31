@@ -170,8 +170,7 @@ export default function AppointmentConfirmation() {
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={createMutation.isPending}
-            className="w-full h-14 rounded-2xl bg-primary text-white font-bold text-lg shadow-lg shadow-primary/25 hover:brightness-105 active:scale-95 transition-all disabled:opacity-70 flex flex-col items-center justify-center gap-0.5"
+            className="w-full h-14 rounded-2xl bg-primary text-white font-bold text-lg shadow-lg shadow-primary/25 hover:brightness-105 active:scale-95 transition-all flex flex-col items-center justify-center gap-0.5"
           >
             {hasExtrasSelected ? (
               <>
