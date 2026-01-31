@@ -19,6 +19,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { FinancialService } from '../financial/financial.service';
 import { SettingsService } from '../settings/settings.service';
 import { TelegramBotService } from '../telegram/telegram-bot.service';
+import { ExtraServicesService } from '../extra-services/extra-services.service';
 import { ErrorCode } from '../../common/interfaces/error-response.interface';
 import { buildErrorResponse } from '../../common/utils/error-response.builder';
 import { getErrorMessage, getErrorStack } from '../../common/utils/error-message';
@@ -46,6 +47,7 @@ export class AppointmentsService {
     private settingsService: SettingsService,
     @Inject(forwardRef(() => TelegramBotService))
     private telegramBotService: TelegramBotService,
+    private extraServicesService: ExtraServicesService,
   ) {}
 
   async create(dto: CreateAppointmentDto, userId: string): Promise<Appointment> {
@@ -106,7 +108,29 @@ export class AppointmentsService {
     // Получаем настройки скидки на первый визит
     const discountSettings = await this.settingsService.getFirstVisitDiscountSettings();
     let discount = 0;
-    let finalPrice = service.price;
+    let finalPrice = Number(service.price);
+
+    // Доп. услуги: загрузка и сумма
+    const extraServiceIds = dto.extraServiceIds?.filter(Boolean) ?? [];
+    let extraServicesTotal = 0;
+    const extraServicesList: { id: string }[] = [];
+    if (extraServiceIds.length > 0) {
+      const extraServices = await this.extraServicesService.findByIds(extraServiceIds);
+      if (extraServices.length !== extraServiceIds.length) {
+        throw new BadRequestException(
+          buildErrorResponse(400, ErrorCode.VALIDATION_ERROR, 'One or more extra services not found or inactive'),
+        );
+      }
+      for (const es of extraServices) {
+        if (!es.isActive) {
+          throw new BadRequestException(
+            buildErrorResponse(400, ErrorCode.VALIDATION_ERROR, `Extra service "${es.name}" is not active`),
+          );
+        }
+        extraServicesTotal += Number(es.price);
+        extraServicesList.push({ id: es.id });
+      }
+    }
 
     // Если скидка уже предрассчитана (для комплекса услуг), используем её
     if (dto.discount !== undefined && dto.discount > 0) {
@@ -115,16 +139,14 @@ export class AppointmentsService {
     } else if (isFirstVisit && discountSettings.enabled) {
       // Если это первый визит и скидка не была предрассчитана, применяем стандартную логику
       if (discountSettings.type === 'percent') {
-        // Скидка в процентах - применяется к цене услуги
-        discount = (service.price * discountSettings.value) / 100;
+        discount = (Number(service.price) * discountSettings.value) / 100;
       } else {
-        // Скидка в рублях - фиксированная сумма
         discount = discountSettings.value;
       }
-      // Убеждаемся, что скидка не превышает цену услуги
-      discount = Math.min(discount, service.price);
-      finalPrice = service.price - discount;
+      discount = Math.min(discount, Number(service.price));
+      finalPrice = Number(service.price) - discount;
     }
+    finalPrice += extraServicesTotal;
 
     // Создание записи
     const appointment = this.appointmentRepository.create({
@@ -142,6 +164,14 @@ export class AppointmentsService {
     const savedAppointment = await this.appointmentRepository.save(appointment);
     if (Array.isArray(savedAppointment)) {
       throw new InternalServerErrorException('Unexpected array returned from save');
+    }
+
+    if (extraServicesList.length > 0) {
+      await this.appointmentRepository
+        .createQueryBuilder()
+        .relation(Appointment, 'extraServices')
+        .of(savedAppointment)
+        .add(extraServicesList.map((e) => e.id));
     }
 
     // Отправка уведомления только если запись подтверждена

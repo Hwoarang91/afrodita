@@ -100,6 +100,43 @@ docker rm n8n
 
 ### Изменения
 
+✅ **Доп. услуги: полная реализация (backend, админка, веб-приложение):**
+
+**Выполнено:**
+
+1. **Backend — сущность и API доп. услуг:**
+   - ✅ Создана сущность `ExtraService` (`backend/src/entities/extra-service.entity.ts`): name, description, price, icon, isActive. Связь ManyToMany с `Appointment` через таблицу `appointment_extra_services`.
+   - ✅ Миграция `023-create-extra-services.ts`: таблицы `extra_services` и `appointment_extra_services`.
+   - ✅ Модуль `ExtraServicesModule`: `GET /extra-services` (без параметров — только активные для веб-приложения; с page/limit — постраничный список для админки), `GET /extra-services/:id`, `POST`, `PUT`, `DELETE`.
+   - ✅ В `CreateAppointmentDto` добавлено поле `extraServiceIds?: string[]`. В `appointments.service.create()`: загрузка доп. услуг по ID, проверка существования и активности, добавление их цен к итоговой сумме записи, сохранение связи в `appointment_extra_services`.
+
+2. **Админка — раздел «Доп. услуги»:**
+   - ✅ В сайдбар добавлен пункт «Доп. услуги» (иконка PlusCircle), маршрут `/extra-services`.
+   - ✅ Страница `/extra-services`: список карточек (название, описание, цена, иконка, кнопки «Редактировать» / «Удалить»), кнопка «Добавить доп. услугу».
+   - ✅ Модальное окно с формой: название, описание, цена, выбор иконки (spa, fireplace, water_drop и др.), переключатель «Активна».
+
+3. **Веб-приложение (шаг 4 бронирования):**
+   - ✅ Список доп. услуг загружается с API `/extra-services` (без мока).
+   - ✅ Одна кнопка «Продолжить»: при отсутствии выбора — над кнопкой текст «Доп. услуги не выбраны»; при выборе — на кнопке отображается сумма (основная услуга + выбранные доп. услуги), например «Продолжить» и «X XXX ₽».
+   - ✅ При создании записи в API передаются `notes` и `extraServiceIds` (если есть выбор). Кнопка «Пропустить» убрана.
+
+**Файлы созданы:**
+- `backend/src/entities/extra-service.entity.ts`
+- `backend/src/migrations/023-create-extra-services.ts`
+- `backend/src/modules/extra-services/` (dto, service, controller, module)
+- `admin/app/extra-services/page.tsx`, `admin/app/extra-services/components/ExtraServiceCard.tsx`, `ExtraServiceForm.tsx`, `ExtraServiceModal.tsx`
+- `apps/telegram/src/shared/api/extra-services.ts`
+
+**Файлы изменены:**
+- `backend/src/entities/appointment.entity.ts` — связь ManyToMany с ExtraService
+- `backend/src/app.module.ts` — импорт ExtraServicesModule
+- `backend/src/modules/appointments/` — dto (extraServiceIds), service (расчёт цены и сохранение связи), module (импорт ExtraServicesModule)
+- `admin/app/components/Sidebar.tsx` — пункт «Доп. услуги» (PlusCircle)
+- `apps/telegram/src/shared/api/appointments.ts` — параметр extraServiceIds в create
+- `apps/telegram/src/features/appointments/AppointmentConfirmation.tsx` — загрузка доп. услуг с API, одна кнопка, подпись/сумма, передача extraServiceIds и notes
+
+---
+
 ✅ **Звёзды рейтинга (половинки), кликабельные отзывы, фиксированная шапка и кнопка «Выбрать» (текущая сессия):**
 
 **Выполнено:**

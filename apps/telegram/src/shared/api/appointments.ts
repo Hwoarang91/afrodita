@@ -10,6 +10,7 @@ export const appointmentsApi = {
     serviceId: string;
     startTime: string;
     notes?: string;
+    extraServiceIds?: string[];
   }): Promise<Appointment> => {
     const { data: appointment } = await apiClient.post('/appointments', data);
     return appointment;

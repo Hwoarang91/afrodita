@@ -12,6 +12,7 @@ import { FinancialModule } from '../financial/financial.module';
 import { AuditModule } from '../audit/audit.module';
 import { SettingsModule } from '../settings/settings.module';
 import { TelegramModule } from '../telegram/telegram.module';
+import { ExtraServicesModule } from '../extra-services/extra-services.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { TelegramModule } from '../telegram/telegram.module';
     FinancialModule,
     AuditModule,
     SettingsModule,
+    ExtraServicesModule,
     forwardRef(() => TelegramModule),
   ],
   controllers: [AppointmentsController],

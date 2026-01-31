@@ -5,12 +5,15 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  ManyToMany,
   JoinColumn,
+  JoinTable,
   Index,
 } from 'typeorm';
 import { User } from './user.entity';
 import { Service } from './service.entity';
 import { Master } from './master.entity';
+import { ExtraService } from './extra-service.entity';
 
 export enum AppointmentStatus {
   PENDING = 'pending',
@@ -81,6 +84,14 @@ export class Appointment {
 
   @Column({ type: 'text', nullable: true })
   cancellationReason: string;
+
+  @ManyToMany(() => ExtraService, (es) => es.appointments)
+  @JoinTable({
+    name: 'appointment_extra_services',
+    joinColumn: { name: 'appointmentId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'extraServiceId', referencedColumnName: 'id' },
+  })
+  extraServices: ExtraService[];
 
   @CreateDateColumn()
   createdAt: Date;

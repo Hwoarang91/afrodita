@@ -1,8 +1,9 @@
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { appointmentsApi } from '../../shared/api/appointments';
 import { servicesApi } from '../../shared/api/services';
+import { extraServicesApi, type ExtraService } from '../../shared/api/extra-services';
 import { apiClient } from '../../shared/api/client';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../../shared/components/LoadingSpinner';
@@ -18,18 +19,17 @@ export default function AppointmentConfirmation() {
   const masterId = searchParams.get('masterId');
   const serviceId = searchParams.get('serviceId');
   const startTime = searchParams.get('startTime');
-  
-  // Настройка BackButton для Telegram Web App
+
+  const [notes, setNotes] = useState('');
+  const [selectedExtraIds, setSelectedExtraIds] = useState<Set<string>>(new Set());
+
   useTelegramBackButton();
-  
+
   const createMutation = useMutation({
     mutationFn: appointmentsApi.create,
     onMutate: async (newAppointment) => {
-      // Оптимистично обновляем список записей
       await queryClient.cancelQueries({ queryKey: ['appointments'] });
       const previousAppointments = queryClient.getQueryData(['appointments']);
-      
-      // Добавляем новую запись в список
       queryClient.setQueryData(['appointments'], (old: any) => {
         if (!old) return old;
         const optimisticAppointment = {
@@ -40,11 +40,9 @@ export default function AppointmentConfirmation() {
         };
         return Array.isArray(old) ? [...old, optimisticAppointment] : old;
       });
-      
       return { previousAppointments };
     },
     onError: (error: any, _variables, context) => {
-      // Откатываем изменения при ошибке
       if (context?.previousAppointments) {
         queryClient.setQueryData(['appointments'], context.previousAppointments);
       }
@@ -60,37 +58,34 @@ export default function AppointmentConfirmation() {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
     },
   });
-  
+
   const handleConfirm = () => {
     if (masterId && serviceId && startTime) {
       createMutation.mutate({
         masterId,
         serviceId,
         startTime,
+        notes: notes.trim() || undefined,
+        extraServiceIds: selectedExtraIds.size > 0 ? Array.from(selectedExtraIds) : undefined,
       });
     }
   };
 
-  // Настройка MainButton для подтверждения записи
+  const toggleExtra = (id: string) => {
+    setSelectedExtraIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   useEffect(() => {
-    if (!webApp?.MainButton) return;
-    
-    const mainButton = webApp.MainButton;
-    mainButton.setText('Подтвердить запись');
-    mainButton.show();
-    
-    const handleMainButtonClick = () => {
-      hapticFeedback.impactOccurred('medium');
-      handleConfirm();
-    };
-    
-    mainButton.onClick(handleMainButtonClick);
-    
+    if (webApp?.MainButton) webApp.MainButton.hide();
     return () => {
-      mainButton.offClick(handleMainButtonClick);
-      mainButton.hide();
+      if (webApp?.MainButton) webApp.MainButton.hide();
     };
-  }, [webApp, hapticFeedback, masterId, serviceId, startTime, createMutation]);
+  }, [webApp]);
 
   const { data: service } = useQuery({
     queryKey: ['service', serviceId],
@@ -107,53 +102,126 @@ export default function AppointmentConfirmation() {
     enabled: !!masterId,
   });
 
+  const { data: extraServicesList = [] } = useQuery({
+    queryKey: ['extra-services'],
+    queryFn: () => extraServicesApi.getAll(),
+  });
+
+  const totalPrice = useMemo(() => {
+    if (!service) return 0;
+    const base = Number(service.price) || 0;
+    const extrasSum = extraServicesList
+      .filter((e) => selectedExtraIds.has(e.id))
+      .reduce((sum, e) => sum + (Number(e.price) || 0), 0);
+    return base + extrasSum;
+  }, [service, extraServicesList, selectedExtraIds]);
+
+  const hasExtrasSelected = selectedExtraIds.size > 0;
+
   if (!service || !master) {
     return <LoadingSpinner />;
   }
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark text-[#2D1B22] dark:text-pink-50">
-      <header className="sticky top-0 z-20 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md">
-        <div className="flex items-center p-4 justify-between">
+    <div className="flex flex-col min-h-screen max-w-md mx-auto bg-[#fff9fa] dark:bg-background-dark text-[#3d2b31] dark:text-[#fce7f3] shadow-xl overflow-x-hidden relative">
+      <header className="sticky top-0 z-10 bg-[#fff9fa]/90 dark:bg-background-dark/90 backdrop-blur-md">
+        <div className="flex items-center p-4 pb-2 justify-between">
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="flex size-10 items-center justify-center rounded-full bg-white dark:bg-[#2D1B22] shadow-sm"
+            className="flex size-12 shrink-0 items-center justify-start cursor-pointer text-[#3d2b31] dark:text-[#fce7f3]"
           >
-            <span className="material-symbols-outlined text-[#2D1B22] dark:text-pink-100">arrow_back_ios_new</span>
+            <span className="material-symbols-outlined">chevron_left</span>
           </button>
-          <div className="flex flex-col items-center flex-1">
-            <h2 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight">Подтверждение записи</h2>
-          </div>
-          <div className="size-10" />
+          <h2 className="text-[#3d2b31] dark:text-[#fce7f3] text-lg font-semibold leading-tight tracking-tight flex-1 text-center">
+            Доп. услуги
+          </h2>
+          <div className="size-12 shrink-0" />
         </div>
         <StepIndicator currentStep={4} />
       </header>
-      <main className="p-4 sm:p-4">
-      <div className="max-w-2xl mx-auto bg-card rounded-lg shadow-md p-4 sm:p-6 border border-border">
-        <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
-          <div>
-            <span className="text-xs sm:text-sm text-muted-foreground">Услуга:</span>
-            <p className="text-base sm:text-lg font-semibold text-foreground">{service.name}</p>
-          </div>
-          <div>
-            <span className="text-xs sm:text-sm text-muted-foreground">Мастер:</span>
-            <p className="text-base sm:text-lg font-semibold text-foreground">{master.name}</p>
-          </div>
-          <div>
-            <span className="text-xs sm:text-sm text-muted-foreground">Дата и время:</span>
-            <p className="text-base sm:text-lg font-semibold text-foreground">
-              {new Date(startTime!).toLocaleString('ru-RU')}
-            </p>
-          </div>
-          <div>
-            <span className="text-xs sm:text-sm text-muted-foreground">Стоимость:</span>
-            <p className="text-xl sm:text-2xl font-bold text-primary">{service.price} ₽</p>
-          </div>
+
+      <main className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="px-2 pb-2">
+          <h3 className="text-xl font-bold text-[#2d1b22] dark:text-[#fff0f5]">Настройте ваш сеанс</h3>
+          <p className="text-sm text-[#9d7886] dark:text-[#d4aebc]">
+            Добавьте услуги для максимального расслабления.
+          </p>
         </div>
-      </div>
+
+        <div className="space-y-3">
+          {extraServicesList.map((extra: ExtraService) => (
+            <label
+              key={extra.id}
+              className="flex items-center gap-4 bg-white dark:bg-[#3d242f] border border-[#f9a8d4]/30 dark:border-[#5a3644] rounded-2xl px-4 min-h-[92px] py-3 cursor-pointer hover:border-primary transition-colors shadow-sm"
+            >
+              <div className="flex items-center gap-4 flex-1">
+                <div className="text-primary dark:text-[#f9a8d4] flex items-center justify-center rounded-xl bg-[#fdf2f8] dark:bg-[#5a3644] shrink-0 size-12">
+                  <span className="material-symbols-outlined text-3xl">{extra.icon || 'spa'}</span>
+                </div>
+                <div className="flex flex-col justify-center">
+                  <p className="text-[#3d2b31] dark:text-[#fce7f3] text-base font-semibold leading-normal">
+                    {extra.name}
+                  </p>
+                  <p className="text-[#9d7886] dark:text-[#d4aebc] text-xs font-normal leading-tight">
+                    {extra.description || ''} (+{(Number(extra.price) || 0).toLocaleString('ru-RU')}₽)
+                  </p>
+                </div>
+              </div>
+              <div className="shrink-0 flex items-center">
+                <input
+                  type="checkbox"
+                  className="custom-checkbox"
+                  checked={selectedExtraIds.has(extra.id)}
+                  onChange={() => toggleExtra(extra.id)}
+                />
+              </div>
+            </label>
+          ))}
+        </div>
+
+        <div className="pt-4">
+          <div className="flex items-center gap-2 mb-2 px-2 text-[#3d2b31] dark:text-[#fce7f3]">
+            <span className="material-symbols-outlined text-sm">notes</span>
+            <label className="text-base font-semibold">Особые пожелания</label>
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="w-full rounded-2xl border-[#f9a8d4]/40 dark:border-[#5a3644] bg-white dark:bg-[#3d242f] text-sm focus:ring-primary focus:border-primary dark:text-[#fce7f3] placeholder:text-[#9d7886]/50 p-4"
+            placeholder="Напишите здесь об аллергиях, зонах внимания или температуре в кабинете..."
+            rows={4}
+          />
+        </div>
+        <div className="h-32" />
       </main>
+
+      <footer className="absolute bottom-0 left-0 right-0 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-[#fff9fa] via-[#fff9fa] dark:from-background-dark dark:via-background-dark to-transparent pt-12 max-w-md mx-auto">
+        <div className="flex flex-col gap-2">
+          {!hasExtrasSelected && (
+            <p className="text-center text-sm text-[#9d7886] dark:text-[#d4aebc]">
+              Доп. услуги не выбраны
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={createMutation.isPending}
+            className="w-full h-14 rounded-2xl bg-primary text-white font-bold text-lg shadow-lg shadow-primary/25 hover:brightness-105 active:scale-95 transition-all disabled:opacity-70 flex flex-col items-center justify-center gap-0.5"
+          >
+            {hasExtrasSelected ? (
+              <>
+                <span>Продолжить</span>
+                <span className="text-base font-semibold opacity-90">
+                  {totalPrice.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽
+                </span>
+              </>
+            ) : (
+              'Продолжить'
+            )}
+          </button>
+        </div>
+      </footer>
     </div>
   );
 }
-

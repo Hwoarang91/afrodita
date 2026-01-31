@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { ServicesModule } from './modules/services/services.module';
+import { ExtraServicesModule } from './modules/extra-services/extra-services.module';
 import { MastersModule } from './modules/masters/masters.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { FinancialModule } from './modules/financial/financial.module';
@@ -47,6 +48,7 @@ import { validate } from './config/env.validation';
     UsersModule,
     AppointmentsModule,
     ServicesModule,
+    ExtraServicesModule,
     MastersModule,
     NotificationsModule,
     FinancialModule,

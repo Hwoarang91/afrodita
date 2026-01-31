@@ -72,6 +72,31 @@
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   }
+
+  /* Чекбокс для доп. услуг (шаг 4) */
+  .custom-checkbox {
+    appearance: none;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 2px solid theme('colors.pink.300');
+    border-radius: 9999px;
+    background-color: transparent;
+    display: grid;
+    place-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .custom-checkbox:checked {
+    background-color: hsl(var(--primary));
+    border-color: hsl(var(--primary));
+  }
+  .custom-checkbox:checked::before {
+    content: "\e5ca";
+    font-family: 'Material Symbols Outlined';
+    color: white;
+    font-size: 1.25rem;
+    font-weight: bold;
+  }
   
   .no-scrollbar::-webkit-scrollbar {
     display: none;

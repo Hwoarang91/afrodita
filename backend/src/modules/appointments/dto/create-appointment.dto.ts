@@ -1,4 +1,4 @@
-import { IsString, IsDateString, IsOptional, IsUUID, IsNumber, Min } from 'class-validator';
+import { IsString, IsDateString, IsOptional, IsUUID, IsNumber, Min, IsArray } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateAppointmentDto {
@@ -30,5 +30,11 @@ export class CreateAppointmentDto {
   @IsNumber()
   @Min(0)
   totalComplexPrice?: number;
+
+  @ApiProperty({ required: false, description: 'ID выбранных доп. услуг' })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  extraServiceIds?: string[];
 }
 
