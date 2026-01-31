@@ -28,6 +28,12 @@ export interface User {
   updatedAt: string;
 }
 
+export interface ExtraServiceRef {
+  id: string;
+  name: string;
+  price: number;
+}
+
 export interface Appointment {
   id: string;
   clientId: string;
@@ -44,6 +50,7 @@ export interface Appointment {
   client?: User;
   service?: Service;
   master?: Master;
+  extraServices?: ExtraServiceRef[];
 }
 
 export interface Service {

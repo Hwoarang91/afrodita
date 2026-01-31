@@ -55,6 +55,7 @@ export class SettingsController {
           properties: {
             termsOfServiceUrl: { type: 'string', nullable: true },
             cancellationPolicyUrl: { type: 'string', nullable: true },
+            customText: { type: 'string', nullable: true },
           },
         },
       },
@@ -62,11 +63,12 @@ export class SettingsController {
   })
   async setBookingTerms(
     @Request() req: AuthRequest,
-    @Body() body: { value: { termsOfServiceUrl?: string | null; cancellationPolicyUrl?: string | null } },
+    @Body() body: { value: { termsOfServiceUrl?: string | null; cancellationPolicyUrl?: string | null; customText?: string | null } },
   ) {
     const value = {
       termsOfServiceUrl: body.value?.termsOfServiceUrl ?? null,
       cancellationPolicyUrl: body.value?.cancellationPolicyUrl ?? null,
+      customText: body.value?.customText ?? null,
     };
     const result = await this.settingsService.setBookingTermsSettings(value);
     await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
@@ -80,9 +82,33 @@ export class SettingsController {
     return { success: true, value: result.value };
   }
 
+  @Get('business')
+  @ApiOperation({ summary: 'Получить адрес салона (админ)' })
+  async getBusiness() {
+    const address = await this.settingsService.getBusinessAddress();
+    return { value: { address } };
+  }
+
+  @Put('business')
+  @ApiOperation({ summary: 'Установить адрес салона' })
+  @ApiBody({ schema: { type: 'object', required: ['value'], properties: { value: { type: 'object', properties: { address: { type: 'string', nullable: true } } } } } })
+  async setBusiness(@Request() req: AuthRequest, @Body() body: { value: { address?: string | null } }) {
+    const address = body.value?.address ?? null;
+    await this.settingsService.setBusinessAddress(address);
+    await this.auditService.log(req.user!.sub!, AuditAction.SETTINGS_UPDATED, {
+      entityType: 'settings',
+      entityId: 'businessAddress',
+      description: 'Обновлён адрес салона',
+      changes: { address },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+    return { success: true, value: { address } };
+  }
+
   @Put()
   @ApiOperation({ summary: 'Обновление настроек' })
-  @ApiBody({ schema: { type: 'object', properties: { bookingSettings: { type: 'object', description: 'manualConfirmation, minAdvanceBooking, maxAdvanceBooking, cancellationDeadline' } } } })
+  @ApiBody({ schema: { type: 'object', properties: { bookingSettings: { type: 'object', description: 'manualConfirmation, minAdvanceBooking, maxAdvanceBooking, cancellationDeadline' } } } } })
   async updateSettings(
     @Request() req: AuthRequest,
     @Body() body: { bookingSettings?: Record<string, unknown> },

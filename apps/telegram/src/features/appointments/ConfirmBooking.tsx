@@ -69,10 +69,10 @@ export default function ConfirmBooking() {
       hapticFeedback.notificationOccurred('error');
       toast.error(error.response?.data?.message || 'Ошибка создания записи');
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
       hapticFeedback.notificationOccurred('success');
       toast.success('Запись успешно создана!');
-      navigate('/profile');
+      navigate('/booking-success', { state: { appointmentId: created.id } });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
@@ -277,6 +277,11 @@ export default function ConfirmBooking() {
       </main>
 
       <footer className="absolute bottom-0 left-0 right-0 p-4 bg-[#fff9fa]/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-pink-100 dark:border-pink-900/30 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {bookingTerms?.customText ? (
+          <p className="text-[11px] text-[#9d7886] dark:text-[#d4aebc] leading-tight mb-3 px-1">
+            {bookingTerms.customText}
+          </p>
+        ) : null}
         <div className="flex items-start gap-2 mb-4 px-1">
           <input
             type="checkbox"
@@ -286,7 +291,7 @@ export default function ConfirmBooking() {
             className="mt-0.5 rounded border-pink-300 text-primary focus:ring-primary cursor-pointer"
           />
           <label className="text-[11px] text-[#9d7886] dark:text-[#d4aebc] leading-tight cursor-pointer select-none" htmlFor="terms">
-            Я согласен с{' '}
+            Я согласна с{' '}
             {bookingTerms?.termsOfServiceUrl ? (
               <a
                 href={bookingTerms.termsOfServiceUrl}

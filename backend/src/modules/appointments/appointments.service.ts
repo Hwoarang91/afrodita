@@ -271,7 +271,7 @@ export class AppointmentsService {
   async findById(id: string, userId?: string): Promise<Appointment> {
     const appointment = await this.appointmentRepository.findOne({
       where: { id },
-      relations: ['master', 'service', 'client'],
+      relations: ['master', 'service', 'client', 'extraServices'],
     });
 
     if (!appointment) {

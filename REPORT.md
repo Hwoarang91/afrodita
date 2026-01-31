@@ -100,6 +100,45 @@ docker rm n8n
 
 ### Изменения
 
+✅ **Экран «Запись подтверждена!» (Booking Success), адрес салона, текстовое поле в настройках, «Я согласна»:**
+
+**Выполнено:**
+
+1. **Экран успешной записи (по референсу):**
+   - ✅ Новая страница `/booking-success`: после создания записи переход с передачей `appointmentId`, загрузка полной записи (с master, service, extraServices) и адреса салона.
+   - ✅ Шапка: иконка spa, заголовок «Готово», кнопка закрытия (X).
+   - ✅ Блок успеха: розовый круг с галочкой (check_circle), анимация пульса. Заголовок «Запись подтверждена!», текст «Ваша процедура успешно забронирована.» (без упоминания email).
+   - ✅ Карточка с деталями (без бейджа #MS-88291): **Запись** (короткий номер из id, напр. № A1B2C3D4), **Специалист**, **Услуга**, **Доп. услуга**, **Дата и время**, **Адрес салона**, **Цена**.
+   - ✅ Кнопки: **«К моим записям»** — переход на `/history`; **«Маршрут»** — открытие адреса в навигаторе (Google Maps `?api=1&query=...`), неактивна, если адрес не задан; **«На главную»** — переход на `/`.
+
+2. **Бэкенд:**
+   - ✅ В `findById` для записи добавлена связь **extraServices**.
+   - ✅ Адрес салона: `SettingsService.getBusinessAddress()` / `setBusinessAddress()`. Публичный **GET /public/settings/business** (`{ address }`). Админ: **GET/PUT /settings/business**.
+
+3. **Админка:**
+   - ✅ Загрузка и сохранение адреса салона (поле «Адрес» в общих настройках) через GET/PUT `/settings/business`.
+   - ✅ В блок «Ссылки на экран подтверждения записи» добавлено **текстовое поле** «Дополнительный текст на экране подтверждения» (`customText`): отображается над чекбоксом в веб-приложении.
+
+4. **Прочее:**
+   - ✅ Текст чекбокса на шаге подтверждения изменён на «Я согласна с Условиями обслуживания и Политикой отмены».
+   - ✅ В shared-типы добавлен `ExtraServiceRef` и поле `extraServices` в `Appointment`.
+
+**Файлы созданы:**
+- `apps/telegram/src/features/appointments/BookingSuccess.tsx`
+
+**Файлы изменены:**
+- `apps/telegram/src/App.tsx` — маршрут `/booking-success`, lazy BookingSuccess.
+- `apps/telegram/src/features/appointments/ConfirmBooking.tsx` — onSuccess: переход на `/booking-success` с `state: { appointmentId }`.
+- `apps/telegram/src/shared/api/settings.ts` — API `getBusiness()`.
+- `backend/src/modules/appointments/appointments.service.ts` — findById с relations `extraServices`.
+- `backend/src/modules/settings/settings.service.ts` — get/set BusinessAddress.
+- `backend/src/modules/settings/settings.controller.ts` — GET/PUT business.
+- `backend/src/modules/settings/public-settings.controller.ts` — GET public/settings/business.
+- `admin/app/settings/page.tsx` — загрузка/сохранение businessAddress, текстовое поле customText в блоке ссылок.
+- `shared/types/entities.ts` — ExtraServiceRef, extraServices в Appointment.
+
+---
+
 ✅ **Окно подтверждения записи (шаг 5): полоска убрана, чекбокс, кнопка «Записаться» с ценой, ссылки из настроек:**
 
 **Выполнено:**

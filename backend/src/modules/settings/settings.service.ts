@@ -158,25 +158,40 @@ export class SettingsService {
   async getBookingTermsSettings(): Promise<{
     termsOfServiceUrl: string | null;
     cancellationPolicyUrl: string | null;
+    customText: string | null;
   }> {
     const settings = await this.settingsRepository.findOne({
       where: { key: 'bookingTerms' },
     });
     if (settings?.value && typeof settings.value === 'object') {
-      const v = settings.value as { termsOfServiceUrl?: string | null; cancellationPolicyUrl?: string | null };
+      const v = settings.value as { termsOfServiceUrl?: string | null; cancellationPolicyUrl?: string | null; customText?: string | null };
       return {
         termsOfServiceUrl: v.termsOfServiceUrl ?? null,
         cancellationPolicyUrl: v.cancellationPolicyUrl ?? null,
+        customText: v.customText ?? null,
       };
     }
-    return { termsOfServiceUrl: null, cancellationPolicyUrl: null };
+    return { termsOfServiceUrl: null, cancellationPolicyUrl: null, customText: null };
   }
 
   async setBookingTermsSettings(settings: {
     termsOfServiceUrl: string | null;
     cancellationPolicyUrl: string | null;
+    customText?: string | null;
   }): Promise<Settings> {
-    return await this.set('bookingTerms', settings);
+    return await this.set('bookingTerms', {
+      termsOfServiceUrl: settings.termsOfServiceUrl,
+      cancellationPolicyUrl: settings.cancellationPolicyUrl,
+      customText: settings.customText ?? null,
+    });
+  }
+
+  async getBusinessAddress(): Promise<string | null> {
+    return await this.get<string | null>('businessAddress', null);
+  }
+
+  async setBusinessAddress(address: string | null): Promise<Settings> {
+    return await this.set('businessAddress', address);
   }
 }
 

@@ -42,6 +42,7 @@ interface Settings {
   bookingTerms?: {
     termsOfServiceUrl: string | null;
     cancellationPolicyUrl: string | null;
+    customText: string | null;
   };
   notifications: {
     emailEnabled: boolean;
@@ -104,6 +105,7 @@ export default function SettingsPage() {
       bookingTerms: {
         termsOfServiceUrl: null as string | null,
         cancellationPolicyUrl: null as string | null,
+        customText: null as string | null,
       },
       notifications: {
         emailEnabled: true,
@@ -133,13 +135,14 @@ export default function SettingsPage() {
         const defaultSettings = getDefaultSettings();
         
         // Загружаем настройки с сервера
-        const [settingsData, timezoneData, reminderIntervalsData, firstVisitDiscountData, telegramAdminData, bonusData] = await Promise.all([
+        const [settingsData, timezoneData, reminderIntervalsData, firstVisitDiscountData, telegramAdminData, bonusData, businessData] = await Promise.all([
           apiClient.get('/settings').catch(() => ({ data: {} })),
           apiClient.get('/settings/timezone').catch(() => ({ data: { value: 'Europe/Moscow' } })),
           apiClient.get('/settings/reminder-intervals').catch(() => ({ data: { value: defaultSettings.notifications.reminderIntervals } })),
           apiClient.get('/settings/first-visit-discount').catch(() => ({ data: { value: defaultSettings.firstVisitDiscount } })),
           apiClient.get('/settings/telegram-admin-user').catch(() => ({ data: { value: null } })),
           apiClient.get('/settings/bonuses').catch(() => ({ data: { value: defaultSettings.bonuses } })),
+          apiClient.get('/settings/business').catch(() => ({ data: { value: { address: defaultSettings.businessAddress ?? null } } })),
         ]);
         
         // Объединяем настройки из API с дефолтными значениями
@@ -151,13 +154,14 @@ export default function SettingsPage() {
             ...defaultSettings.bookingSettings,
             ...(settingsData.data.bookingSettings || {}),
           },
-          bookingTerms: settingsData.data.bookingTerms ?? defaultSettings.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null },
+          bookingTerms: settingsData.data.bookingTerms ?? defaultSettings.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null, customText: null },
           notifications: {
             ...defaultSettings.notifications,
             reminderIntervals: reminderIntervalsData.data.value || defaultSettings.notifications.reminderIntervals,
           },
           firstVisitDiscount: firstVisitDiscountData.data.value || defaultSettings.firstVisitDiscount,
           bonuses: bonusData.data.value || defaultSettings.bonuses,
+          businessAddress: businessData.data.value?.address ?? defaultSettings.businessAddress ?? '',
         };
         return mergedSettings;
       } catch (error) {
@@ -216,6 +220,7 @@ export default function SettingsPage() {
             value: {
               termsOfServiceUrl: data.bookingTerms.termsOfServiceUrl ?? null,
               cancellationPolicyUrl: data.bookingTerms.cancellationPolicyUrl ?? null,
+              customText: data.bookingTerms.customText ?? null,
             },
           });
         }
@@ -255,6 +260,12 @@ export default function SettingsPage() {
         if (data.telegramAdminUserId !== undefined) {
           await apiClient.put('/settings/telegram-admin-user', {
             userId: data.telegramAdminUserId || null,
+          });
+        }
+
+        if (data.businessAddress !== undefined) {
+          await apiClient.put('/settings/business', {
+            value: { address: data.businessAddress?.trim() || null },
           });
         }
         
@@ -550,7 +561,7 @@ export default function SettingsPage() {
                         setFormData({
                           ...formData,
                           bookingTerms: {
-                            ...(formData.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null }),
+                            ...(formData.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null, customText: null }),
                             termsOfServiceUrl: e.target.value.trim() || null,
                           },
                         })
@@ -570,13 +581,36 @@ export default function SettingsPage() {
                         setFormData({
                           ...formData,
                           bookingTerms: {
-                            ...(formData.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null }),
+                            ...(formData.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null, customText: null }),
                             cancellationPolicyUrl: e.target.value.trim() || null,
                           },
                         })
                       }
                       className="w-full px-3 py-2 border border-input rounded-lg bg-background"
                     />
+                  </div>
+                  <div className="col-span-full">
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      Дополнительный текст на экране подтверждения
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Произвольный текст, который будет показан на экране подтверждения записи (например, напоминание об отмене)"
+                      value={formData.bookingTerms?.customText ?? ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          bookingTerms: {
+                            ...(formData.bookingTerms ?? { termsOfServiceUrl: null, cancellationPolicyUrl: null, customText: null }),
+                            customText: e.target.value.trim() || null,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-input rounded-lg bg-background resize-y min-h-[80px]"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Отображается над чекбоксом согласия с условиями. Можно оставить пустым.
+                    </p>
                   </div>
                 </div>
               </div>
