@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { DialogFooter } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 import type { ExtraService } from '../page';
@@ -109,7 +109,7 @@ export function ExtraServiceForm({ item, onSubmit, isLoading, onCancel }: ExtraS
           />
         </div>
         <div className="flex items-center gap-2">
-          <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
+          <Checkbox id="isActive" checked={isActive} onCheckedChange={(v) => setIsActive(!!v)} />
           <Label htmlFor="isActive">Активна (отображается в веб-приложении)</Label>
         </div>
       </div>

@@ -25,7 +25,7 @@ export class ExtraService {
   price: number;
 
   @Column({ type: 'varchar', length: 64, nullable: true })
-  icon: string; // Material icon name, e.g. spa, fireplace
+  icon: string | null; // Material icon name, e.g. spa, fireplace
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;

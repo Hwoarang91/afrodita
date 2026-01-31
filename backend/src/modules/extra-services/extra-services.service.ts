@@ -70,7 +70,8 @@ export class ExtraServicesService {
       icon: dto.icon ?? null,
       isActive: dto.isActive ?? true,
     });
-    return this.extraServiceRepository.save(entity);
+    const saved = await this.extraServiceRepository.save(entity);
+    return Array.isArray(saved) ? saved[0]! : saved;
   }
 
   async update(id: string, dto: UpdateExtraServiceDto): Promise<ExtraService> {
