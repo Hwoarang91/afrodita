@@ -1774,6 +1774,18 @@ tsc --noEmit OK.
 
 **Статус:** Обновлено ✅ (код обновлен, все контейнеры пересобраны и работают)
 
+✅ **Миграция 023 (extra_services) на сервере:**
+
+**Проблема:** При нажатии «Записаться» в Telegram Web App — Internal Server Error из‑за отсутствия таблиц `extra_services` и `appointment_extra_services`.
+
+**Выполнено:**
+- ✅ Исправлено имя класса миграции 023: TypeORM требует 13-значный timestamp в имени. `CreateExtraServices023` → `CreateExtraServices0231707000000000` в `backend/src/migrations/023-create-extra-services.ts`.
+- ✅ Коммит и push исправления в репозиторий.
+- ✅ На сервере (MCP SSH, `/root/afrodita`): `git pull`, `docker compose build backend`, `docker compose up -d backend`.
+- ✅ Запуск миграций: `docker compose exec -T backend sh -c "cd /app && node node_modules/typeorm/cli.js migration:run -d dist/config/data-source.js"` — вывод: «No migrations are pending» (миграции уже применены при старте backend с AUTO_RUN_MIGRATIONS=true или ранее).
+
+**Статус:** Миграции на сервере выполнены. Кнопка «Записаться» должна работать; при повторной ошибке проверить логи backend.
+
 ✅ **Комплексная проверка всего кода проекта с использованием best practices (17.01.2026):**
 
 **Выполнено:**

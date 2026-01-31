@@ -27,6 +27,26 @@ function mapsUrl(address: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
+/** Формат даты для Google Calendar (UTC). */
+function toGoogleCalendarDate(d: Date) {
+  return d.toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+}
+
+/** Ссылка «Добавить в календарь» (Google Calendar). */
+function calendarAddUrl(params: { title: string; startTime: string; durationMin: number; details?: string; location?: string }) {
+  const start = new Date(params.startTime);
+  const end = new Date(start.getTime() + params.durationMin * 60 * 1000);
+  const text = encodeURIComponent(params.title);
+  const dates = `${toGoogleCalendarDate(start)}/${toGoogleCalendarDate(end)}`;
+  const details = params.details ? encodeURIComponent(params.details) : '';
+  const location = params.location ? encodeURIComponent(params.location) : '';
+  const base = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}`;
+  const parts = [base];
+  if (details) parts.push(`details=${details}`);
+  if (location) parts.push(`location=${location}`);
+  return parts.join('&');
+}
+
 export default function BookingSuccess() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,20 +107,20 @@ export default function BookingSuccess() {
   const serviceName = apt.service?.name ?? '—';
   const duration = apt.service?.duration ?? 0;
   const masterName = apt.master?.name ?? '—';
-  const extraNames = apt.extraServices?.map((e: { name: string }) => e.name).join(', ') || '—';
+  const extraNames = apt.extraServices?.length
+    ? apt.extraServices.map((e: { name: string }) => e.name).join(', ')
+    : 'Не выбрано';
   const address = business?.address?.trim() || '—';
   const price = Number(apt.price) || 0;
   const recordNum = recordNumber(apt.id);
 
-  const handleClose = () => {
-    hapticFeedback.impactOccurred('light');
-    navigate('/profile');
-  };
-
-  const handleToMyBookings = () => {
-    hapticFeedback.impactOccurred('light');
-    navigate('/history');
-  };
+  const calendarUrl = calendarAddUrl({
+    title: serviceName,
+    startTime: apt.startTime,
+    durationMin: duration || 60,
+    details: [`Запись № ${recordNum}`, `Специалист: ${masterName}`, extraNames !== 'Не выбрано' ? `Доп. услуги: ${extraNames}` : null].filter(Boolean).join('\n'),
+    location: business?.address?.trim() || undefined,
+  });
 
   const handleRoute = () => {
     hapticFeedback.impactOccurred('light');
@@ -116,34 +136,14 @@ export default function BookingSuccess() {
 
   return (
     <div className="flex flex-col min-h-screen max-w-[430px] mx-auto bg-[#fff9fa] dark:bg-background-dark text-[#3d2b31] dark:text-[#fce7f3] shadow-xl relative">
-      {/* Шапка */}
-      <header className="flex items-center justify-between p-4 pb-2 sticky top-0 z-10 bg-[#fff9fa] dark:bg-background-dark border-b border-pink-100 dark:border-pink-900/30">
-        <div className="text-primary flex size-12 shrink-0 items-center justify-center">
-          <span className="material-symbols-outlined text-3xl">spa</span>
+      {/* Заголовок с галочкой */}
+      <div className="flex flex-col items-center justify-center pt-10 pb-6 px-4">
+        <div className="flex items-center justify-center gap-3 mb-2">
+          <span className="material-symbols-outlined text-primary text-4xl" aria-hidden>check_circle</span>
+          <h1 className="text-[#3d2b31] dark:text-[#fce7f3] tracking-tight text-2xl font-bold leading-tight text-center">
+            Запись подтверждена!
+          </h1>
         </div>
-        <h2 className="text-[#3d2b31] dark:text-[#fce7f3] text-lg font-bold leading-tight tracking-tight flex-1 text-center">
-          Готово
-        </h2>
-        <button
-          type="button"
-          onClick={handleClose}
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-pink-100 dark:bg-pink-900/30 text-[#3d2b31] dark:text-[#fce7f3]"
-        >
-          <span className="material-symbols-outlined">close</span>
-        </button>
-      </header>
-
-      {/* Иконка и заголовок */}
-      <div className="flex flex-col items-center justify-center pt-10 pb-6">
-        <div className="relative">
-          <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150" />
-          <div className="relative bg-primary text-white rounded-full p-6 shadow-xl shadow-primary/30 animate-pulse">
-            <span className="material-symbols-outlined text-6xl">check_circle</span>
-          </div>
-        </div>
-        <h1 className="text-[#3d2b31] dark:text-[#fce7f3] tracking-tight text-2xl font-bold leading-tight px-4 pb-2 pt-10 text-center">
-          Запись подтверждена!
-        </h1>
         <p className="text-[#9d7886] dark:text-[#d4aebc] text-base font-normal leading-normal pb-6 px-6 text-center">
           Ваша процедура успешно забронирована.
         </p>
@@ -248,17 +248,19 @@ export default function BookingSuccess() {
         </div>
       </div>
 
-      {/* Кнопки К моим записям и Маршрут */}
+      {/* Кнопки В календарь и Маршрут */}
       <div className="flex justify-center mt-6 px-4">
         <div className="flex flex-1 gap-3 w-full max-w-[430px]">
-          <button
-            type="button"
-            onClick={handleToMyBookings}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl h-12 px-4 bg-[#fdf2f8] dark:bg-pink-900/20 text-primary border border-pink-100 dark:border-pink-900/30 text-sm font-bold tracking-wide transition-colors"
+          <a
+            href={calendarUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => hapticFeedback.impactOccurred('light')}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl h-12 px-4 bg-[#fdf2f8] dark:bg-pink-900/20 text-primary border border-pink-100 dark:border-pink-900/30 text-sm font-bold tracking-wide transition-colors no-underline"
           >
             <span className="material-symbols-outlined text-lg">event</span>
-            <span className="truncate">К моим записям</span>
-          </button>
+            <span className="truncate">В календарь</span>
+          </a>
           <button
             type="button"
             onClick={handleRoute}
