@@ -34,7 +34,7 @@ export function ExtraServiceModal({ open, onClose, item, onSuccess }: ExtraServi
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{item ? 'Редактировать доп. услугу' : 'Добавить доп. услугу'}</DialogTitle>
         </DialogHeader>

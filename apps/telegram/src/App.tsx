@@ -17,6 +17,7 @@ const ServiceDetail = lazy(() => import('./features/services/ServiceDetail'));
 const MasterSelection = lazy(() => import('./features/services/MasterSelection'));
 const Calendar = lazy(() => import('./features/appointments/Calendar'));
 const AppointmentConfirmation = lazy(() => import('./features/appointments/AppointmentConfirmation'));
+const ConfirmBooking = lazy(() => import('./features/appointments/ConfirmBooking'));
 const Profile = lazy(() => import('./features/profile/page'));
 const History = lazy(() => import('./features/appointments/History'));
 const Notifications = lazy(() => import('./features/profile/Notifications'));
@@ -74,6 +75,7 @@ function App() {
                 <Route path="/masters" element={<MasterSelection />} />
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/confirm" element={<AppointmentConfirmation />} />
+                <Route path="/confirm-final" element={<ConfirmBooking />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/history" element={<History />} />
                 <Route path="/notifications" element={<Notifications />} />

@@ -297,7 +297,7 @@ export default function MasterSelection() {
 
       {/* Модальное окно отзывов — просмотр доступен всем */}
       <Dialog open={!!reviewsModalMasterId} onOpenChange={(open) => !open && setReviewsModalMasterId(null)}>
-        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col gap-4">
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col gap-4" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Отзывы</DialogTitle>
           </DialogHeader>
@@ -337,7 +337,7 @@ export default function MasterSelection() {
 
       {/* Детальный просмотр отзыва (кликабельный отзыв) */}
       <Dialog open={!!clickedReview} onOpenChange={(open) => !open && setClickedReview(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Отзыв</DialogTitle>
           </DialogHeader>

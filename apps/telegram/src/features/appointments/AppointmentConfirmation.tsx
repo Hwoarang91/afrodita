@@ -1,11 +1,9 @@
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, useMemo } from 'react';
-import { appointmentsApi } from '../../shared/api/appointments';
 import { servicesApi } from '../../shared/api/services';
 import { extraServicesApi, type ExtraService } from '../../shared/api/extra-services';
 import { apiClient } from '../../shared/api/client';
-import toast from 'react-hot-toast';
 import LoadingSpinner from '../../shared/components/LoadingSpinner';
 import StepIndicator from '../../shared/components/StepIndicator';
 import { useTelegramBackButton } from '../../hooks/useTelegramBackButton';
@@ -14,60 +12,26 @@ import { useTelegram } from '../../contexts/TelegramContext';
 export default function AppointmentConfirmation() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { webApp, hapticFeedback } = useTelegram();
+  const location = useLocation();
+  const { webApp } = useTelegram();
   const masterId = searchParams.get('masterId');
   const serviceId = searchParams.get('serviceId');
   const startTime = searchParams.get('startTime');
 
-  const [notes, setNotes] = useState('');
-  const [selectedExtraIds, setSelectedExtraIds] = useState<Set<string>>(new Set());
+  const extraIdsFromUrl = searchParams.get('extraIds') || '';
+  const [notes, setNotes] = useState(() => (location.state as { notes?: string } | null)?.notes ?? '');
+  const [selectedExtraIds, setSelectedExtraIds] = useState<Set<string>>(() => {
+    if (!extraIdsFromUrl) return new Set();
+    return new Set(extraIdsFromUrl.split(',').filter(Boolean));
+  });
 
   useTelegramBackButton();
 
-  const createMutation = useMutation({
-    mutationFn: appointmentsApi.create,
-    onMutate: async (newAppointment) => {
-      await queryClient.cancelQueries({ queryKey: ['appointments'] });
-      const previousAppointments = queryClient.getQueryData(['appointments']);
-      queryClient.setQueryData(['appointments'], (old: any) => {
-        if (!old) return old;
-        const optimisticAppointment = {
-          id: `temp-${Date.now()}`,
-          ...newAppointment,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-        };
-        return Array.isArray(old) ? [...old, optimisticAppointment] : old;
-      });
-      return { previousAppointments };
-    },
-    onError: (error: any, _variables, context) => {
-      if (context?.previousAppointments) {
-        queryClient.setQueryData(['appointments'], context.previousAppointments);
-      }
-      hapticFeedback.notificationOccurred('error');
-      toast.error(error.response?.data?.message || 'Ошибка создания записи');
-    },
-    onSuccess: () => {
-      hapticFeedback.notificationOccurred('success');
-      toast.success('Запись успешно создана!');
-      navigate('/profile');
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
-    },
-  });
-
   const handleConfirm = () => {
     if (masterId && serviceId && startTime) {
-      createMutation.mutate({
-        masterId,
-        serviceId,
-        startTime,
-        notes: notes.trim() || undefined,
-        extraServiceIds: selectedExtraIds.size > 0 ? Array.from(selectedExtraIds) : undefined,
-      });
+      const params = new URLSearchParams({ masterId, serviceId, startTime });
+      if (selectedExtraIds.size > 0) params.set('extraIds', Array.from(selectedExtraIds).join(','));
+      navigate(`/confirm-final?${params.toString()}`, { state: { notes: notes.trim() || undefined } });
     }
   };
 
