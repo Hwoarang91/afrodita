@@ -74,7 +74,7 @@ export default function ConfirmBooking() {
       toast.success('Запись успешно создана!');
       const id = created?.id ?? (created as any)?.data?.id;
       if (id) {
-        navigate(`/booking-success/${id}`);
+        navigate(`/booking-success/${id}`, { state: { appointment: created } });
       } else {
         navigate('/profile');
       }

@@ -194,7 +194,8 @@ export class AppointmentsService {
       this.logger.error(`Ошибка при отправке уведомления мастеру о новой записи: ${getErrorMessage(error)}`, getErrorStack(error));
     }
 
-    return savedAppointment;
+    // Возвращаем полную запись с связями (master, service, extraServices) для экрана успеха
+    return await this.findById(savedAppointment.id, userId);
   }
 
   async findAll(

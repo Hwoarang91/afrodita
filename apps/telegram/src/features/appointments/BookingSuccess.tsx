@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { appointmentsApi } from '../../shared/api/appointments';
@@ -29,21 +29,25 @@ function mapsUrl(address: string) {
 
 export default function BookingSuccess() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { appointmentId } = useParams<{ appointmentId: string }>();
   const { webApp, hapticFeedback } = useTelegram();
+  const appointmentFromState = (location.state as { appointment?: Appointment } | null)?.appointment;
 
   useEffect(() => {
     if (webApp?.MainButton) webApp.MainButton.hide();
     return () => { if (webApp?.MainButton) webApp.MainButton.hide(); };
   }, [webApp]);
 
-  const { data: appointment, isLoading: appointmentLoading, isError: appointmentError } = useQuery({
+  const { data: appointmentFromApi, isLoading: appointmentLoading, isError: appointmentError } = useQuery({
     queryKey: ['appointment', appointmentId],
     queryFn: () => appointmentsApi.getById(appointmentId!),
-    enabled: !!appointmentId,
+    enabled: !!appointmentId && !appointmentFromState,
     retry: false,
     refetchOnWindowFocus: false,
   });
+
+  const appointment = appointmentFromState ?? appointmentFromApi;
 
   const { data: business } = useQuery({
     queryKey: ['business'],
