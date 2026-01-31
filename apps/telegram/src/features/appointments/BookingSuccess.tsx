@@ -37,10 +37,12 @@ export default function BookingSuccess() {
     return () => { if (webApp?.MainButton) webApp.MainButton.hide(); };
   }, [webApp]);
 
-  const { data: appointment, isLoading: appointmentLoading } = useQuery({
+  const { data: appointment, isLoading: appointmentLoading, isError: appointmentError } = useQuery({
     queryKey: ['appointment', appointmentId],
     queryFn: () => appointmentsApi.getById(appointmentId!),
     enabled: !!appointmentId,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: business } = useQuery({
@@ -54,7 +56,26 @@ export default function BookingSuccess() {
     }
   }, [appointmentId, navigate]);
 
-  if (!appointmentId || appointmentLoading || !appointment) {
+  if (!appointmentId) {
+    return <LoadingSpinner />;
+  }
+
+  if (appointmentError) {
+    return (
+      <div className="flex flex-col min-h-screen max-w-[430px] mx-auto bg-[#fff9fa] dark:bg-background-dark text-[#3d2b31] dark:text-[#fce7f3] items-center justify-center p-6">
+        <p className="text-center text-[#9d7886] dark:text-[#d4aebc] mb-4">Не удалось загрузить данные записи</p>
+        <button
+          type="button"
+          onClick={() => navigate('/profile')}
+          className="w-full max-w-xs bg-primary text-white font-bold py-3 rounded-2xl"
+        >
+          В профиль
+        </button>
+      </div>
+    );
+  }
+
+  if (appointmentLoading || !appointment) {
     return <LoadingSpinner />;
   }
 

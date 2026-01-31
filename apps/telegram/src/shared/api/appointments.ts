@@ -22,8 +22,9 @@ export const appointmentsApi = {
     return data;
   },
   getById: async (id: string): Promise<Appointment> => {
-    const { data } = await apiClient.get(`/appointments/${id}`);
-    return data;
+    const res = await apiClient.get(`/appointments/${id}`);
+    const data = res.data?.data ?? res.data;
+    return data as Appointment;
   },
   getAvailableSlots: async (
     masterId: string,
