@@ -136,127 +136,105 @@ export default function BookingSuccess() {
 
   return (
     <div className="flex flex-col min-h-screen max-w-[430px] mx-auto bg-[#fff9fa] dark:bg-background-dark text-[#3d2b31] dark:text-[#fce7f3] shadow-xl relative">
-      {/* Заголовок с галочкой */}
-      <div className="flex flex-col items-center justify-center pt-10 pb-6 px-4">
-        <div className="flex items-center justify-center gap-3 mb-2">
-          <span className="material-symbols-outlined text-primary text-4xl" aria-hidden>check_circle</span>
-          <h1 className="text-[#3d2b31] dark:text-[#fce7f3] tracking-tight text-2xl font-bold leading-tight text-center">
-            Запись подтверждена!
-          </h1>
+      <header className="sticky top-0 z-10 bg-[#fff9fa]/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-pink-100 dark:border-pink-900/30">
+        <div className="flex items-center p-4 pb-2 justify-center">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-2xl" aria-hidden>check_circle</span>
+            <h2 className="text-[#3d2b31] dark:text-[#fce7f3] text-lg font-bold leading-tight tracking-tight">
+              Запись подтверждена!
+            </h2>
+          </div>
         </div>
-        <p className="text-[#9d7886] dark:text-[#d4aebc] text-base font-normal leading-normal pb-6 px-6 text-center">
+        <p className="text-[#9d7886] dark:text-[#d4aebc] text-sm text-center px-4 pb-4">
           Ваша процедура успешно забронирована.
         </p>
-      </div>
+      </header>
 
-      {/* Карточка с деталями */}
-      <div className="px-4 flex-1">
-        <div className="flex flex-col rounded-2xl border border-pink-100 dark:border-pink-900/30 bg-white dark:bg-[#3d242f]/50 overflow-hidden shadow-sm">
-          {apt.service?.imageUrl ? (
-            <div
-              className="w-full bg-center bg-no-repeat aspect-video bg-cover"
-              style={{ backgroundImage: `url("${apt.service.imageUrl}")` }}
-            />
-          ) : null}
-          <div className="flex flex-col gap-4 p-5">
-            <div>
-              <p className="text-[#3d2b31] dark:text-[#fce7f3] text-xl font-bold leading-tight tracking-tight">
-                {serviceName}
-              </p>
-              <p className="text-primary text-sm font-semibold mt-1 uppercase tracking-wider">
-                {duration} минут
-              </p>
+      <main className="flex-1 overflow-y-auto pb-36">
+        <h3 className="text-[#2d1b22] dark:text-[#fff0f5] text-lg font-bold px-4 pb-2 pt-4">Детали записи</h3>
+        <div className="space-y-1 px-4">
+          {/* Запись */}
+          <div className="flex items-center gap-4 bg-white dark:bg-[#3d242f] min-h-[72px] py-3 px-4 rounded-xl border border-pink-100/50 dark:border-pink-900/30">
+            <div className="text-primary flex items-center justify-center rounded-xl bg-[#fdf2f8] dark:bg-[#5a3644] shrink-0 size-12">
+              <span className="material-symbols-outlined text-2xl">confirmation_number</span>
             </div>
-
-            <div className="space-y-4 pt-2">
-              {/* Запись и номер записи */}
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#fdf2f8] dark:bg-pink-900/30 text-primary">
-                  <span className="material-symbols-outlined text-xl">confirmation_number</span>
-                </div>
-                <div>
-                  <p className="text-[#9d7886] dark:text-[#d4aebc] text-xs">Запись</p>
-                  <p className="text-[#3d2b31] dark:text-[#fce7f3] text-sm font-bold">№ {recordNum}</p>
-                </div>
-              </div>
-              {/* Специалист */}
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#fdf2f8] dark:bg-pink-900/30 text-primary">
-                  <span className="material-symbols-outlined text-xl">person</span>
-                </div>
-                <div>
-                  <p className="text-[#9d7886] dark:text-[#d4aebc] text-xs">Специалист</p>
-                  <p className="text-[#3d2b31] dark:text-[#fce7f3] text-sm font-bold">{masterName}</p>
-                </div>
-              </div>
-              {/* Услуга */}
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#fdf2f8] dark:bg-pink-900/30 text-primary">
-                  <span className="material-symbols-outlined text-xl">spa</span>
-                </div>
-                <div>
-                  <p className="text-[#9d7886] dark:text-[#d4aebc] text-xs">Услуга</p>
-                  <p className="text-[#3d2b31] dark:text-[#fce7f3] text-sm font-bold">{serviceName}</p>
-                </div>
-              </div>
-              {/* Доп. услуга */}
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#fdf2f8] dark:bg-pink-900/30 text-primary">
-                  <span className="material-symbols-outlined text-xl">add_circle</span>
-                </div>
-                <div>
-                  <p className="text-[#9d7886] dark:text-[#d4aebc] text-xs">Доп. услуга</p>
-                  <p className="text-[#3d2b31] dark:text-[#fce7f3] text-sm font-bold">{extraNames}</p>
-                </div>
-              </div>
-              {/* Дата и время */}
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#fdf2f8] dark:bg-pink-900/30 text-primary">
-                  <span className="material-symbols-outlined text-xl">calendar_today</span>
-                </div>
-                <div>
-                  <p className="text-[#9d7886] dark:text-[#d4aebc] text-xs">Дата и время</p>
-                  <p className="text-[#3d2b31] dark:text-[#fce7f3] text-sm font-bold">
-                    {formatDateRu(apt.startTime)}, {formatTime(apt.startTime)}
-                  </p>
-                </div>
-              </div>
-              {/* Адрес */}
-              <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#fdf2f8] dark:bg-pink-900/30 text-primary mt-0.5">
-                  <span className="material-symbols-outlined text-xl">location_on</span>
-                </div>
-                <div>
-                  <p className="text-[#9d7886] dark:text-[#d4aebc] text-xs">Адрес салона</p>
-                  <p className="text-[#3d2b31] dark:text-[#fce7f3] text-sm font-bold whitespace-pre-line">{address}</p>
-                </div>
-              </div>
-              {/* Цена */}
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#fdf2f8] dark:bg-pink-900/30 text-primary">
-                  <span className="material-symbols-outlined text-xl">payments</span>
-                </div>
-                <div>
-                  <p className="text-[#9d7886] dark:text-[#d4aebc] text-xs">Цена</p>
-                  <p className="text-[#3d2b31] dark:text-[#fce7f3] text-sm font-bold">
-                    {price.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽
-                  </p>
-                </div>
-              </div>
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <p className="text-[#3d2b31] dark:text-[#fce7f3] text-base font-semibold leading-normal">№ {recordNum}</p>
+              <p className="text-[#9d7886] dark:text-[#d4aebc] text-sm">Запись</p>
+            </div>
+          </div>
+          {/* Специалист */}
+          <div className="flex items-center gap-4 bg-white dark:bg-[#3d242f] min-h-[72px] py-3 px-4 rounded-xl border border-pink-100/50 dark:border-pink-900/30">
+            <div className="text-primary flex items-center justify-center rounded-xl bg-[#fdf2f8] dark:bg-[#5a3644] shrink-0 size-12">
+              <span className="material-symbols-outlined text-2xl">person</span>
+            </div>
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <p className="text-[#3d2b31] dark:text-[#fce7f3] text-base font-semibold leading-normal truncate">{masterName}</p>
+              <p className="text-[#9d7886] dark:text-[#d4aebc] text-sm">Специалист</p>
+            </div>
+          </div>
+          {/* Услуга */}
+          <div className="flex items-center gap-4 bg-white dark:bg-[#3d242f] min-h-[72px] py-3 px-4 rounded-xl border border-pink-100/50 dark:border-pink-900/30">
+            <div className="text-primary flex items-center justify-center rounded-xl bg-[#fdf2f8] dark:bg-[#5a3644] shrink-0 size-12">
+              <span className="material-symbols-outlined text-2xl">spa</span>
+            </div>
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <p className="text-[#3d2b31] dark:text-[#fce7f3] text-base font-semibold leading-normal truncate">{serviceName}</p>
+              <p className="text-[#9d7886] dark:text-[#d4aebc] text-sm">{duration} минут</p>
+            </div>
+          </div>
+          {/* Доп. услуга */}
+          <div className="flex items-center gap-4 bg-white dark:bg-[#3d242f] min-h-[72px] py-3 px-4 rounded-xl border border-pink-100/50 dark:border-pink-900/30">
+            <div className="text-primary flex items-center justify-center rounded-xl bg-[#fdf2f8] dark:bg-[#5a3644] shrink-0 size-12">
+              <span className="material-symbols-outlined text-2xl">add_circle</span>
+            </div>
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <p className="text-[#3d2b31] dark:text-[#fce7f3] text-base font-semibold leading-normal truncate">{extraNames}</p>
+              <p className="text-[#9d7886] dark:text-[#d4aebc] text-sm">Доп. услуга</p>
+            </div>
+          </div>
+          {/* Дата и время */}
+          <div className="flex items-center gap-4 bg-white dark:bg-[#3d242f] min-h-[72px] py-3 px-4 rounded-xl border border-pink-100/50 dark:border-pink-900/30">
+            <div className="text-primary flex items-center justify-center rounded-xl bg-[#fdf2f8] dark:bg-[#5a3644] shrink-0 size-12">
+              <span className="material-symbols-outlined text-2xl">calendar_today</span>
+            </div>
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <p className="text-[#3d2b31] dark:text-[#fce7f3] text-base font-semibold leading-normal">{formatDateRu(apt.startTime)}, {formatTime(apt.startTime)}</p>
+              <p className="text-[#9d7886] dark:text-[#d4aebc] text-sm">Дата и время</p>
+            </div>
+          </div>
+          {/* Адрес */}
+          <div className="flex items-center gap-4 bg-white dark:bg-[#3d242f] min-h-[72px] py-3 px-4 rounded-xl border border-pink-100/50 dark:border-pink-900/30">
+            <div className="text-primary flex items-center justify-center rounded-xl bg-[#fdf2f8] dark:bg-[#5a3644] shrink-0 size-12 self-start mt-1">
+              <span className="material-symbols-outlined text-2xl">location_on</span>
+            </div>
+            <div className="flex flex-col justify-center min-w-0 flex-1 py-1">
+              <p className="text-[#3d2b31] dark:text-[#fce7f3] text-base font-semibold leading-normal whitespace-pre-line">{address}</p>
+              <p className="text-[#9d7886] dark:text-[#d4aebc] text-sm">Адрес салона</p>
+            </div>
+          </div>
+          {/* Цена */}
+          <div className="flex items-center gap-4 bg-white dark:bg-[#3d242f] min-h-[72px] py-3 px-4 rounded-xl border border-pink-100/50 dark:border-pink-900/30">
+            <div className="text-primary flex items-center justify-center rounded-xl bg-[#fdf2f8] dark:bg-[#5a3644] shrink-0 size-12">
+              <span className="material-symbols-outlined text-2xl">payments</span>
+            </div>
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <p className="text-[#3d2b31] dark:text-[#fce7f3] text-base font-semibold leading-normal">
+                {price.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽
+              </p>
+              <p className="text-[#9d7886] dark:text-[#d4aebc] text-sm">Цена</p>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Кнопки В календарь и Маршрут */}
-      <div className="flex justify-center mt-6 px-4">
-        <div className="flex flex-1 gap-3 w-full max-w-[430px]">
+        {/* Кнопки В календарь и Маршрут */}
+        <div className="flex gap-3 px-4 mt-4">
           <a
             href={calendarUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => hapticFeedback.impactOccurred('light')}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl h-12 px-4 bg-[#fdf2f8] dark:bg-pink-900/20 text-primary border border-pink-100 dark:border-pink-900/30 text-sm font-bold tracking-wide transition-colors no-underline"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl h-12 px-4 bg-white dark:bg-[#3d242f] border border-pink-100/50 dark:border-pink-900/30 text-primary text-sm font-semibold transition-colors no-underline"
           >
             <span className="material-symbols-outlined text-lg">event</span>
             <span className="truncate">В календарь</span>
@@ -265,16 +243,15 @@ export default function BookingSuccess() {
             type="button"
             onClick={handleRoute}
             disabled={!business?.address?.trim()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl h-12 px-4 bg-[#fdf2f8] dark:bg-pink-900/20 text-primary border border-pink-100 dark:border-pink-900/30 text-sm font-bold tracking-wide transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl h-12 px-4 bg-white dark:bg-[#3d242f] border border-pink-100/50 dark:border-pink-900/30 text-primary text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="material-symbols-outlined text-lg">near_me</span>
             <span className="truncate">Маршрут</span>
           </button>
         </div>
-      </div>
+      </main>
 
-      {/* На главную */}
-      <div className="mt-auto px-4 pb-10 pt-4">
+      <footer className="absolute bottom-0 left-0 right-0 p-4 bg-[#fff9fa]/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-pink-100 dark:border-pink-900/30 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
           onClick={handleToHome}
@@ -282,11 +259,7 @@ export default function BookingSuccess() {
         >
           На главную
         </button>
-      </div>
-
-      <div className="h-6 w-full flex justify-center items-end pb-2">
-        <div className="w-32 h-1 bg-pink-200 dark:bg-pink-900/40 rounded-full" />
-      </div>
+      </footer>
     </div>
   );
 }
