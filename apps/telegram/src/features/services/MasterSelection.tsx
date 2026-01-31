@@ -33,6 +33,8 @@ export default function MasterSelection() {
   const navigate = useNavigate();
   const { hapticFeedback } = useTelegram();
   const serviceId = searchParams.get('serviceId');
+  const extraIdsParam = searchParams.get('extraIds') || '';
+  const extraIds = extraIdsParam ? extraIdsParam.split(',').filter(Boolean) : [];
   const [selectedMaster, setSelectedMaster] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'today'>('all');
   const [anyMaster, _setAnyMaster] = useState(false); // сеттер не используется — блок «Любой мастер» закомментирован
@@ -88,7 +90,9 @@ export default function MasterSelection() {
     const masterToUse = masterId ?? selectedMaster ?? (anyMaster && masters.length > 0 ? masters[0].id : null);
     if (masterToUse && serviceId) {
       hapticFeedback.impactOccurred('medium');
-      navigate(`/calendar?masterId=${masterToUse}&serviceId=${serviceId}`);
+      const params = new URLSearchParams({ masterId: masterToUse, serviceId });
+      if (extraIds.length > 0) params.set('extraIds', extraIds.join(','));
+      navigate(`/calendar?${params.toString()}`);
     }
   };
 
@@ -129,22 +133,21 @@ export default function MasterSelection() {
   };
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark text-[#2D1B22] dark:text-pink-50">
-      {/* Sticky Header */}
-      <header className="sticky top-0 z-20 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md">
-        <div className="flex items-center p-4 justify-between">
+    <div className="min-h-screen max-w-[430px] mx-auto bg-[#fff9fa] dark:bg-background-dark text-[#3d2b31] dark:text-[#fce7f3] shadow-xl">
+      <header className="sticky top-0 z-20 bg-[#fff9fa]/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-pink-100 dark:border-pink-900/30">
+        <div className="flex items-center p-4 pb-2 justify-between">
           <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="flex size-10 items-center justify-center rounded-full bg-white dark:bg-[#2D1B22] shadow-sm"
+            className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-[#3d2b31] dark:text-[#fce7f3]"
           >
-            <span className="material-symbols-outlined text-[#2D1B22] dark:text-pink-100">arrow_back_ios_new</span>
+            <span className="material-symbols-outlined">chevron_left</span>
           </button>
-          <div className="flex flex-col items-center flex-1">
-            <h2 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight">Выберите мастера</h2>
-          </div>
-          <div className="size-10"></div>
+          <h2 className="text-[#3d2b31] dark:text-[#fce7f3] text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-12">
+            Выбор мастера
+          </h2>
         </div>
-        <StepIndicator currentStep={2} />
+        <StepIndicator currentStep={3} />
       </header>
 
       <main className="pb-24">
@@ -284,14 +287,14 @@ export default function MasterSelection() {
       </main>
 
       {/* Фиксированная кнопка «Выбрать» — одна на всех мастеров */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 max-w-[430px] mx-auto p-4 pb-6 bg-white/90 dark:bg-[#1f1214]/90 backdrop-blur-md border-t border-pink-100 dark:border-pink-900/30">
+      <div className="fixed bottom-0 left-0 right-0 z-20 max-w-[430px] mx-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-[#fff9fa]/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-pink-100 dark:border-pink-900/30">
         <button
           type="button"
           disabled={!selectedMaster && !anyMaster}
           onClick={() => handleNext()}
-          className="w-full h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-pink-200/50 dark:shadow-none transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+          className="w-full h-12 rounded-xl bg-primary text-white text-base font-bold shadow-lg shadow-primary/25 hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
         >
-          Выбрать
+          Продолжить
         </button>
       </div>
 

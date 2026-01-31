@@ -255,7 +255,7 @@ export default function BookingSuccess() {
         <button
           type="button"
           onClick={handleToHome}
-          className="flex w-full items-center justify-center rounded-2xl h-14 bg-primary text-white text-base font-bold shadow-lg shadow-primary/30 hover:brightness-105 active:scale-[0.98] transition-all"
+          className="flex w-full items-center justify-center rounded-xl h-12 bg-primary text-white text-base font-bold shadow-lg shadow-primary/25 hover:brightness-105 active:scale-[0.98] transition-all"
         >
           На главную
         </button>

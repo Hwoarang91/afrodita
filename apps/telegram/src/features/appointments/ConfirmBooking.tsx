@@ -133,12 +133,16 @@ export default function ConfirmBooking() {
   const totalPrice = servicePrice + extrasSum;
 
   const goToServices = () => navigate('/services');
-  const goToMasters = () => navigate(`/masters?serviceId=${serviceId}`);
-  const goToCalendar = () => navigate(`/calendar?masterId=${masterId}&serviceId=${serviceId}`);
-  const goToExtras = () => {
-    const params = new URLSearchParams({ masterId: masterId!, serviceId: serviceId!, startTime: startTime! });
+  const goToExtras = () => navigate(`/extras?serviceId=${serviceId}`);
+  const goToMasters = () => {
+    const params = new URLSearchParams({ serviceId: serviceId! });
     if (extraIds.length) params.set('extraIds', extraIds.join(','));
-    navigate(`/confirm?${params.toString()}`, { state: { notes } });
+    navigate(`/masters?${params.toString()}`);
+  };
+  const goToCalendar = () => {
+    const params = new URLSearchParams({ masterId: masterId!, serviceId: serviceId! });
+    if (extraIds.length) params.set('extraIds', extraIds.join(','));
+    navigate(`/calendar?${params.toString()}`);
   };
 
   useEffect(() => {
@@ -331,10 +335,10 @@ export default function ConfirmBooking() {
           type="button"
           onClick={handlePayAndBook}
           disabled={!termsAccepted || createMutation.isPending}
-          className="w-full bg-primary hover:brightness-105 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-primary/30 flex justify-between px-6 items-center disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full h-12 rounded-xl bg-primary text-white text-base font-bold shadow-lg shadow-primary/25 hover:brightness-105 active:scale-[0.98] transition-all flex justify-between px-6 items-center disabled:opacity-70 disabled:cursor-not-allowed"
         >
-          <span className="text-lg">Записаться</span>
-          <span className="text-lg">{totalPrice.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽</span>
+          <span>Записаться</span>
+          <span>{totalPrice.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ₽</span>
         </button>
       </footer>
     </div>

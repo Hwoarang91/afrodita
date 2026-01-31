@@ -77,6 +77,8 @@ export default function CalendarPage() {
   const { webApp, hapticFeedback } = useTelegram();
   const masterId = searchParams.get('masterId');
   const serviceId = searchParams.get('serviceId');
+  const extraIdsParam = searchParams.get('extraIds') || '';
+  const extraIds = extraIdsParam ? extraIdsParam.split(',').filter(Boolean) : [];
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -158,23 +160,21 @@ export default function CalendarPage() {
   const monthTitle = monthStr.charAt(0).toUpperCase() + monthStr.slice(1);
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark text-[#2D1B22] dark:text-pink-50">
-      {/* Единый стиль с этапами 1 и 2 */}
-      <header className="sticky top-0 z-20 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md">
-        <div className="flex items-center p-4 justify-between">
+    <div className="min-h-screen max-w-[430px] mx-auto bg-[#fff9fa] dark:bg-background-dark text-[#3d2b31] dark:text-[#fce7f3] shadow-xl">
+      <header className="sticky top-0 z-20 bg-[#fff9fa]/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-pink-100 dark:border-pink-900/30">
+        <div className="flex items-center p-4 pb-2 justify-between">
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="flex size-10 items-center justify-center rounded-full bg-white dark:bg-[#2D1B22] shadow-sm"
+            className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-[#3d2b31] dark:text-[#fce7f3]"
           >
-            <span className="material-symbols-outlined text-[#2D1B22] dark:text-pink-100">arrow_back_ios_new</span>
+            <span className="material-symbols-outlined">chevron_left</span>
           </button>
-          <div className="flex flex-col items-center flex-1">
-            <h2 className="text-[#2D1B22] dark:text-white text-lg font-bold leading-tight tracking-tight">Выбор даты и времени</h2>
-          </div>
-          <div className="size-10" />
+          <h2 className="text-[#3d2b31] dark:text-[#fce7f3] text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-12">
+            Выбор даты и времени
+          </h2>
         </div>
-        <StepIndicator currentStep={3} />
+        <StepIndicator currentStep={4} />
       </header>
 
       <main className="pb-32 -mt-1">
@@ -293,21 +293,18 @@ export default function CalendarPage() {
         </section>
       </main>
 
-      {/* Футер — как на этапе 2 (выбор мастера) */}
-      <footer className="fixed bottom-0 left-0 right-0 z-20 max-w-[430px] mx-auto p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] bg-white/90 dark:bg-[#1f1214]/90 backdrop-blur-md border-t border-pink-100 dark:border-pink-900/30">
+      <footer className="fixed bottom-0 left-0 right-0 z-20 max-w-[430px] mx-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-[#fff9fa]/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-pink-100 dark:border-pink-900/30">
         <div className="flex items-center justify-between mb-3">
           <div className="flex flex-col">
-            <span className="text-[10px] text-pink-400 dark:text-pink-300 uppercase tracking-widest font-bold">
+            <span className="text-[10px] text-[#9d7886] dark:text-[#d4aebc] uppercase tracking-widest font-bold">
               Детали записи
             </span>
-            <p className="text-[#2D1B22] dark:text-white text-sm font-bold">
-              {service && master
-                ? `${service.name} • ${master.name}`
-                : '—'}
+            <p className="text-[#3d2b31] dark:text-[#fce7f3] text-sm font-bold">
+              {service && master ? `${service.name} · ${master.name}` : '—'}
             </p>
           </div>
           <div className="text-right">
-            <span className="text-[10px] text-pink-400 dark:text-pink-300 uppercase tracking-widest font-bold">
+            <span className="text-[10px] text-[#9d7886] dark:text-[#d4aebc] uppercase tracking-widest font-bold">
               Итого
             </span>
             <p className="text-primary text-xl font-black leading-none">
@@ -319,7 +316,7 @@ export default function CalendarPage() {
           type="button"
           disabled={!selectedSlot}
           onClick={handleNext}
-          className="w-full h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-md shadow-pink-200/50 dark:shadow-none transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+          className="w-full h-12 rounded-xl bg-primary text-white text-base font-bold shadow-lg shadow-primary/25 hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
         >
           Продолжить
         </button>
