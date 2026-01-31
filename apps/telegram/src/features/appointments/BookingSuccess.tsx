@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { appointmentsApi } from '../../shared/api/appointments';
@@ -29,9 +29,8 @@ function mapsUrl(address: string) {
 
 export default function BookingSuccess() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { appointmentId } = useParams<{ appointmentId: string }>();
   const { webApp, hapticFeedback } = useTelegram();
-  const appointmentId = (location.state as { appointmentId?: string } | null)?.appointmentId;
 
   useEffect(() => {
     if (webApp?.MainButton) webApp.MainButton.hide();
@@ -50,7 +49,7 @@ export default function BookingSuccess() {
   });
 
   useEffect(() => {
-    if (appointmentId === undefined) {
+    if (!appointmentId) {
       navigate('/profile');
     }
   }, [appointmentId, navigate]);

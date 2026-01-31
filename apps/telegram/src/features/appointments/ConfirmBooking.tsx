@@ -72,7 +72,12 @@ export default function ConfirmBooking() {
     onSuccess: (created) => {
       hapticFeedback.notificationOccurred('success');
       toast.success('Запись успешно создана!');
-      navigate('/booking-success', { state: { appointmentId: created.id } });
+      const id = created?.id ?? (created as any)?.data?.id;
+      if (id) {
+        navigate(`/booking-success/${id}`);
+      } else {
+        navigate('/profile');
+      }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });

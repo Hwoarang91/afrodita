@@ -77,7 +77,7 @@ function App() {
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/confirm" element={<AppointmentConfirmation />} />
                 <Route path="/confirm-final" element={<ConfirmBooking />} />
-                <Route path="/booking-success" element={<BookingSuccess />} />
+                <Route path="/booking-success/:appointmentId" element={<BookingSuccess />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/history" element={<History />} />
                 <Route path="/notifications" element={<Notifications />} />
